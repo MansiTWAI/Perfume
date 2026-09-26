@@ -19,7 +19,7 @@ function LegalPage({ title, seoTitle, eyebrow, path, image, alt, children }) {
     <>
       <Seo title={seoTitle || title} jsonLd={breadcrumbLd([['Home', '/'], [title, path]])} />
       <PageHero eyebrow={eyebrow} title={title} layout="split" image={image} alt={alt} />
-      <section className="section">
+      <section className="section light">
         <div className="container narrow prose legal">{children}</div>
       </section>
     </>

@@ -307,3 +307,16 @@ html.lenis, html.lenis body { height: auto; }
   .fn-list button { padding-block: 8px; }
   .contact-info dd a, .ing-in a, .site-footer address a, .footer-grid a, a.m-status { display: inline-block; padding-block: 10px; }
 }
+
+/* ============ Compact rhythm on small screens ============ */
+@media (max-width: 767px) {
+  body { font-size: 16px; }
+  .section { padding-block: 72px; }
+  .section-head { margin-bottom: 40px; }
+  .prose { font-size: 17px; }
+}
+@media (max-width: 380px) {
+  :root { --gutter: 16px; }
+  .section { padding-block: 60px; }
+  .btn { padding: 0 22px; letter-spacing: 0.18em; }
+}
