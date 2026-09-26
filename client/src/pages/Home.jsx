@@ -10,6 +10,7 @@ import Img from '../components/Img';
 import BottleStage from '../components/BottleStage';
 import NoteIcon from '../components/NoteIcon';
 import { useApi } from '../hooks/useApi';
+import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
 import { formatDate, money, whatsappLink } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
@@ -149,7 +150,7 @@ function Collection({ products }) {
           {z && <ProductCard product={z} index={1} className="pcard-b" />}
         </div>
         {rest.map((p) => (
-          <Reveal key={p._id} className="duo-band">
+          <Reveal key={p._id || p.slug} className="duo-band">
             <Link to={`/fragrances/${p.slug}`} className="duo-link">
               <div className="duo-img"><Img src={p.images?.[1]?.src || p.images?.[0]?.src} alt={p.images?.[1]?.alt || p.name} sizes="(max-width: 800px) 100vw, 60vw" /></div>
               <div className="duo-text">
@@ -394,7 +395,7 @@ function Closing() {
 }
 
 export default function Home() {
-  const { data: products = [] } = useApi('/products');
+  const { products } = useProducts();
   const { data: posts } = useApi('/posts?limit=3');
   const zafreon = products.find((p) => p.video?.src);
 

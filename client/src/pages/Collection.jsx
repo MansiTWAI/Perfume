@@ -3,11 +3,11 @@ import Seo, { breadcrumbLd } from '../components/Seo';
 import { PageHero, Loading } from '../components/Bits';
 import ProductCard from '../components/ProductCard';
 import { Reveal } from '../components/Motion';
-import { useApi } from '../hooks/useApi';
+import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
 
 export default function Collection() {
-  const { data: products, loading } = useApi('/products');
+  const { products, loading } = useProducts();
   const { setFinderOpen } = useStore();
   const [family, setFamily] = useState('All');
   // Filters come from the product data itself, never a fixed list.
@@ -41,7 +41,7 @@ export default function Collection() {
           </div>
           {loading ? <Loading /> : (
             <div className="product-grid">
-              {list.map((p, i) => <ProductCard key={p._id} product={p} index={i} />)}
+              {list.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} />)}
             </div>
           )}
           <Reveal className="collection-note">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
-import { useApi } from '../hooks/useApi';
+import { useProducts } from '../hooks/useProducts';
 import { api } from '../lib/api';
 import { money } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
@@ -13,7 +13,7 @@ const SUGGESTIONS = ['Oud', 'Saffron', 'Jasmine', 'Gift', 'Evening'];
 // Journal by title and tags.
 export default function SearchOverlay() {
   const { searchOpen, setSearchOpen, currency } = useStore();
-  const { data: products = [] } = useApi('/products');
+  const { products } = useProducts();
   const [q, setQ] = useState('');
   const [posts, setPosts] = useState([]);
   const input = useRef(null);

@@ -1,3 +1,7 @@
+// The fragrance catalogue. Used by the database seed (server/src/seed) and
+// by the storefront as a fallback, so the product story still renders if the
+// API cannot be reached.
+//
 // Fragrance notes below are the proposed olfactive direction for each
 // fragrance, drawn from the campaign imagery. Confirm them against the
 // perfumer's final specification, then tick "Notes approved" in the admin.

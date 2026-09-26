@@ -7,7 +7,7 @@ import { connectDB } from '../config/db.js';
 import Product from '../models/Product.js';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
-import products from './products.js';
+import products from '../../../shared/catalog.js';
 import posts from './posts.js';
 
 const reset = process.argv.includes('--reset');

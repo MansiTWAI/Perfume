@@ -9,7 +9,7 @@ import ProductCard from '../components/ProductCard';
 import AutoVideo from '../components/AutoVideo';
 import BottleStage from '../components/BottleStage';
 import Img from '../components/Img';
-import { useApi } from '../hooks/useApi';
+import { useProduct } from '../hooks/useProducts';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { money, whatsappLink } from '../lib/format';
@@ -86,7 +86,7 @@ function WearTimeline({ wear }) {
 export default function Product() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { data, loading, error } = useApi(`/products/${slug}`);
+  const { data, loading, error } = useProduct(slug);
   const { currency, region, addToCart, toast } = useStore();
   const [qty, setQty] = useState(1);
   const buyRef = useRef(null);
@@ -265,7 +265,7 @@ export default function Product() {
               <SplitHeading text="Complete your signature" className="display-l" />
             </div>
             <div className="product-grid">
-              {related.map((r, i) => <ProductCard key={r._id} product={r} index={i} />)}
+              {related.map((r, i) => <ProductCard key={r._id || r.slug} product={r} index={i} />)}
             </div>
           </div>
         </section>

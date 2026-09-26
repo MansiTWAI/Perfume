@@ -131,7 +131,7 @@ export default function Article() {
               <SplitHeading text="The fragrances" />
             </div>
             <div className="product-grid">
-              {products.map((p, i) => <ProductCard key={p._id} product={p} index={i} />)}
+              {products.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} />)}
             </div>
           </div>
         </section>

@@ -31,7 +31,7 @@ const GLASS = { ...ADD, color: '#000000', transparent: true, roughness: 0.02, me
 const CRYSTAL = { transparent: true, opacity: 0.2, roughness: 0.02, metalness: 0, clearcoat: 1, envMapIntensity: 2.5, flatShading: true, depthWrite: false, emissive: '#3a3028', emissiveIntensity: 0.6 };
 const FACETS = { ...GLASS, flatShading: true, envMapIntensity: 6 };
 
-function Bottle({ variant, progress, pointer, autoRotate }) {
+function Bottle({ variant, progress, pointer, autoRotate, calm }) {
   const v = VARIANTS[variant] || VARIANTS.zafreon;
   const group = useRef();
   const label = useTexture(v.label);
@@ -43,13 +43,13 @@ function Bottle({ variant, progress, pointer, autoRotate }) {
     if (!g) return;
     const t = state.clock.elapsedTime;
     const p = progress?.get?.() ?? 0;
-    const spin = autoRotate ? t * 0.18 : 0;
+    const spin = autoRotate && !calm ? t * 0.18 : 0;
     // Scroll turns the bottle; the pointer tilts it gently.
     const targetY = -0.35 + p * Math.PI * 2 + spin + pointer.current.x * 0.35;
     const targetX = pointer.current.y * 0.12;
     g.rotation.y = THREE.MathUtils.damp(g.rotation.y, targetY, 4, dt);
     g.rotation.x = THREE.MathUtils.damp(g.rotation.x, targetX, 4, dt);
-    g.position.y = -0.3 + Math.sin(t * 0.7) * 0.03;
+    g.position.y = -0.3 + (calm ? 0 : Math.sin(t * 0.7) * 0.03);
   });
 
 
@@ -115,7 +115,7 @@ function Placement({ stage, children }) {
 }
 
 // Lights rise from darkness when the scene first appears.
-function Reveal({ onReady }) {
+function Reveal({ onReady, calm }) {
   const { scene } = useThree();
   const start = useRef(null);
   const ready = useRef(onReady);
@@ -125,17 +125,17 @@ function Reveal({ onReady }) {
   }, [scene]);
   useFrame((state) => {
     if (start.current === null) start.current = state.clock.elapsedTime;
-    const k = Math.min((state.clock.elapsedTime - start.current) / 2.4, 1);
+    const k = calm ? 1 : Math.min((state.clock.elapsedTime - start.current) / 2.4, 1);
     scene.environmentIntensity = 1.1 * (1 - Math.pow(1 - k, 3));
   });
   return null;
 }
 
-export default function BottleScene({ variant = 'zafreon', progress, interactive = false, stage = false, active = true, onReady }) {
+export default function BottleScene({ variant = 'zafreon', progress, interactive = false, stage = false, calm = false, active = true, onReady }) {
   const pointer = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (interactive) return;
+    if (interactive || calm) return;
     const move = (e) => {
       pointer.current.x = (e.clientX / innerWidth) * 2 - 1;
       pointer.current.y = (e.clientY / innerHeight) * 2 - 1;
@@ -152,14 +152,14 @@ export default function BottleScene({ variant = 'zafreon', progress, interactive
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       style={{ touchAction: interactive ? 'pan-y' : 'auto' }}
     >
-      <Reveal onReady={onReady} />
+      <Reveal onReady={onReady} calm={calm} />
       <ambientLight intensity={0.08} />
       <spotLight position={[3, 4, 3]} angle={0.4} penumbra={0.9} intensity={28} color="#ffd6a0" />
       <pointLight position={[-2.5, 1.5, -2]} intensity={10} color="#ffb870" />
       <Placement stage={stage}>
-        <Bottle variant={variant} progress={progress} pointer={pointer} autoRotate={interactive} />
+        <Bottle variant={variant} progress={progress} pointer={pointer} autoRotate={interactive} calm={calm} />
         <ContactShadows position={[0, -0.9, 0]} opacity={0.55} scale={4} blur={2.6} far={1.4} color="#000000" />
-        {stage && <NoteField progress={progress} />}
+        {stage && <NoteField progress={progress} calm={calm} />}
       </Placement>
       <Environment resolution={256}>
         {/* narrow vertical strips: crisp edge highlights, dark faces */}

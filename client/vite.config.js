@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    fs: { allow: ['..'] }, // the shared catalogue lives outside client/
     proxy: {
       '/api': 'http://localhost:5000',
       '/uploads': 'http://localhost:5000',
