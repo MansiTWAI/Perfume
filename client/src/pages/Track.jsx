@@ -1,0 +1,98 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import Seo from '../components/Seo';
+import { PageHero } from '../components/Bits';
+import { api } from '../lib/api';
+import { formatDate } from '../lib/format';
+
+function Lamp({ lit, current, label, date }) {
+  return (
+    <div className={`lamp ${lit ? 'is-lit' : ''} ${current ? 'is-now' : ''}`}>
+      <span className="lamp-flame">
+        <svg viewBox="0 0 30 30" aria-hidden="true">
+          <path d="M15 3c4 6 6 9 0 16-6-7-4-10 0-16z" />
+          <path d="M5 21c4 5 16 5 20 0" fill="none" strokeWidth="1.4" />
+        </svg>
+      </span>
+      <b>{label}</b>
+      <small>{date || '—'}</small>
+    </div>
+  );
+}
+
+export default function Track() {
+  const [params] = useSearchParams();
+  const [id, setId] = useState(params.get('id') || '');
+  const [email, setEmail] = useState(params.get('email') || '');
+  const [order, setOrder] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function lookup(e) {
+    e?.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      setOrder(await api(`/orders/track/${encodeURIComponent(id.trim())}?email=${encodeURIComponent(email.trim())}`));
+    } catch (err) {
+      setOrder(null);
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (params.get('id') && params.get('email')) lookup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const idx = order ? order.stages.indexOf(order.status) : -1;
+  const dateFor = (s) => {
+    const h = order?.history?.filter((x) => x.status === s).pop();
+    return h ? formatDate(h.at) : null;
+  };
+
+  return (
+    <>
+      <Seo title="Track your order" description="Track your AL BARAKAH LIFESTYLE order with your tracking ID and email." />
+      <PageHero eyebrow="Track your order" title="Follow the lamps home" layout="split" image="/media/panel-elarisse.webp" alt="ELARISSE beneath ivory arches" lede="Enter your tracking ID and the email used at checkout." />
+      <section className="section">
+        <div className="container">
+          <form className="form track-form" onSubmit={lookup}>
+            <label>Tracking ID<input required value={id} onChange={(e) => setId(e.target.value)} placeholder="ABL…" /></label>
+            <label>Email used at checkout<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <button className="btn btn-primary" disabled={busy}>{busy ? 'Finding…' : 'Track'}</button>
+          </form>
+          {error && <p className="form-error center" role="alert">{error}</p>}
+          {order && (
+            <motion.div className="track-result" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="track-head">
+                <div>
+                  <p className="eyebrow">Order {order.orderNumber} · to {order.city}, {order.country}</p>
+                  <h2>{order.status}</h2>
+                </div>
+                <div className="track-meta">
+                  {order.eta && <p>Expected: <b>{order.eta}</b></p>}
+                  {order.carrier && <p>Courier: <b>{order.carrier}</b></p>}
+                  {order.carrierUrl && <a href={order.carrierUrl} target="_blank" rel="noreferrer" className="text-link">Courier tracking →</a>}
+                </div>
+              </div>
+              <div className="lamps">
+                {order.stages.map((s, i) => (
+                  <Lamp key={s} label={s} lit={i <= idx} current={i === idx} date={i <= idx ? dateFor(s) : null} />
+                ))}
+              </div>
+              <ul className="track-items">
+                {order.items.map((it) => (
+                  <li key={it.name}><img src={it.image} alt="" width="48" height="48" />{it.name} × {it.qty}</li>
+                ))}
+              </ul>
+            </motion.div>
+          )}
+        </div>
+      </section>
+    </>
+  );
+}

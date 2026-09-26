@@ -1,0 +1,55 @@
+import { useState } from 'react';
+import Seo, { breadcrumbLd } from '../components/Seo';
+import { PageHero, Loading } from '../components/Bits';
+import ProductCard from '../components/ProductCard';
+import { Reveal } from '../components/Motion';
+import { useApi } from '../hooks/useApi';
+import { useStore } from '../context/StoreContext';
+
+export default function Collection() {
+  const { data: products, loading } = useApi('/products');
+  const { setFinderOpen } = useStore();
+  const [family, setFamily] = useState('All');
+  // Filters come from the product data itself, never a fixed list.
+  const families = ['All', ...new Set((products || []).map((p) => p.family).filter(Boolean))];
+  const list = (products || []).filter((p) => family === 'All' || p.family === family);
+
+  return (
+    <>
+      <Seo
+        title="Premium Eau de Parfum Collection | AL BARAKAH LIFESTYLE"
+        description="Discover the AL BARAKAH LIFESTYLE collection of premium Eau de Parfum: ELARISSE, ZAFREON and the Signature Duo gift set. Delivered across India and to the UAE."
+        jsonLd={[
+          breadcrumbLd([['Home', '/'], ['Fragrances', '/fragrances']]),
+          {
+            '@context': 'https://schema.org',
+            '@type': 'ItemList',
+            itemListElement: (products || []).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${window.location.origin}/fragrances/${p.slug}`, name: p.name })),
+          },
+        ]}
+      />
+      <PageHero eyebrow="The collection" title="Eau de Parfum" image="/media/duo-triptych.webp" lede="Each fragrance has its own personality, and every presentation has a purpose." />
+      <section className="section collection-page">
+        <div className="container">
+          <div className="filter-row">
+            <div className="chips" role="group" aria-label="Filter by fragrance family">
+              {families.map((c) => (
+                <button key={c} className="chip" aria-pressed={family === c} onClick={() => setFamily(c)}>{c}</button>
+              ))}
+            </div>
+            <button className="text-link" onClick={() => setFinderOpen(true)}>Not sure? Take the four-question guide</button>
+          </div>
+          {loading ? <Loading /> : (
+            <div className="product-grid">
+              {list.map((p, i) => <ProductCard key={p._id} product={p} index={i} />)}
+            </div>
+          )}
+          <Reveal className="collection-note">
+            <p className="eyebrow">Next from the house</p>
+            <p>The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.</p>
+          </Reveal>
+        </div>
+      </section>
+    </>
+  );
+}
