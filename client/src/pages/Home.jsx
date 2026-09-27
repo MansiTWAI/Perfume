@@ -8,6 +8,7 @@ import AutoVideo from '../components/AutoVideo';
 import ProductCard from '../components/ProductCard';
 import Img from '../components/Img';
 import FloatingProduct from '../components/FloatingProduct';
+import NotesStage from '../components/NotesStage';
 import { renderFor } from '../lib/renders';
 import NoteIcon from '../components/NoteIcon';
 import SeasonBand from '../components/SeasonBand';
@@ -56,13 +57,16 @@ function Opening({ product }) {
     <section ref={ref} className={`opening ${lit ? 'is-lit' : ''}`} style={{ position: 'relative' }}>
       <motion.div className="opening-stage" style={{ backgroundColor: bg }}>
         <div className="opening-glow" aria-hidden="true" />
-        {/* The bottle stands before a lit burgundy arch, the house motif. */}
+        {/* Layered back to front: the lit burgundy arch, the notes behind the
+            bottle, the bottle, the notes passing in front of it. */}
+        <div className="opening-arch" aria-hidden="true"><span className="hero-arch" /></div>
+        <NotesStage className="opening-notes" variant="zafreon" stage side="back" progress={scrollYProgress} />
         <div className="opening-product">
-          <span className="hero-arch" aria-hidden="true" />
           <motion.div className="opening-product-inner" style={{ scale: productScale, y: productY }}>
             <FloatingProduct render={render} alt="ZAFREON Eau de Parfum, black and gold bottle with a crystal cap" eager sizes="(max-width: 860px) 60vw, 34vw" strength={0.7} />
           </motion.div>
         </div>
+        <NotesStage className="opening-notes opening-notes-front" variant="zafreon" stage side="front" progress={scrollYProgress} />
       </motion.div>
 
       <div className="opening-scroll">

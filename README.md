@@ -52,9 +52,9 @@ How it runs on Vercel: the built React app, `/assets` and `/media` are served by
 
 ## How the site is built
 
-**The opening.** The ZAFREON bottle stands before a lit burgundy arch, pinned on stage while the story scrolls past it: the opening, then its top, heart and base notes, as the light warms from black to oxblood.
+**The opening.** The ZAFREON bottle stands before a lit burgundy arch, pinned on stage while the story scrolls past it: the opening, then its top, heart and base notes, as the light warms from black to oxblood. As each tier arrives, its materials rise out of the bottle and orbit it in 3D (Three.js via React Three Fiber): saffron threads, cardamom and black pepper; rose petals, frankincense and incense smoke; oud wood, amber and patchouli. The notes are drawn on two transparent canvases, one behind the bottle render and one in front, so they pass both behind and in front of the glass. The 3D code loads in its own chunk, pauses off-screen, and is simply left out without WebGL.
 
-**Product pages** open on the floating bottle render, followed by the film, a zoomable gallery, interactive top/heart/base notes with ingredient photographs or line icons, Buy now, and a sticky buy bar on phones.
+**Product pages** open on the floating bottle with its own notes circling it tier by tier on a slow loop (ELARISSE has its own set: saffron, pink pepper, bergamot; jasmine, Taif rose, orange blossom; amber, sandalwood, vanilla), followed by the film, a zoomable gallery, interactive top/heart/base notes with ingredient photographs or line icons, Buy now, and a sticky buy bar on phones.
 
 **Product renders** (`client/public/media/render-*.webp`, registered in `client/src/lib/renders.js`) are cut-out bottles shown floating on a lit stage in each fragrance's colours. Product cards show the bottle and fade to the campaign photograph on hover.
 
