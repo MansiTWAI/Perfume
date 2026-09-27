@@ -120,8 +120,10 @@ const AR = {
   All: 'الكل',
   'Not sure? Take the four-question guide': 'لست متأكداً؟ أجب عن أربعة أسئلة لتجد عطرك',
   'Next from the house': 'القادم من الدار',
-  'The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.':
-    'ستمتد المجموعة إلى العود والعنبر والمسك والأخشاب، ثم إلى الجمال وأسلوب الحياة. اشترك في رسائل المجلة لتكون أول من يعرف.',
+  'Coming soon': 'قريباً',
+  'A new signature is on its way. The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle.':
+    'توقيع جديد في الطريق. ستمتد المجموعة إلى العود والعنبر والمسك والأخشاب، ثم إلى الجمال وأسلوب الحياة.',
+  'Be the first to know': 'كن أول من يعرف',
 
   // ----- reviews -----
   '{n} out of 5 stars': '{n} من 5 نجوم',

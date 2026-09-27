@@ -6,7 +6,7 @@ import Product from '../models/Product.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
 
 const r = Router();
-const submitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10 });
+const submitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, message: { message: 'Too many reviews from this connection. Please try again later.' } });
 
 // Public name: first name and initial only ("Ayesha K.").
 function displayName(full) {

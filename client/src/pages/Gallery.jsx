@@ -19,6 +19,7 @@ const ITEMS = [
   { src: '/media/business-card.webp', alt: 'AL BARAKAH LIFESTYLE stationery', tags: ['Brand', 'Details'], size: 'wide' },
   { src: '/media/elarisse-logo-ivory.webp', alt: 'ELARISSE emblem on ivory', tags: ['ELARISSE', 'Brand'], size: 'sq' },
   { src: '/media/zafreon-bottle-marble.jpg', alt: 'ZAFREON bottle on black marble', tags: ['ZAFREON', 'Packaging'], size: 'tall' },
+  { src: '/media/zaymara-logo.webp', alt: 'ZAYMARA, the next Eau de Parfum from the house: a gold lotus on burgundy', tags: ['Brand'], size: 'sq' },
 ];
 const FILTERS = ['All', 'Brand', 'ELARISSE', 'ZAFREON', 'Packaging', 'Campaigns', 'Details', 'Lifestyle'];
 

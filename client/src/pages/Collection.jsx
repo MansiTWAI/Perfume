@@ -5,6 +5,8 @@ import ProductCard from '../components/ProductCard';
 import { Reveal } from '../components/Motion';
 import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
+import Img from '../components/Img';
+import Newsletter from '../components/Newsletter';
 
 export default function Collection() {
   const { products, loading } = useProducts();
@@ -46,9 +48,22 @@ export default function Collection() {
               {list.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} />)}
             </div>
           )}
-          <Reveal className="collection-note">
-            <p className="eyebrow">{t('Next from the house')}</p>
-            <p>{t('The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.')}</p>
+          {/* The next fragrance, announced by name only: no notes, price or
+              date until the house confirms them. */}
+          <Reveal className="next-signature" y={50}>
+            <div className="next-logo">
+              <Img src="/media/zaymara-logo.webp" alt="ZAYMARA Eau de Parfum logo: a gold lotus above the name, with the words leave your signature" sizes="(max-width: 860px) 80vw, 36vw" />
+            </div>
+            <div className="next-copy">
+              <p className="eyebrow">{t('Next from the house')}</p>
+              <h2 className="display-l">ZAYMARA</h2>
+              <p className="next-sub">{t('Eau de Parfum')} · {t('Coming soon')}</p>
+              <p>{t('A new signature is on its way. The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle.')}</p>
+              <div className="next-form">
+                <p className="eyebrow">{t('Be the first to know')}</p>
+                <Newsletter source="zaymara" />
+              </div>
+            </div>
           </Reveal>
         </div>
       </section>

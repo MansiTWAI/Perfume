@@ -46,7 +46,7 @@ export const whatsappLink = (text) => `https://wa.me/${CONTACT.phoneRaw}?text=${
 export const cx = (...a) => a.filter(Boolean).join(' ');
 
 // Bundled media above 900px wide also ship an 800px version (name-800.webp).
-const HAS_SMALL = /^\/media\/(business-card|duo-triptych|elarisse-bottle|elarisse-campaign|elarisse-logo-dark|elarisse-logo-ivory|elarisse-still|zafreon-campaign|zafreon-logo)\.webp$/;
+const HAS_SMALL = /^\/media\/(business-card|duo-triptych|elarisse-bottle|elarisse-campaign|elarisse-logo-dark|elarisse-logo-ivory|elarisse-still|zafreon-campaign|zafreon-logo|zaymara-logo)\.webp$/;
 export function srcSet(src) {
   if (!src || !HAS_SMALL.test(src)) return undefined;
   return `${src.replace('.webp', '-800.webp')} 800w, ${src} 1600w`;

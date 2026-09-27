@@ -4,7 +4,7 @@ import { Enquiry, Subscriber } from '../models/Enquiry.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
 
 const r = Router();
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10 });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: { message: 'Too many messages from this connection. Please try again in a few minutes, or write to us on WhatsApp.' } });
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || ''));
 
 r.post(
