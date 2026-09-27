@@ -123,6 +123,17 @@ const AR = {
   'The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.':
     'ستمتد المجموعة إلى العود والعنبر والمسك والأخشاب، ثم إلى الجمال وأسلوب الحياة. اشترك في رسائل المجلة لتكون أول من يعرف.',
 
+  // ----- reviews -----
+  '{n} out of 5 stars': '{n} من 5 نجوم',
+  '{n} verified reviews': '{n} تقييمات موثّقة',
+  'Verified reviews': 'تقييمات موثّقة',
+  'In their words': 'بكلماتهم',
+  'Verified buyer': 'مشترٍ موثّق',
+  'From the house': 'من الدار',
+  '{name} has no reviews yet. Every review here comes from a delivered order and is read by the house before it appears.':
+    'لا توجد تقييمات لـ{name} بعد. كل تقييم هنا يأتي من طلب تم توصيله، وتقرؤه الدار قبل نشره.',
+  'Bought it? Review it from your order': 'اشتريته؟ قيّمه من صفحة طلبك',
+
   // ----- service promise -----
   'Our promise': 'وعدنا',
   'Delivered across {country}': 'توصيل إلى جميع أنحاء {country}',

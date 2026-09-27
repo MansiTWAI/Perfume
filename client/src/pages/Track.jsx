@@ -5,6 +5,7 @@ import Seo from '../components/Seo';
 import { PageHero } from '../components/Bits';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
+import { ReviewForm } from '../components/Reviews';
 
 function Lamp({ lit, current, label, date }) {
   return (
@@ -28,13 +29,21 @@ export default function Track() {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reviewable, setReviewable] = useState([]);
 
   async function lookup(e) {
     e?.preventDefault();
     setBusy(true);
     setError('');
     try {
-      setOrder(await api(`/orders/track/${encodeURIComponent(id.trim())}?email=${encodeURIComponent(email.trim())}`));
+      const o = await api(`/orders/track/${encodeURIComponent(id.trim())}?email=${encodeURIComponent(email.trim())}`);
+      setOrder(o);
+      // Delivered orders can review each fragrance once.
+      setReviewable([]);
+      if (o.status === 'Delivered') {
+        const r = await api(`/reviews/eligible/${encodeURIComponent(id.trim())}?email=${encodeURIComponent(email.trim())}`).catch(() => null);
+        setReviewable((r?.items || []).filter((i) => !i.reviewed));
+      }
     } catch (err) {
       setOrder(null);
       setError(err.message);
@@ -89,6 +98,13 @@ export default function Track() {
                   <li key={it.name}><img src={it.image} alt="" width="48" height="48" />{it.name} × {it.qty}</li>
                 ))}
               </ul>
+              {reviewable.length > 0 && (
+                <div className="track-reviews">
+                  {reviewable.map((it) => (
+                    <ReviewForm key={it.slug} trackingId={id.trim()} email={email.trim()} item={it} />
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </div>

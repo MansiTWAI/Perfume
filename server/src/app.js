@@ -13,6 +13,7 @@ import productRoutes from './routes/products.js';
 import postRoutes from './routes/posts.js';
 import orderRoutes from './routes/orders.js';
 import contactRoutes from './routes/contact.js';
+import reviewRoutes from './routes/reviews.js';
 import uploadRoutes, { serveUpload } from './routes/uploads.js';
 import Product from './models/Product.js';
 import Post from './models/Post.js';
@@ -60,6 +61,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api', contactRoutes);
 

@@ -12,6 +12,8 @@ import FloatingProduct from '../components/FloatingProduct';
 import NotesStage from '../components/NotesStage';
 import { renderFor } from '../lib/renders';
 import { useProduct } from '../hooks/useProducts';
+import { useApi } from '../hooks/useApi';
+import Reviews, { RatingSummary } from '../components/Reviews';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { whatsappLink } from '../lib/format';
@@ -110,6 +112,7 @@ export default function Product() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { data, loading, error } = useProduct(slug);
+  const { data: reviews } = useApi(`/reviews/product/${slug}`);
   const { region, addToCart, toast, priceOf, fmt, t } = useStore();
   const [qty, setQty] = useState(1);
   const buyRef = useRef(null);
@@ -163,6 +166,18 @@ export default function Product() {
       availability: soldOut ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
       itemCondition: 'https://schema.org/NewCondition',
     })),
+    // Only real, approved reviews; never a placeholder rating.
+    ...(reviews?.count > 0 && {
+      aggregateRating: { '@type': 'AggregateRating', ratingValue: reviews.average, reviewCount: reviews.count, bestRating: 5, worstRating: 1 },
+      review: reviews.items.slice(0, 5).map((r) => ({
+        '@type': 'Review',
+        author: { '@type': 'Person', name: r.name },
+        datePublished: String(r.createdAt).slice(0, 10),
+        reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+        ...(r.title && { name: r.title }),
+        reviewBody: r.body,
+      })),
+    }),
   };
 
   return (
@@ -185,6 +200,7 @@ export default function Product() {
               <p className="eyebrow">{p.family}</p>
               <SplitHeading as="h1" text={p.name} className="pinfo-name" />
               <p className="pinfo-sub">{p.subtitle} · <span dir="ltr">{p.sizeLabel}</span></p>
+              <RatingSummary summary={reviews} />
               <p className="pinfo-tag">{p.tagline}</p>
               <p className="pinfo-desc">{p.description}</p>
 
@@ -288,6 +304,8 @@ export default function Product() {
           />
         </div>
       </section>
+
+      <Reviews data={reviews} name={p.name} />
 
       {related?.length > 0 && (
         <section className="section related">

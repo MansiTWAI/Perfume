@@ -102,7 +102,7 @@ r.get(
       carrier: order.carrier,
       carrierUrl: order.carrierUrl,
       eta: order.eta,
-      items: order.items.map((i) => ({ name: i.name, qty: i.qty, image: i.image })),
+      items: order.items.map((i) => ({ slug: i.slug, name: i.name, qty: i.qty, image: i.image })),
       city: order.customer.address.city,
       country: order.customer.address.country,
       createdAt: order.createdAt,
