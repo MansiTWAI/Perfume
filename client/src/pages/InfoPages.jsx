@@ -3,16 +3,28 @@ import Seo, { breadcrumbLd } from '../components/Seo';
 import { PageHero, Accordion } from '../components/Bits';
 import { Reveal } from '../components/Motion';
 import { CONTACT } from '../lib/format';
+import { useStore } from '../context/StoreContext';
 
-const FAQS = [
-  ['What is an Eau de Parfum?', 'An Eau de Parfum typically contains 15–20% perfume oil. It is rich enough to develop through the day without feeling heavy. Both ELARISSE and ZAFREON are Eau de Parfum.'],
-  ['Which fragrance should I choose?', 'ELARISSE is luminous and floral-amber, lovely for daytime and celebrations. ZAFREON is darker, with saffron, incense and oud, made for evenings. Try our Find Your Signature quiz from the top of any page.'],
-  ['Are your fragrances unisex?', 'Yes. Both fragrances are designed for anyone drawn to their character.'],
-  ['Do you deliver outside India?', 'We deliver across India and to the UAE, with selected Middle Eastern destinations to follow. Duties and delivery windows for international orders are confirmed before dispatch.'],
-  ['Can I add a gift note?', 'Yes. At checkout, add a Signature Card with the recipient’s name, the occasion and a personal line. We print it and place it in the box.'],
-  ['How do I track my order?', 'Use the tracking ID from your order confirmation on the Track Order page, together with the email you used at checkout.'],
-  ['How should I store my perfume?', 'Keep it in its box, away from sunlight, heat and humidity. Avoid the bathroom and never leave it in a car.'],
-];
+const FAQS = {
+  en: [
+    ['What is an Eau de Parfum?', 'An Eau de Parfum typically contains 15–20% perfume oil. It is rich enough to develop through the day without feeling heavy. Both ELARISSE and ZAFREON are Eau de Parfum.'],
+    ['Which fragrance should I choose?', 'ELARISSE is luminous and floral-amber, lovely for daytime and celebrations. ZAFREON is darker, with saffron, incense and oud, made for evenings. Try our Find Your Signature quiz from the top of any page.'],
+    ['Are your fragrances unisex?', 'Yes. Both fragrances are designed for anyone drawn to their character.'],
+    ['Do you deliver outside India?', 'We deliver across India and to the UAE, with selected Middle Eastern destinations to follow. Duties and delivery windows for international orders are confirmed before dispatch.'],
+    ['Can I add a gift note?', 'Yes. At checkout, add a Signature Card with the recipient’s name, the occasion and a personal line. We print it and place it in the box.'],
+    ['How do I track my order?', 'Use the tracking ID from your order confirmation on the Track Order page, together with the email you used at checkout.'],
+    ['How should I store my perfume?', 'Keep it in its box, away from sunlight, heat and humidity. Avoid the bathroom and never leave it in a car.'],
+  ],
+  ar: [
+    ['ما هو أو دو بارفان؟', 'يحتوي أو دو بارفان عادةً على 15–20% من زيت العطر، وهو غنيّ بما يكفي ليتطوّر طوال اليوم دون أن يكون ثقيلاً. ELARISSE وZAFREON كلاهما أو دو بارفان.'],
+    ['أيّ عطر أختار؟', 'ELARISSE مضيء، زهري عنبري، جميل للنهار والاحتفالات. وZAFREON أعمق، بالزعفران والبخور والعود، صُنع للأمسيات. جرّب اختبار «اكتشف توقيعك» من أعلى أي صفحة.'],
+    ['هل عطوركم للجنسين؟', 'نعم. صُمّم العطران لكل من ينجذب إلى طابعهما.'],
+    ['هل توصلون خارج الهند؟', 'نوصل إلى جميع أنحاء الهند وإلى الإمارات، وتتبعها وجهات مختارة في الشرق الأوسط. نؤكد الرسوم الجمركية ومدة التوصيل للطلبات الدولية قبل الشحن.'],
+    ['هل يمكنني إضافة بطاقة إهداء؟', 'نعم. عند إتمام الطلب أضف بطاقة إهداء تحمل اسم المُهدى إليه والمناسبة وسطراً شخصياً، نطبعها ونضعها داخل العلبة.'],
+    ['كيف أتتبّع طلبي؟', 'استخدم رقم التتبّع من تأكيد طلبك في صفحة تتبّع الطلب، مع البريد الإلكتروني الذي استخدمته عند الطلب.'],
+    ['كيف أحفظ عطري؟', 'احفظه في علبته بعيداً عن أشعة الشمس والحرارة والرطوبة. تجنّب الحمّام، ولا تتركه في السيارة أبداً.'],
+  ],
+};
 
 function LegalPage({ title, seoTitle, eyebrow, path, image, alt, children }) {
   return (
@@ -27,6 +39,8 @@ function LegalPage({ title, seoTitle, eyebrow, path, image, alt, children }) {
 }
 
 export function Faq() {
+  const { lang, t } = useStore();
+  const faqs = FAQS[lang] || FAQS.en;
   return (
     <>
       <Seo
@@ -34,15 +48,15 @@ export function Faq() {
         description="Answers about AL BARAKAH LIFESTYLE fragrances, delivery across India and the UAE, gift notes, tracking and perfume care."
         jsonLd={[
           breadcrumbLd([['Home', '/'], ['FAQ', '/faq']]),
-          { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: FAQS.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
+          { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
         ]}
       />
-      <PageHero eyebrow="Help" title="Questions, answered" layout="split" image="/media/elarisse-campaign.webp" alt="ELARISSE beneath palace arches at sunset" lede="Fragrance, delivery, gifting and care." />
+      <PageHero eyebrow={t('Help')} title={t('Questions, answered')} layout="split" image="/media/elarisse-campaign.webp" alt="ELARISSE beneath palace arches at sunset" lede={t('Fragrance, delivery, gifting and care.')} />
       <section className="section">
         <div className="container narrow">
-          <Accordion items={FAQS} />
+          <Accordion items={faqs} />
           <Reveal className="center" style={{ marginTop: 48 }}>
-            <p className="section-lede">Still wondering? <Link to="/contact" className="text-link">Speak with the house</Link>.</p>
+            <p className="section-lede">{t('Still wondering? {link}.', { link: <Link to="/contact" className="text-link">{t('Speak with the house')}</Link> })}</p>
           </Reveal>
         </div>
       </section>
@@ -50,21 +64,54 @@ export function Faq() {
   );
 }
 
+const SHIPPING = {
+  en: {
+    title: 'Shipping & Returns',
+    eyebrow: 'Delivery',
+    body: (
+      <>
+        <h2>Where we deliver</h2>
+        <p>We deliver across India from our home in Hyderabad, and to the United Arab Emirates. Selected Middle Eastern destinations will follow, subject to courier coverage, customs requirements, import rules and destination restrictions.</p>
+        <h2>Delivery charges</h2>
+        <p>Delivery charges are shown in your bag and at checkout before you place your order. Orders above the threshold shown in your bag qualify for complimentary delivery.</p>
+        <h2>International orders</h2>
+        <p>Unless checkout states otherwise, customers may be responsible for destination duties, taxes and local charges. We confirm these and the expected delivery window before dispatch.</p>
+        <h2>Tracking</h2>
+        <p>Every order receives a tracking ID. Follow each stage, from Order Placed to Delivered, on the <Link to="/track">Track Order</Link> page.</p>
+        <h2>Returns</h2>
+        <p>Because fragrance is a personal-care product, opened bottles cannot be returned unless they arrive damaged or incorrect. If your order arrives damaged, please contact us within 48 hours of delivery with photographs of the parcel and product, and we will make it right.</p>
+        <h2>Contact</h2>
+      </>
+    ),
+  },
+  ar: {
+    title: 'الشحن والإرجاع',
+    eyebrow: 'التوصيل',
+    body: (
+      <>
+        <h2>أين نوصل</h2>
+        <p>نوصل إلى جميع أنحاء الهند من مقرّنا في حيدر آباد، وإلى الإمارات العربية المتحدة. وتتبعها وجهات مختارة في الشرق الأوسط، رهناً بتغطية شركات الشحن ومتطلبات الجمارك وقواعد الاستيراد وقيود كل وجهة.</p>
+        <h2>رسوم التوصيل</h2>
+        <p>تظهر رسوم التوصيل في حقيبتك وعند إتمام الطلب قبل تأكيده. والطلبات التي تتجاوز الحدّ الظاهر في حقيبتك تحصل على توصيل مجاني.</p>
+        <h2>الطلبات الدولية</h2>
+        <p>ما لم تذكر صفحة الطلب خلاف ذلك، قد يتحمّل العميل الرسوم الجمركية والضرائب والرسوم المحلية في بلد الوصول. نؤكد هذه الرسوم ومدة التوصيل المتوقعة قبل الشحن.</p>
+        <h2>التتبّع</h2>
+        <p>يحصل كل طلب على رقم تتبّع. تابع كل مرحلة، من تقديم الطلب حتى التسليم، في صفحة <Link to="/track">تتبّع الطلب</Link>.</p>
+        <h2>الإرجاع</h2>
+        <p>لأن العطر منتج للعناية الشخصية، لا يمكن إرجاع القوارير المفتوحة إلا إذا وصلت تالفة أو غير صحيحة. إذا وصل طلبك تالفاً، يُرجى التواصل معنا خلال 48 ساعة من التسليم مع صور للطرد والمنتج، وسنعالج الأمر.</p>
+        <h2>التواصل</h2>
+      </>
+    ),
+  },
+};
+
 export function Shipping() {
+  const { lang } = useStore();
+  const c = SHIPPING[lang] || SHIPPING.en;
   return (
-    <LegalPage title="Shipping & Returns" eyebrow="Delivery" path="/shipping-returns" image="/media/elarisse-bottle.webp" alt="ELARISSE in its ivory and gold presentation box">
-      <h2>Where we deliver</h2>
-      <p>We deliver across India from our home in Hyderabad, and to the United Arab Emirates. Selected Middle Eastern destinations will follow, subject to courier coverage, customs requirements, import rules and destination restrictions.</p>
-      <h2>Delivery charges</h2>
-      <p>Delivery charges are shown in your bag and at checkout before you place your order. Orders above the threshold shown in your bag qualify for complimentary delivery.</p>
-      <h2>International orders</h2>
-      <p>Unless checkout states otherwise, customers may be responsible for destination duties, taxes and local charges. We confirm these and the expected delivery window before dispatch.</p>
-      <h2>Tracking</h2>
-      <p>Every order receives a tracking ID. Follow each stage, from Order Placed to Delivered, on the <Link to="/track">Track Order</Link> page.</p>
-      <h2>Returns</h2>
-      <p>Because fragrance is a personal-care product, opened bottles cannot be returned unless they arrive damaged or incorrect. If your order arrives damaged, please contact us within 48 hours of delivery with photographs of the parcel and product, and we will make it right.</p>
-      <h2>Contact</h2>
-      <p>{CONTACT.email} · {CONTACT.phone}</p>
+    <LegalPage title={c.title} seoTitle="Shipping & Returns" eyebrow={c.eyebrow} path="/shipping-returns" image="/media/elarisse-bottle.webp" alt="ELARISSE in its ivory and gold presentation box">
+      {c.body}
+      <p dir="ltr">{CONTACT.email} · {CONTACT.phone}</p>
     </LegalPage>
   );
 }
@@ -122,13 +169,14 @@ export function Terms() {
 }
 
 export function NotFound() {
+  const { t } = useStore();
   return (
     <>
       <Seo title="Page not found" />
-      <PageHero eyebrow="404" title="This page has left no trace" image="/media/zafreon-campaign.webp" lede="The page you are looking for may have moved. Let us take you somewhere memorable.">
+      <PageHero eyebrow="404" title={t('This page has left no trace')} image="/media/zafreon-campaign.webp" lede={t('The page you are looking for may have moved. Let us take you somewhere memorable.')}>
         <div className="btn-row" style={{ marginTop: 32 }}>
-          <Link to="/" className="btn btn-primary">Return home</Link>
-          <Link to="/fragrances" className="btn btn-ghost">View the fragrances</Link>
+          <Link to="/" className="btn btn-primary">{t('Return home')}</Link>
+          <Link to="/fragrances" className="btn btn-ghost">{t('View the fragrances')}</Link>
         </div>
       </PageHero>
     </>

@@ -130,3 +130,10 @@
   .a-row { flex-wrap: wrap; }
   .a-grid2 { grid-template-columns: 1fr; }
 }
+.a-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.a-tabs button { padding: 7px 14px; border-radius: 20px; border: 1px solid var(--a-line); background: var(--a-panel); font: 500 13px/1.2 var(--body); cursor: pointer; }
+.a-tabs button.is-on { border-color: var(--a-accent); color: var(--a-accent); }
+.a-reply { display: grid; gap: 6px; font-size: 13px; margin-top: 10px; }
+.a-reply textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--a-line); border-radius: 6px; resize: vertical; }
+.a-rtl { display: grid; gap: 14px; }
+.a-rtl input, .a-rtl textarea { text-align: right; font-family: var(--body); }

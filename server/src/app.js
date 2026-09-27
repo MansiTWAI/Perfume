@@ -13,6 +13,7 @@ import productRoutes from './routes/products.js';
 import postRoutes from './routes/posts.js';
 import orderRoutes from './routes/orders.js';
 import contactRoutes from './routes/contact.js';
+import reviewRoutes from './routes/reviews.js';
 import uploadRoutes, { serveUpload } from './routes/uploads.js';
 import Product from './models/Product.js';
 import Post from './models/Post.js';
@@ -50,10 +51,17 @@ app.get('/uploads/:name', serveUpload);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/settings', (_req, res) => res.json({ regions: REGIONS }));
+// The visitor's country, from the edge network's geolocation header, so a
+// first visit from Dubai opens in dirhams. Nothing is stored.
+app.get('/api/geo', (req, res) => {
+  const country = String(req.get('x-vercel-ip-country') || req.get('cf-ipcountry') || '').toUpperCase();
+  res.set('Cache-Control', 'private, no-store').json({ country: /^[A-Z]{2}$/.test(country) ? country : null });
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api', contactRoutes);
 

@@ -5,13 +5,17 @@ import ProductCard from '../components/ProductCard';
 import { Reveal } from '../components/Motion';
 import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
+import Img from '../components/Img';
+import Newsletter from '../components/Newsletter';
 
 export default function Collection() {
   const { products, loading } = useProducts();
-  const { setFinderOpen } = useStore();
-  const [family, setFamily] = useState('All');
+  const { setFinderOpen, t } = useStore();
+  const [picked, setFamily] = useState('All');
   // Filters come from the product data itself, never a fixed list.
   const families = ['All', ...new Set((products || []).map((p) => p.family).filter(Boolean))];
+  // Family names change with the language; an unknown one means All.
+  const family = families.includes(picked) ? picked : 'All';
   const list = (products || []).filter((p) => family === 'All' || p.family === family);
 
   return (
@@ -28,25 +32,38 @@ export default function Collection() {
           },
         ]}
       />
-      <PageHero eyebrow="The collection" title="Eau de Parfum" image="/media/duo-triptych.webp" lede="Each fragrance has its own personality, and every presentation has a purpose." />
+      <PageHero eyebrow={t('The collection')} title={t('Eau de Parfum')} image="/media/duo-triptych.webp" lede={t('Each fragrance has its own personality, and every presentation has a purpose.')} />
       <section className="section collection-page">
         <div className="container">
           <div className="filter-row">
-            <div className="chips" role="group" aria-label="Filter by fragrance family">
+            <div className="chips" role="group" aria-label={t('Filter by fragrance family')}>
               {families.map((c) => (
-                <button key={c} className="chip" aria-pressed={family === c} onClick={() => setFamily(c)}>{c}</button>
+                <button key={c} className="chip" aria-pressed={family === c} onClick={() => setFamily(c)}>{c === 'All' ? t('All') : c}</button>
               ))}
             </div>
-            <button className="text-link" onClick={() => setFinderOpen(true)}>Not sure? Take the four-question guide</button>
+            <button className="text-link" onClick={() => setFinderOpen(true)}>{t('Not sure? Take the four-question guide')}</button>
           </div>
           {loading ? <Loading /> : (
             <div className="product-grid">
               {list.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} />)}
             </div>
           )}
-          <Reveal className="collection-note">
-            <p className="eyebrow">Next from the house</p>
-            <p>The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.</p>
+          {/* The next fragrance, announced by name only: no notes, price or
+              date until the house confirms them. */}
+          <Reveal className="next-signature" y={50}>
+            <div className="next-logo">
+              <Img src="/media/zaymara-logo.webp" alt="ZAYMARA Eau de Parfum logo: a gold lotus above the name, with the words leave your signature" sizes="(max-width: 860px) 80vw, 36vw" />
+            </div>
+            <div className="next-copy">
+              <p className="eyebrow">{t('Next from the house')}</p>
+              <h2 className="display-l">ZAYMARA</h2>
+              <p className="next-sub">{t('Eau de Parfum')} · {t('Coming soon')}</p>
+              <p>{t('A new signature is on its way. The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle.')}</p>
+              <div className="next-form">
+                <p className="eyebrow">{t('Be the first to know')}</p>
+                <Newsletter source="zaymara" />
+              </div>
+            </div>
           </Reveal>
         </div>
       </section>

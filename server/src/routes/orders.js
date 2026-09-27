@@ -7,7 +7,7 @@ import { ORDER_STAGES, regionByCode, shippingFor } from '../config/commerce.js';
 import { code } from '../utils.js';
 
 const r = Router();
-const placeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 });
+const placeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { message: 'Too many orders from this connection. Please try again in a few minutes, or order on WhatsApp.' } });
 
 // Place an order. Prices are always recalculated from the database.
 r.post(
@@ -102,7 +102,7 @@ r.get(
       carrier: order.carrier,
       carrierUrl: order.carrierUrl,
       eta: order.eta,
-      items: order.items.map((i) => ({ name: i.name, qty: i.qty, image: i.image })),
+      items: order.items.map((i) => ({ slug: i.slug, name: i.name, qty: i.qty, image: i.image })),
       city: order.customer.address.city,
       country: order.customer.address.country,
       createdAt: order.createdAt,

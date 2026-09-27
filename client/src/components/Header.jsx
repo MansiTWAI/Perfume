@@ -26,8 +26,24 @@ const Icon = {
   bag: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8z" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
 };
 
+// English ⇄ Arabic. Each option is labelled in its own language.
+function LangToggle({ className = 'lang-btn' }) {
+  const { lang, setLang } = useStore();
+  const next = lang === 'ar' ? 'en' : 'ar';
+  return (
+    <button
+      className={className}
+      onClick={() => setLang(next)}
+      lang={next}
+      aria-label={next === 'ar' ? 'تصفّح بالعربية' : 'Read in English'}
+    >
+      {next === 'ar' ? 'عربي' : 'EN'}
+    </button>
+  );
+}
+
 export default function Header() {
-  const { count, setCartOpen, user, setSearchOpen, setFinderOpen } = useStore();
+  const { count, setCartOpen, user, setSearchOpen, setFinderOpen, t } = useStore();
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -63,15 +79,15 @@ export default function Header() {
       >
         <div className="container header-row">
           <div className="header-left">
-            <button className="menu-btn" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+            <button className="menu-btn" aria-label={t(menu ? 'Close menu' : 'Open menu')} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
               <span /><span />
             </button>
-            <nav className="nav-desktop" aria-label="Primary">
+            <nav className="nav-desktop" aria-label={t('Primary')}>
               {PRIMARY.map(([to, label]) => (
                 <NavLink key={to} to={to} className="nav-link">
                   {({ isActive }) => (
                     <>
-                      {label}
+                      {t(label)}
                       {isActive && <motion.span layoutId="nav-underline" className="nav-underline" transition={{ type: 'spring', stiffness: 260, damping: 30 }} />}
                     </>
                   )}
@@ -80,7 +96,7 @@ export default function Header() {
             </nav>
           </div>
 
-          <Link to="/" className="logo" aria-label="AL BARAKAH LIFESTYLE, home">
+          <Link to="/" className="logo" aria-label={t('AL BARAKAH LIFESTYLE, home')}>
             <img src="/media/calligraphy.webp" alt="" width="58" height="44" />
             <span className="logo-word">
               <b>Al Barakah</b>
@@ -89,11 +105,12 @@ export default function Header() {
           </Link>
 
           <div className="header-right">
-            <NavLink to="/contact" className="nav-link nav-desktop-only">Contact</NavLink>
-            <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label="Search">{Icon.search}</button>
+            <NavLink to="/contact" className="nav-link nav-desktop-only">{t('Contact')}</NavLink>
+            <LangToggle />
+            <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}>{Icon.search}</button>
             <div className="nav-desktop-only"><RegionSelect /></div>
-            <Link to="/account" className="icon-btn nav-desktop-only" aria-label={user ? 'Your account' : 'Sign in'}>{Icon.user}</Link>
-            <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={`Bag, ${count} ${count === 1 ? 'item' : 'items'}`}>
+            <Link to="/account" className="icon-btn nav-desktop-only" aria-label={t(user ? 'Your account' : 'Sign in')}>{Icon.user}</Link>
+            <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t('Bag, {n} items', { n: count })}>
               {Icon.bag}
               <AnimatePresence>
                 {count > 0 && (
@@ -115,17 +132,18 @@ export default function Header() {
             animate={{ clipPath: 'inset(0 0 0% 0)', transition: { duration: 0.7, ease: [0.76, 0, 0.24, 1] } }}
             exit={{ clipPath: 'inset(0 0 100% 0)', transition: { duration: 0.5, ease: [0.76, 0, 0.24, 1] } }}
           >
-            <nav aria-label="Menu">
+            <nav aria-label={t('Menu')}>
               {MENU.map(([to, label], i) => (
                 <motion.div key={to} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 + i * 0.05 } }}>
-                  <NavLink to={to}>{label}</NavLink>
+                  <NavLink to={to}>{t(label)}</NavLink>
                 </motion.div>
               ))}
             </nav>
             <div className="mobile-menu-foot">
-              <button className="text-btn" onClick={() => { setMenu(false); setFinderOpen(true); }}>Find your signature</button>
-              <Link to="/account" className="text-btn">{user ? 'Your account' : 'Sign in'}</Link>
-              <Link to="/track" className="text-btn">Track an order</Link>
+              <button className="text-btn" onClick={() => { setMenu(false); setFinderOpen(true); }}>{t('Find your signature')}</button>
+              <Link to="/account" className="text-btn">{t(user ? 'Your account' : 'Sign in')}</Link>
+              <Link to="/track" className="text-btn">{t('Track an order')}</Link>
+              <LangToggle className="lang-btn lang-btn-menu" />
               <RegionSelect align="left" />
             </div>
           </motion.div>

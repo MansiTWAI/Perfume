@@ -7,6 +7,11 @@
 //
 // To add a market: add a region here, add its currency to the Product price
 // schema, and set prices in the admin.
+// Units of a currency per AED, from its rate per US dollar.
+function aed(perUsd) {
+  return Math.round((perUsd / 3.6725) * 10000) / 10000;
+}
+
 export const REGIONS = [
   {
     code: 'IN', name: 'India', currency: 'INR', ships: true,
@@ -18,14 +23,20 @@ export const REGIONS = [
     taxLabel: 'incl. 5% VAT', shipping: { flat: 35, freeOver: 300 },
     payments: ['pay-on-confirmation'],
   },
-  { code: 'SA', name: 'Saudi Arabia', currency: 'AED', ships: false },
-  { code: 'QA', name: 'Qatar', currency: 'AED', ships: false },
-  { code: 'KW', name: 'Kuwait', currency: 'AED', ships: false },
-  { code: 'OM', name: 'Oman', currency: 'AED', ships: false },
-  { code: 'BH', name: 'Bahrain', currency: 'AED', ships: false },
+  // Enquiry markets show an indicative price in their own currency, converted
+  // from the AED price. Every GCC currency except the Kuwaiti dinar is pegged
+  // to the US dollar, so these rates barely move; the exact amount is
+  // confirmed on WhatsApp before the customer pays.
+  { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', ships: false, base: 'AED', fx: aed(3.75) },
+  { code: 'QA', name: 'Qatar', currency: 'QAR', ships: false, base: 'AED', fx: aed(3.64) },
+  { code: 'KW', name: 'Kuwait', currency: 'KWD', ships: false, base: 'AED', fx: aed(0.307) },
+  { code: 'OM', name: 'Oman', currency: 'OMR', ships: false, base: 'AED', fx: aed(0.3845) },
+  { code: 'BH', name: 'Bahrain', currency: 'BHD', ships: false, base: 'AED', fx: aed(0.376) },
 ];
 
-export const CURRENCIES = [...new Set(REGIONS.map((r) => r.currency))];
+// Currencies products are actually priced and sold in.
+export const CURRENCIES = [...new Set(REGIONS.filter((r) => r.ships).map((r) => r.currency))];
+
 
 export const ORDER_STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
 

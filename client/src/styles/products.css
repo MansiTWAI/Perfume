@@ -1,0 +1,362 @@
+/* ============ Product renders: floating bottles and their stages ============ */
+
+/* ---------- The floating product ---------- */
+.fp {
+  --rx: 0deg; --ry: 0deg; --gx: 50%; --lift: 0%;
+  --pad: 7% 10% 17%;           /* room around the bottle: top, sides, floor */
+  --floor: 17%;                /* where the bottle stands, from the bottom */
+  --glow: rgba(210, 160, 90, 0.2);
+  position: relative; width: 100%; height: 100%;
+  isolation: isolate;
+}
+.fp-float {
+  position: absolute; inset: var(--pad);
+  display: grid; place-items: end center;
+  container-type: size;
+  animation: fpFloat 7s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.fp-obj {
+  position: relative;
+  /* as large as the box allows, keeping the render's own proportions */
+  width: min(100cqw, 100cqh * var(--arn, 0.58));
+  aspect-ratio: var(--ar);
+  transform: perspective(1100px) translateY(var(--lift)) rotateX(var(--rx)) rotateY(var(--ry));
+  transform-style: preserve-3d;
+  transition: transform 1s var(--ease);
+  will-change: transform;
+}
+.fp.is-tilting .fp-obj { transition: transform 0.18s linear; }
+.fp-img, .fp-reflect { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.fp-img { filter: drop-shadow(0 26px 30px rgba(0, 0, 0, 0.35)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.25)); }
+
+/* A light sweep that follows the pointer, clipped to the bottle's own shape. */
+.fp-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 246, 225, 0.42) 48%, rgba(255, 255, 255, 0.1) 54%, transparent 64%) no-repeat;
+  background-size: 320% 100%;
+  background-position: var(--gx) 0;
+  -webkit-mask: var(--mask) center / contain no-repeat;
+  mask: var(--mask) center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 0.7s var(--ease), background-position 0.3s linear;
+}
+.fp.is-tilting .fp-sheen { opacity: 1; }
+
+/* The bottle's reflection on a polished floor. */
+.fp-reflect {
+  top: 100%; bottom: auto; height: 100%;
+  transform: scaleY(-1);
+  opacity: 0.16;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 26%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 26%);
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+/* Contact shadow on the floor; it tightens as the bottle rises. */
+.fp-shadow {
+  position: absolute; left: 50%; bottom: calc(var(--floor) - 2.5%);
+  width: 52%; height: 6%;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.18) 60%, transparent);
+  animation: fpShadow 7s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  pointer-events: none;
+}
+/* Warm light behind the bottle. */
+.fp-glow {
+  position: absolute; inset: 8% 12% 12%;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  z-index: -1; pointer-events: none;
+}
+
+@keyframes fpFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.4%); } }
+@keyframes fpShadow { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 1; } 50% { transform: translateX(-50%) scale(0.86); opacity: 0.7; } }
+
+/* The gift-set render stands on its own marble plinth: no floor effects. */
+/* The plinth runs off the bottom edge, as if the marble continues below. */
+.fp-plinth { --pad: 8% 7% 0; --floor: 0%; }
+.fp-plinth .fp-shadow { display: none; }
+.fp-plinth .fp-float { animation: none; }
+.product-stage:has(.fp-plinth)::before { border-bottom-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-float, .fp-shadow { animation: none; }
+}
+
+/* ---------- Stages: each fragrance lit in its own colours ---------- */
+.product-stage { position: relative; overflow: hidden; }
+.product-stage::before {
+  /* a hairline gold frame set just inside the edge */
+  content: ''; position: absolute; inset: 12px; z-index: 2; pointer-events: none;
+  border: 1px solid rgba(184, 149, 90, 0.22);
+  transition: border-color 0.8s var(--ease), inset 0.8s var(--ease);
+}
+.stage-ivory { background: radial-gradient(120% 85% at 50% 32%, #fffaf0 0%, #f1e6d2 52%, #e0cfb1 100%); }
+.stage-ivory .fp { --glow: rgba(255, 214, 150, 0.55); }
+.stage-ivory .fp-reflect { opacity: 0.22; }
+.stage-ivory .fp-shadow { background: radial-gradient(closest-side, rgba(90, 60, 30, 0.42), rgba(90, 60, 30, 0.12) 60%, transparent); }
+.stage-onyx { background: radial-gradient(120% 85% at 50% 30%, #2e2019 0%, #141010 55%, #0a0807 100%); }
+.stage-onyx .fp { --glow: rgba(210, 150, 80, 0.24); }
+.stage-duo { background: radial-gradient(120% 85% at 50% 28%, #611a24 0%, #2b080c 62%, #170407 100%); }
+.stage-duo .fp { --glow: rgba(230, 170, 100, 0.22); }
+
+/* ---------- Product cards ---------- */
+.pcard-render .pcard-media { aspect-ratio: 4 / 5; }
+/* The gift set's marble runs past the card edges so the bottles can be larger. */
+.pcard-render .fp-plinth, .pgallery-render .fp-plinth { --pad: 18% -16% 0; }
+/* Name and price share a row; a long name wraps within its own column. */
+@media (min-width: 768px) {
+  .pcard-render .pcard-body { flex-wrap: nowrap; }
+  .pcard-render .pcard-title { flex: 1; min-width: 0; }
+}
+.pcard-badge {
+  position: absolute; top: 24px; inset-inline-start: 24px; z-index: 3;
+  font: 500 10px/1 var(--body); letter-spacing: 0.26em; text-transform: uppercase;
+  color: var(--gold-soft); padding: 7px 10px; border: 1px solid rgba(184, 149, 90, 0.4);
+}
+.stage-ivory .pcard-badge { color: var(--gold-ink); }
+/* The campaign photograph that fades in over the bottle on hover. */
+.pcard-photo { z-index: 1; transition: opacity 0.9s var(--ease), transform 1.8s var(--ease); }
+@media (hover: hover) {
+  .pcard-render:hover .product-stage::before { border-color: rgba(215, 195, 160, 0.6); inset: 16px; }
+}
+
+/* ---------- Homepage hero: the render on the opening stage ---------- */
+.opening-product,
+.opening-arch {
+  position: absolute; z-index: 2; pointer-events: auto;
+  /* beside the copy: right in English, left in Arabic (see gulf.css) */
+  left: calc(50% + min(24vw, 400px)); top: 52%;
+  height: min(70vh, 860px); aspect-ratio: 427 / 900;
+  translate: -50% -50%;
+  opacity: 0; filter: brightness(0.25) blur(6px);
+  transform: translateY(40px);
+  transition: opacity 2s 0.3s var(--ease), filter 2.4s 0.3s var(--ease), transform 2.4s 0.3s var(--ease);
+}
+.opening-arch { z-index: 0; pointer-events: none; }
+.opening.is-lit .opening-product, .opening.is-lit .opening-arch { opacity: 1; filter: none; transform: none; }
+.opening-product-inner { width: 100%; height: 100%; }
+.opening-product .fp { --pad: 4% 4% 18%; --floor: 18%; --glow: rgba(214, 150, 70, 0.3); }
+.opening-product .fp-reflect { opacity: 0.12; }
+[dir='rtl'] .opening-product, [dir='rtl'] .opening-arch { left: calc(50% - min(24vw, 400px)); }
+.opening-product-inner { position: relative; z-index: 1; }
+
+/* The lit arch behind the bottle: burgundy lacquer, gold keylines, fading
+   into the floor where the bottle stands. */
+.hero-arch,
+.hero-arch::before,
+.hero-arch::after { border-radius: 50% 50% 0 0 / 26% 26% 0 0; }
+.hero-arch {
+  position: absolute; left: 50%; bottom: 12%;
+  width: 168%; height: 94%;
+  translate: -50% 0;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 38%, rgba(214, 150, 70, 0.22), transparent 70%),
+    linear-gradient(180deg, #5a1520 0%, #3a0c13 45%, #1c0508 100%);
+  border: 1px solid rgba(210, 182, 132, 0.45);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.6), 0 0 160px rgba(110, 20, 30, 0.35);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+.hero-arch::before,
+.hero-arch::after { content: ''; position: absolute; pointer-events: none; }
+.hero-arch::before { inset: -18px; border: 1px solid rgba(210, 182, 132, 0.2); }
+.hero-arch::after { inset: 14px; border: 1px solid rgba(210, 182, 132, 0.16); }
+/* The pool of light on the floor. */
+.opening-arch::before {
+  content: ''; position: absolute; left: 50%; bottom: 8%;
+  width: 190%; height: 14%; translate: -50% 0;
+  background: radial-gradient(closest-side, rgba(214, 160, 90, 0.2), transparent);
+  pointer-events: none;
+}
+
+/* The 3D notes: one full-stage layer behind the bottle, one in front. */
+.notes-stage { position: absolute; inset: 0; opacity: 0; transition: opacity 1.4s var(--ease); pointer-events: none; }
+.notes-stage.is-ready { opacity: 1; }
+.notes-stage canvas { outline: none; }
+.opening-notes { z-index: 1; }
+.opening-notes-front { z-index: 3; }
+
+/* Portrait screens: the bottle above, the copy below. */
+@media (max-aspect-ratio: 1 / 1) {
+  .opening-product, .opening-arch, [dir='rtl'] .opening-product, [dir='rtl'] .opening-arch { left: 50%; top: 32%; height: min(40vh, 110vw); }
+}
+/* Short phones: the copy alone fills the screen, so the first panel grows and
+   the bottle stands clear above it; the copy then scrolls up over the stage
+   as the story panels already do. */
+@media (max-aspect-ratio: 1 / 1) and (max-height: 740px) {
+  .opening-hero { min-height: calc(100svh + 30vh); }
+  .opening-product, .opening-arch, [dir='rtl'] .opening-product, [dir='rtl'] .opening-arch { top: 36%; height: 38vh; }
+}
+
+/* ---------- Signature Duo band ---------- */
+.duo-img.product-stage { aspect-ratio: 16 / 11; }
+
+/* ---------- Product page gallery ---------- */
+.pgallery-main:has(.pgallery-render) { background: transparent; }
+.pgallery-render { width: 100%; height: 100%; }
+.pgallery-render .fp { --pad: 8% 14% 16%; --floor: 16%; }
+.pgallery-thumbs button.is-render img { object-fit: contain; padding: 10% 14%; }
+
+/* ---------- Closing scene: the two signatures ---------- */
+.closing-scene { min-height: 0; background: radial-gradient(70% 60% at 50% 38%, #2a130f 0%, var(--black) 70%); }
+.closing-scene::after { display: none; }
+.closing-scene .closing-inner { gap: 28px; padding-block: clamp(80px, 10vw, 140px); }
+.closing-products {
+  position: relative; width: min(560px, 90vw); height: clamp(300px, 38vw, 480px);
+  margin-bottom: clamp(8px, 2vw, 24px);
+}
+.closing-bottle { position: absolute; bottom: 0; display: block; }
+.closing-bottle .fp { --pad: 4% 4% 16%; --floor: 16%; }
+.closing-bottle-back { left: 8%; width: 42%; height: 86%; opacity: 0.92; }
+.closing-bottle-back .fp { --delay: -3.5s; --glow: rgba(255, 210, 140, 0.18); }
+.closing-bottle-front { right: 8%; width: 46%; height: 100%; z-index: 1; }
+.closing-bottle:focus-visible { outline-offset: -8px; }
+
+/* ---------- Small screens ---------- */
+@media (max-width: 560px) {
+  .product-stage::before { inset: 8px; }
+  .pcard-badge { top: 18px; inset-inline-start: 18px; }
+  .pgallery-render .fp { --pad: 8% 16% 16%; }
+}
+
+/* ---------- Service promise band ---------- */
+.promise {
+  background: var(--ivory); color: var(--ink);
+  --s-fg: var(--ink); --s-muted: #6b5f57; --s-line: #dcd1bf; --s-accent: var(--gold-ink);
+  padding-block: clamp(8px, 2vw, 24px) clamp(72px, 8vw, 120px);
+}
+.promise-list {
+  list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--s-line);
+}
+.promise-list li { display: grid; gap: 10px; align-content: start; padding: clamp(28px, 3vw, 40px) clamp(18px, 2vw, 32px); }
+.promise-list li + li { border-inline-start: 1px solid var(--s-line); }
+.promise-list svg { color: var(--gold-ink); margin-bottom: 6px; }
+.promise-list h3 { font-size: clamp(19px, 1.5vw, 22px); line-height: 1.25; }
+.promise-list p { font-size: 14.5px; line-height: 1.6; color: var(--s-muted); }
+@media (max-width: 1023px) {
+  .promise-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .promise-list li { justify-items: center; text-align: center; }
+  .promise-list li + li { border-inline-start: 0; }
+  .promise-list li:nth-child(even) { border-inline-start: 1px solid var(--s-line); }
+  .promise-list li:nth-child(n + 3) { border-top: 1px solid var(--s-line); }
+}
+@media (max-width: 479px) {
+  .promise-list { grid-template-columns: minmax(0, 1fr); }
+  .promise-list li:nth-child(even) { border-inline-start: 0; }
+  .promise-list li + li { border-top: 1px solid var(--s-line); }
+}
+
+/* ---------- Stars, reviews and the review form ---------- */
+.stars { display: inline-flex; gap: 2px; vertical-align: middle; }
+.star-empty { fill: none; stroke: var(--s-accent, var(--gold)); stroke-width: 1.2; opacity: 0.55; }
+.star-full { fill: var(--gold); }
+.rating-summary { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--s-fg); }
+.rating-summary .rating-count { color: var(--s-muted); border-bottom: 1px solid var(--s-line-strong); }
+
+.reviews-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 24px 40px; margin-bottom: clamp(36px, 5vw, 64px); }
+.reviews-head > div:first-child { display: grid; gap: 14px; }
+.reviews-score { display: grid; justify-items: end; gap: 6px; color: var(--s-muted); font-size: 13.5px; }
+.reviews-score b { font: 400 clamp(48px, 5vw, 72px)/1 var(--display); color: var(--s-fg); }
+.review-list { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: clamp(20px, 2.5vw, 32px); }
+.review { display: grid; gap: 14px; align-content: start; padding: clamp(24px, 2.5vw, 34px); border: 1px solid var(--s-line); background: var(--s-card); }
+.review h3 { font-size: clamp(20px, 1.6vw, 24px); }
+.review-body { color: var(--s-muted); line-height: 1.75; white-space: pre-line; }
+.review-by { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13.5px; color: var(--s-muted); padding-top: 14px; border-top: 1px solid var(--s-line); }
+.review-by b { color: var(--s-fg); font-weight: 500; }
+.review-verified { color: var(--s-accent); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+.review-reply { padding: 14px 16px; border-inline-start: 2px solid var(--s-accent); background: rgba(184, 149, 90, 0.07); display: grid; gap: 6px; font-size: 14.5px; }
+.reviews-empty { display: grid; gap: 14px; justify-items: start; max-width: 60ch; padding: clamp(24px, 3vw, 36px); border: 1px dashed var(--s-line-strong); color: var(--s-muted); }
+
+.track-reviews { display: grid; gap: 24px; margin-top: 40px; }
+.review-form { padding: clamp(22px, 3vw, 36px); border: 1px solid var(--s-line); background: var(--s-card); }
+.review-form-head { display: flex; gap: 16px; align-items: center; }
+.review-form-head img { width: 56px; height: 56px; object-fit: cover; }
+.review-form-head h3 { font-size: 24px; margin-top: 4px; }
+.rate { border: 0; padding: 0; margin: 0; }
+.rate legend { font-size: 13px; margin-bottom: 8px; }
+.rate-stars { display: flex; gap: 4px; }
+.rate-stars label { cursor: pointer; display: block; }
+.rate-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rate-stars input:focus-visible + .sr-only + svg { outline: 1.5px solid var(--s-accent); outline-offset: 2px; }
+.rate-stars svg { transition: transform 0.2s var(--ease); }
+.rate-stars label:hover svg { transform: scale(1.12); }
+.review-done { padding: 20px; border: 1px solid var(--s-line); }
+@media (max-width: 1023px) {
+  .reviews-head { flex-direction: column; align-items: center; text-align: center; }
+  .reviews-head > div:first-child { justify-items: center; }
+  .reviews-score { justify-items: center; }
+  .reviews-empty { justify-items: center; text-align: center; margin-inline: auto; }
+}
+
+/* ---------- Latest shelf: bottles standing on the page ---------- */
+.shelf {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, var(--black) 0%, #140e0c 100%);
+  color: var(--ivory);
+  --s-fg: var(--ivory); --s-muted: #b3a597; --s-accent: var(--gold-soft); --s-line: rgba(215, 195, 160, 0.18);
+  padding-block: clamp(64px, 8vw, 110px) clamp(48px, 6vw, 80px);
+}
+.shelf-head { display: flex; justify-content: space-between; align-items: end; gap: 20px 32px; flex-wrap: wrap; margin-bottom: clamp(12px, 2vw, 24px); }
+.shelf-head > div:first-child { display: grid; gap: 12px; }
+.shelf-title { font-size: clamp(28px, 3vw, 44px); }
+.shelf-nav { display: flex; align-items: center; gap: 12px; }
+.shelf-arrow {
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--s-line); color: var(--s-fg);
+  display: grid; place-items: center; transition: border-color 0.3s, opacity 0.3s;
+}
+.shelf-arrow:hover:not(:disabled) { border-color: var(--gold-soft); }
+.shelf-arrow:disabled { opacity: 0.3; cursor: default; }
+[dir='rtl'] .shelf-arrow { transform: scaleX(-1); }
+
+/* The floor: a hairline of warm light the bottles stand on. */
+.shelf-track {
+  --item: clamp(200px, 19vw, 280px);
+  list-style: none; position: relative;
+  display: flex; gap: clamp(20px, 3vw, 56px);
+  justify-content: safe center;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding-inline: max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
+  scroll-padding-inline: max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
+}
+.shelf-track::-webkit-scrollbar { display: none; }
+.shelf-item { flex: 0 0 var(--item); scroll-snap-align: start; display: grid; gap: 14px; justify-items: center; text-align: center; position: relative; }
+.shelf-item.is-wide { flex-basis: calc(var(--item) * 1.9); }
+.shelf-bottle { display: block; width: 100%; aspect-ratio: 3 / 4.4; position: relative; }
+.shelf-item.is-wide .shelf-bottle { aspect-ratio: auto; height: calc(var(--item) * 4.4 / 3); }
+.shelf-bottle .fp { --pad: 6% 6% 20%; --floor: 20%; --glow: rgba(214, 150, 70, 0.16); }
+.shelf-bottle .fp-plinth { --pad: 26% 0 12%; }
+.shelf-bottle .fp-reflect { opacity: 0.14; }
+.shelf-bottle::after {
+  /* the lit floor line under each bottle */
+  content: ''; position: absolute; left: 4%; right: 4%; bottom: 20%;
+  height: 1px; background: linear-gradient(90deg, transparent, rgba(210, 182, 132, 0.4), transparent);
+  pointer-events: none;
+}
+.shelf-item.is-wide .shelf-bottle::after { bottom: 12%; }
+.shelf-info { display: grid; gap: 4px; justify-items: center; margin-top: -8%; }
+.shelf-info h3 { font-size: 19px; letter-spacing: 0.1em; }
+.shelf-info h3 a:hover { color: var(--gold-soft); }
+.shelf-price { font: 400 17px/1.3 var(--display); color: var(--s-muted); font-variant-numeric: tabular-nums; }
+.shelf-add {
+  margin-top: 6px; min-height: 40px; padding: 0 4px;
+  font: 500 10.5px/1 var(--body); letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--s-fg); border-bottom: 1px solid var(--gold-soft); transition: color 0.3s, opacity 0.4s;
+}
+.shelf-add:hover { color: var(--gold-soft); }
+.shelf-add:disabled { opacity: 0.45; }
+.shelf-add:lang(ar) { font-size: 13.5px; }
+@media (hover: hover) {
+  .shelf-item .fp-obj { transition: transform 1s var(--ease); }
+  .shelf-item:hover .fp { --lift: -3%; }
+}
+@media (max-width: 760px) {
+  .shelf-head { justify-content: center; text-align: center; }
+  .shelf-head > div:first-child { justify-items: center; }
+  .shelf-track { --item: 46vw; justify-content: flex-start; }
+  .shelf-item.is-wide { flex-basis: 80vw; }
+}

@@ -7,8 +7,10 @@ import { Reveal } from '../components/Motion';
 import { useApi } from '../hooks/useApi';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
+import { useStore } from '../context/StoreContext';
 
 export default function Journal() {
+  const { t } = useStore();
   const [cat, setCat] = useState('All');
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -55,23 +57,23 @@ export default function Journal() {
         description="The AL BARAKAH LIFESTYLE Journal: fragrance guides, perfume rituals, the heritage of oud and attar, and the story behind the house."
         jsonLd={breadcrumbLd([['Home', '/'], ['Journal', '/journal']])}
       />
-      <PageHero eyebrow="The Journal" title="Stories, rituals and guides" layout="split" image="/media/panel-zafreon.webp" alt="ZAFREON with oud wood and incense smoke" lede="A fragrance publication from the house: how to choose, wear and keep a fragrance, the heritage behind the materials, and the story of AL BARAKAH LIFESTYLE." />
+      <PageHero eyebrow={t('The Journal')} title={t('Stories, rituals and guides')} layout="split" image="/media/panel-zafreon.webp" alt="ZAFREON with oud wood and incense smoke" lede={t('A fragrance publication from the house: how to choose, wear and keep a fragrance, the heritage behind the materials, and the story of AL BARAKAH LIFESTYLE.')} />
       <section className="section journal-page">
         <div className="container">
           <div className="filter-row">
-            <div className="chips" role="group" aria-label="Filter by category">
+            <div className="chips" role="group" aria-label={t('Filter by category')}>
               {['All', ...cats].map((c) => (
-                <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{c}</button>
+                <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{t(c)}</button>
               ))}
             </div>
             <label className="search">
-              <span className="sr-only">Search the Journal</span>
-              <input type="search" placeholder="Search the Journal" value={q} onChange={(e) => setQ(e.target.value)} />
+              <span className="sr-only">{t('Search the Journal')}</span>
+              <input type="search" placeholder={t('Search the Journal')} value={q} onChange={(e) => setQ(e.target.value)} />
             </label>
           </div>
 
           {feature && (
-            <Reveal className="feature-post">
+            <Reveal className="feature-post" lang="en" dir="ltr">
               <Link to={`/journal/${feature.slug}`}>
                 <div className="feature-img"><img src={feature.cover?.src} alt={feature.cover?.alt || ''} /></div>
                 <div className="feature-body">
@@ -88,7 +90,7 @@ export default function Journal() {
           {loading && page === 1 ? (
             <Loading />
           ) : items.length === 0 ? (
-            <p className="empty">No articles match “{debounced}”. Try another word, such as oud or storage.</p>
+            <p className="empty">{t('No articles match “{q}”. Try another word, such as oud or storage.', { q: debounced })}</p>
           ) : (
             <motion.div layout className="post-grid">
               {rest.map((p, i) => <PostCard key={p._id} post={p} index={i % 3} />)}
@@ -98,7 +100,7 @@ export default function Journal() {
           {page < meta.pages && (
             <div className="center" style={{ marginTop: 56 }}>
               <button className="btn btn-ghost" disabled={loading} onClick={() => setPage((p) => p + 1)}>
-                {loading ? 'Loading…' : 'Load more stories'}
+                {t(loading ? 'Loading…' : 'Load more stories')}
               </button>
             </div>
           )}

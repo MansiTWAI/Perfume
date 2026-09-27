@@ -9,7 +9,14 @@ import * as THREE from 'three';
 //   top   – saffron threads, cardamom pods, black pepper
 //   heart – rose petals, frankincense tears, incense smoke
 //   base  – oud wood, amber, patchouli leaves, smoke
+// ELARISSE has its own set: saffron, pink pepper, bergamot; jasmine, Taif
+// rose, orange blossom; amber, sandalwood, vanilla.
 // Scroll progress p runs 0 (opening) → 1/3 (top) → 2/3 (heart) → 1 (base).
+//
+// The bottle is a flat photographic render, so the field is drawn in two
+// layers: side="back" behind the render and side="front" over it. Each item
+// shows in the layer matching its depth, so it truly circles the glass.
+// Orbits follow wall-clock time so both layers stay in step.
 const WINDOWS = { top: [0.18, 0.5], heart: [0.5, 0.84], base: [0.84, 1.2] };
 
 const smooth = (a, b, x) => {
@@ -41,7 +48,7 @@ function orbits(n, seed, { r = [0.85, 1.35], y = [-0.7, 0.9], speed = [0.12, 0.3
   }));
 }
 
-function Swarm({ tier, progress, geometry, material, count, seed, opts, lift = 0, calm }) {
+function Swarm({ tier, progress, geometry, material, count, seed, opts, lift = 0, calm, side = 'all', emerge = true }) {
   const mesh = useRef();
   const key = JSON.stringify(opts);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -56,14 +63,18 @@ function Swarm({ tier, progress, geometry, material, count, seed, opts, lift = 0
     w.current = THREE.MathUtils.damp(w.current, target, 3, dt);
     m.visible = w.current > 0.01;
     if (!m.visible) return;
-    const t = calm ? 0 : state.clock.elapsedTime;
+    const t = calm ? 0 : performance.now() / 1000;
     const e = w.current;
     items.forEach((it, i) => {
-      if (!calm) it.a += it.s * dt;
-      const r = it.r * (0.25 + 0.75 * e); // they emerge from the bottle outward
-      dummy.position.set(Math.cos(it.a) * r, it.y * (0.4 + 0.6 * e) + Math.sin(t * 0.8 + it.bob) * 0.05 + lift * e, Math.sin(it.a) * r * 0.75);
+      const a = it.a + it.s * t;
+      // In the story they emerge from the bottle outward; elsewhere they keep
+      // their orbit and only fade, so nothing gathers over the label.
+      const r = emerge ? it.r * (0.25 + 0.75 * e) : it.r;
+      const z = Math.sin(a) * r * 0.75;
+      const shown = side === 'all' || (side === 'front') === (z > 0);
+      dummy.position.set(Math.cos(a) * r, it.y * (0.4 + 0.6 * e) + Math.sin(t * 0.8 + it.bob) * 0.05 + lift * e, z);
       dummy.rotation.set(it.rx + t * it.spin, it.ry + t * it.spin * 0.6, it.rz);
-      dummy.scale.setScalar(it.k * e);
+      dummy.scale.setScalar(shown && (emerge || e > 0.2) ? it.k * e : 0);
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
     });
@@ -124,7 +135,7 @@ function Smoke({ tiers, progress, calm, count = 36, seed = 9 }) {
   );
 }
 
-export default function NoteField({ progress, calm = false, radius = 1 }) {
+export default function NoteField({ progress, calm = false, radius = 1, variant = 'zafreon', side = 'all', emerge = true }) {
   const oudTex = useTexture('/media/ing-oud.webp');
   oudTex.colorSpace = THREE.SRGBColorSpace;
 
@@ -147,7 +158,9 @@ export default function NoteField({ progress, calm = false, radius = 1 }) {
     leafShape.quadraticCurveTo(0.07, 0.08, 0, 0.2);
     leafShape.quadraticCurveTo(-0.07, 0.08, 0, 0);
     const leaf = new THREE.ShapeGeometry(leafShape, 8);
-    return { thread, pod, corn, petal, tear, chip, drop, leaf };
+    const bean = new THREE.CapsuleGeometry(0.014, 0.26, 4, 8);
+    const zest = new THREE.SphereGeometry(0.05, 14, 10);
+    return { thread, pod, corn, petal, tear, chip, drop, leaf, bean, zest };
   }, []);
 
   const mat = useMemo(
@@ -160,24 +173,49 @@ export default function NoteField({ progress, calm = false, radius = 1 }) {
       oud: new THREE.MeshStandardMaterial({ map: oudTex, color: '#d8b89a', roughness: 0.8 }),
       amber: new THREE.MeshPhysicalMaterial({ color: '#9a4f0c', emissive: '#7a3a06', emissiveIntensity: 0.5, roughness: 0.12, clearcoat: 1, flatShading: true, transparent: true, opacity: 0.78 }),
       leaf: new THREE.MeshStandardMaterial({ color: '#4a4a26', roughness: 0.7, side: THREE.DoubleSide }),
+      // ELARISSE
+      pinkPepper: new THREE.MeshStandardMaterial({ color: '#c24a5e', emissive: '#4a0c16', emissiveIntensity: 0.4, roughness: 0.4 }),
+      bergamot: new THREE.MeshPhysicalMaterial({ color: '#c8c24e', emissive: '#3c3a08', emissiveIntensity: 0.3, roughness: 0.35, clearcoat: 0.6 }),
+      jasmine: new THREE.MeshPhysicalMaterial({ color: '#f4eee2', emissive: '#3a3226', emissiveIntensity: 0.3, roughness: 0.5, sheen: 1, sheenColor: new THREE.Color('#fff8e6'), side: THREE.DoubleSide }),
+      rose: new THREE.MeshPhysicalMaterial({ color: '#b8465a', roughness: 0.45, sheen: 1, sheenColor: new THREE.Color('#ffc2cb'), sheenRoughness: 0.5, side: THREE.DoubleSide }),
+      blossom: new THREE.MeshPhysicalMaterial({ color: '#fff4dc', emissive: '#6b5a30', emissiveIntensity: 0.25, roughness: 0.4 }),
+      sandalwood: new THREE.MeshStandardMaterial({ color: '#c9a27a', roughness: 0.7 }),
+      vanilla: new THREE.MeshStandardMaterial({ color: '#3b2415', roughness: 0.55 }),
     }),
     [oudTex]
   );
 
   const R = (a, b) => [a * radius, b * radius];
+  const common = { progress, calm, side, emerge };
 
   return (
     <group>
-      <Sparkles count={70} scale={[3.4, 2.6, 2]} size={2.2} speed={calm ? 0 : 0.25} opacity={0.55} color="#d9bb86" />
-      <Swarm tier="top" progress={progress} geometry={geo.thread} material={mat.saffron} count={46} seed={3} opts={{ r: R(0.75, 1.3) }} calm={calm} />
-      <Swarm tier="top" progress={progress} geometry={geo.pod} material={mat.cardamom} count={12} seed={5} opts={{ r: R(0.8, 1.25) }} calm={calm} />
-      <Swarm tier="top" progress={progress} geometry={geo.corn} material={mat.pepper} count={22} seed={7} opts={{ r: R(0.8, 1.35) }} calm={calm} />
-      <Swarm tier="heart" progress={progress} geometry={geo.petal} material={mat.petal} count={30} seed={11} opts={{ r: R(0.8, 1.35), scale: [0.8, 1.4] }} calm={calm} />
-      <Swarm tier="heart" progress={progress} geometry={geo.tear} material={mat.tear} count={16} seed={13} opts={{ r: R(0.75, 1.2) }} calm={calm} />
-      <Swarm tier="base" progress={progress} geometry={geo.chip} material={mat.oud} count={18} seed={17} opts={{ r: R(0.8, 1.3), y: [-0.8, 0.4] }} lift={-0.1} calm={calm} />
-      <Swarm tier="base" progress={progress} geometry={geo.drop} material={mat.amber} count={12} seed={19} opts={{ r: R(0.75, 1.2), y: [-0.6, 0.6], scale: [0.6, 1] }} calm={calm} />
-      <Swarm tier="base" progress={progress} geometry={geo.leaf} material={mat.leaf} count={12} seed={23} opts={{ r: R(0.85, 1.3) }} calm={calm} />
-      <Smoke tiers={['heart', 'base']} progress={progress} calm={calm} />
+      {side !== 'front' && <Sparkles count={70} scale={[3.4 * radius, 2.6, 2]} size={2.2} speed={calm ? 0 : 0.25} opacity={0.55} color="#d9bb86" />}
+      {variant === 'elarisse' ? (
+        <>
+          <Swarm tier="top" geometry={geo.thread} material={mat.saffron} count={30} seed={3} opts={{ r: R(0.75, 1.3) }} {...common} />
+          <Swarm tier="top" geometry={geo.corn} material={mat.pinkPepper} count={22} seed={7} opts={{ r: R(0.8, 1.35) }} {...common} />
+          <Swarm tier="top" geometry={geo.zest} material={mat.bergamot} count={10} seed={5} opts={{ r: R(0.8, 1.25), scale: [0.6, 1] }} {...common} />
+          <Swarm tier="heart" geometry={geo.petal} material={mat.jasmine} count={28} seed={11} opts={{ r: R(0.8, 1.35), scale: [0.7, 1.2] }} {...common} />
+          <Swarm tier="heart" geometry={geo.petal} material={mat.rose} count={16} seed={29} opts={{ r: R(0.8, 1.3), scale: [0.8, 1.3] }} {...common} />
+          <Swarm tier="heart" geometry={geo.tear} material={mat.blossom} count={12} seed={13} opts={{ r: R(0.75, 1.2), scale: [0.6, 0.9] }} {...common} />
+          <Swarm tier="base" geometry={geo.drop} material={mat.amber} count={14} seed={19} opts={{ r: R(0.75, 1.2), y: [-0.6, 0.6], scale: [0.6, 1] }} {...common} />
+          <Swarm tier="base" geometry={geo.chip} material={mat.sandalwood} count={16} seed={17} opts={{ r: R(0.8, 1.3), y: [-0.8, 0.4] }} lift={-0.1} {...common} />
+          <Swarm tier="base" geometry={geo.bean} material={mat.vanilla} count={8} seed={31} opts={{ r: R(0.85, 1.3) }} {...common} />
+        </>
+      ) : (
+        <>
+          <Swarm tier="top" geometry={geo.thread} material={mat.saffron} count={46} seed={3} opts={{ r: R(0.75, 1.3) }} {...common} />
+          <Swarm tier="top" geometry={geo.pod} material={mat.cardamom} count={12} seed={5} opts={{ r: R(0.8, 1.25) }} {...common} />
+          <Swarm tier="top" geometry={geo.corn} material={mat.pepper} count={22} seed={7} opts={{ r: R(0.8, 1.35) }} {...common} />
+          <Swarm tier="heart" geometry={geo.petal} material={mat.petal} count={30} seed={11} opts={{ r: R(0.8, 1.35), scale: [0.8, 1.4] }} {...common} />
+          <Swarm tier="heart" geometry={geo.tear} material={mat.tear} count={16} seed={13} opts={{ r: R(0.75, 1.2) }} {...common} />
+          <Swarm tier="base" geometry={geo.chip} material={mat.oud} count={18} seed={17} opts={{ r: R(0.8, 1.3), y: [-0.8, 0.4] }} lift={-0.1} {...common} />
+          <Swarm tier="base" geometry={geo.drop} material={mat.amber} count={12} seed={19} opts={{ r: R(0.75, 1.2), y: [-0.6, 0.6], scale: [0.6, 1] }} {...common} />
+          <Swarm tier="base" geometry={geo.leaf} material={mat.leaf} count={12} seed={23} opts={{ r: R(0.85, 1.3) }} {...common} />
+          {side !== 'back' && <Smoke tiers={['heart', 'base']} progress={progress} calm={calm} />}
+        </>
+      )}
     </group>
   );
 }

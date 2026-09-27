@@ -10,6 +10,8 @@ const EMPTY = {
   name: '', slug: '', subtitle: 'Eau de Parfum', tagline: '', family: '', description: '', story: '',
   sizeMl: 100, sizeLabel: '100 ML / 3.4 FL.OZ.', price: { INR: 0, AED: 0 }, stock: 0, category: 'Fragrances',
   badge: '', theme: 'ivory', images: [], video: { src: '', poster: '' },
+  render: { src: '', width: 0, height: 0 },
+  ar: { tagline: '', family: '', description: '', story: '', howToWear: '', howToStore: '', occasions: [], includes: [] },
   notes: { top: [], heart: [], base: [], approved: false }, wear: [], mood: [], occasions: [],
   howToWear: '', howToStore: '', faq: [], includes: [], featured: false, published: false, sortOrder: 10,
   seo: { title: '', description: '' },
@@ -64,6 +66,14 @@ export function ProductEdit() {
   if (!p) return <p>Loading…</p>;
   const set = (k, v) => setP((x) => ({ ...x, [k]: v }));
   const setIn = (k, sub, v) => setP((x) => ({ ...x, [k]: { ...x[k], [sub]: v } }));
+  // The floating bottle's proportions come from the image itself.
+  const setRender = (src) => {
+    if (!src) return set('render', { src: '', width: 0, height: 0 });
+    const img = new Image();
+    img.onload = () => set('render', { src, width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => set('render', { src, width: 0, height: 0 });
+    img.src = src;
+  };
 
   async function save(e) {
     e.preventDefault();
@@ -180,6 +190,30 @@ export function ProductEdit() {
             <h3>Film (optional)</h3>
             <ImageField value={p.video?.src} onChange={(src) => setIn('video', 'src', src)} label="Video" />
             <ImageField value={p.video?.poster} onChange={(src) => setIn('video', 'poster', src)} label="Poster" />
+          </section>
+
+          <section className="a-panel a-form">
+            <h2>Floating bottle</h2>
+            <p className="a-muted">The bottle alone on a transparent background (PNG or WebP). It floats on the home page, the product cards and the product page. Without one, the main image is used instead.</p>
+            <ImageField value={p.render?.src} onChange={setRender} label="Transparent bottle" />
+            {p.render?.src && (p.render.width ? <p className="a-muted">{p.render.width} × {p.render.height}px</p> : <p className="a-error">This image could not be read. Check the path or upload it again.</p>)}
+          </section>
+
+          <section className="a-panel a-form">
+            <h2>Arabic</h2>
+            <p className="a-muted">Shown to visitors browsing in Arabic. Leave a field empty to use the English text.</p>
+            <div dir="rtl" lang="ar" className="a-rtl">
+              <div className="a-grid2">
+                <label>الشعار (Tagline)<input value={p.ar?.tagline || ''} onChange={(e) => setIn('ar', 'tagline', e.target.value)} /></label>
+                <label>العائلة العطرية (Family)<input value={p.ar?.family || ''} onChange={(e) => setIn('ar', 'family', e.target.value)} /></label>
+              </div>
+              <label>وصف قصير (Short description)<textarea rows="3" value={p.ar?.description || ''} onChange={(e) => setIn('ar', 'description', e.target.value)} /></label>
+              <label>الحكاية (Story)<textarea rows="5" value={p.ar?.story || ''} onChange={(e) => setIn('ar', 'story', e.target.value)} /></label>
+              <label>طريقة الاستخدام (How to wear)<textarea rows="3" value={p.ar?.howToWear || ''} onChange={(e) => setIn('ar', 'howToWear', e.target.value)} /></label>
+              <label>طريقة الحفظ (How to store)<textarea rows="3" value={p.ar?.howToStore || ''} onChange={(e) => setIn('ar', 'howToStore', e.target.value)} /></label>
+              <label>المناسبات، مفصولة بفواصل (Occasions)<input value={csv(p.ar?.occasions)} onChange={(e) => setIn('ar', 'occasions', fromCsv(e.target.value))} /></label>
+              <label>محتويات العلبة (What is included)<input value={csv(p.ar?.includes)} onChange={(e) => setIn('ar', 'includes', fromCsv(e.target.value))} /></label>
+            </div>
           </section>
 
           <section className="a-panel a-form">

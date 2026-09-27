@@ -7,7 +7,9 @@ import App from './App';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/pages.css';
+import './styles/products.css';
 import './styles/admin.css';
+import './styles/gulf.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -66,4 +66,5 @@ export function RowList({ rows = [], onChange, fields, addLabel = 'Add row', emp
 }
 
 export const csv = (arr) => (arr || []).join(', ');
-export const fromCsv = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
+// Latin or Arabic commas.
+export const fromCsv = (s) => s.split(/[,،]/).map((x) => x.trim()).filter(Boolean);

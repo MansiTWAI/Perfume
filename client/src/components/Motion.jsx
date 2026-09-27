@@ -21,11 +21,17 @@ export function Reveal({ children, delay = 0, y = 32, as = 'div', className, ...
 }
 
 // Splits a heading into words that rise out of a mask one after another.
+// Latin text keeps its word order inside right-to-left pages: each word is
+// its own box, so without this "SIGNATURE DUO" would read "DUO SIGNATURE".
+const RTL_SCRIPT = /[\u0590-\u08FF]/;
+
 export function SplitHeading({ text, as = 'h2', className, delay = 0 }) {
   const M = motion[as];
   const words = String(text).split(' ');
+  const Wrap = RTL_SCRIPT.test(text) ? Fragment : LtrRun;
   return (
     <M className={className} initial="hidden" whileInView="show" viewport={{ once: true, margin: '0px 0px -8% 0px' }} aria-label={text}>
+      <Wrap>
       {words.map((w, i) => (
         <Fragment key={i}>
           <span className="split-mask" aria-hidden="true">
@@ -39,9 +45,15 @@ export function SplitHeading({ text, as = 'h2', className, delay = 0 }) {
           {i < words.length - 1 ? ' ' : null}
         </Fragment>
       ))}
+      </Wrap>
     </M>
   );
 }
+
+// An isolated left-to-right run; the heading keeps its own alignment.
+const LtrRun = ({ children }) => (
+  <span dir="ltr" style={{ display: 'inline-block', maxWidth: '100%' }}>{children}</span>
+);
 
 // Each word brightens as the paragraph scrolls through the viewport.
 export function ScrollText({ text, className }) {
