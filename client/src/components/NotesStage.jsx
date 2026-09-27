@@ -3,6 +3,19 @@ import { cx } from '../lib/format';
 
 const NotesScene = lazy(() => import('./three/NotesScene'));
 
+// The notes are decoration: phones that would struggle, and anyone saving
+// data, get the bottle alone.
+function lowPower() {
+  try {
+    if (navigator.connection?.saveData) return true;
+    if (navigator.deviceMemory && navigator.deviceMemory <= 4) return true;
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    return touch && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
+  } catch {
+    return false;
+  }
+}
+
 function hasWebGL() {
   try {
     const c = document.createElement('canvas');
@@ -39,7 +52,7 @@ class SceneBoundary extends Component {
 // chunk, and rendering pauses whenever the layer is off-screen.
 export default function NotesStage({ className, ...scene }) {
   const ref = useRef(null);
-  const [enabled] = useState(hasWebGL);
+  const [enabled] = useState(() => !lowPower() && hasWebGL());
   const [calm] = useState(prefersCalm);
   const [visible, setVisible] = useState(true);
   const [ready, setReady] = useState(false);

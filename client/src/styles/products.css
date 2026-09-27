@@ -223,11 +223,6 @@
   .pgallery-render .fp { --pad: 8% 16% 16%; }
 }
 
-/* Notes around the bottle on the product page. */
-.pgallery-notes { z-index: 0; }
-.pgallery-render .fp { z-index: 1; }
-.pgallery-notes-front { z-index: 2; }
-
 /* ---------- Service promise band ---------- */
 .promise {
   background: var(--ivory); color: var(--ink);
@@ -296,4 +291,72 @@
   .reviews-head > div:first-child { justify-items: center; }
   .reviews-score { justify-items: center; }
   .reviews-empty { justify-items: center; text-align: center; margin-inline: auto; }
+}
+
+/* ---------- Latest shelf: bottles standing on the page ---------- */
+.shelf {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, var(--black) 0%, #140e0c 100%);
+  color: var(--ivory);
+  --s-fg: var(--ivory); --s-muted: #b3a597; --s-accent: var(--gold-soft); --s-line: rgba(215, 195, 160, 0.18);
+  padding-block: clamp(64px, 8vw, 110px) clamp(48px, 6vw, 80px);
+}
+.shelf-head { display: flex; justify-content: space-between; align-items: end; gap: 20px 32px; flex-wrap: wrap; margin-bottom: clamp(12px, 2vw, 24px); }
+.shelf-head > div:first-child { display: grid; gap: 12px; }
+.shelf-title { font-size: clamp(28px, 3vw, 44px); }
+.shelf-nav { display: flex; align-items: center; gap: 12px; }
+.shelf-arrow {
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--s-line); color: var(--s-fg);
+  display: grid; place-items: center; transition: border-color 0.3s, opacity 0.3s;
+}
+.shelf-arrow:hover:not(:disabled) { border-color: var(--gold-soft); }
+.shelf-arrow:disabled { opacity: 0.3; cursor: default; }
+[dir='rtl'] .shelf-arrow { transform: scaleX(-1); }
+
+/* The floor: a hairline of warm light the bottles stand on. */
+.shelf-track {
+  --item: clamp(200px, 19vw, 280px);
+  list-style: none; position: relative;
+  display: flex; gap: clamp(20px, 3vw, 56px);
+  justify-content: safe center;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding-inline: max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
+  scroll-padding-inline: max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
+}
+.shelf-track::-webkit-scrollbar { display: none; }
+.shelf-item { flex: 0 0 var(--item); scroll-snap-align: start; display: grid; gap: 14px; justify-items: center; text-align: center; position: relative; }
+.shelf-item.is-wide { flex-basis: calc(var(--item) * 1.9); }
+.shelf-bottle { display: block; width: 100%; aspect-ratio: 3 / 4.4; position: relative; }
+.shelf-item.is-wide .shelf-bottle { aspect-ratio: auto; height: calc(var(--item) * 4.4 / 3); }
+.shelf-bottle .fp { --pad: 6% 6% 20%; --floor: 20%; --glow: rgba(214, 150, 70, 0.16); }
+.shelf-bottle .fp-plinth { --pad: 26% 0 12%; }
+.shelf-bottle .fp-reflect { opacity: 0.14; }
+.shelf-bottle::after {
+  /* the lit floor line under each bottle */
+  content: ''; position: absolute; left: 4%; right: 4%; bottom: 20%;
+  height: 1px; background: linear-gradient(90deg, transparent, rgba(210, 182, 132, 0.4), transparent);
+  pointer-events: none;
+}
+.shelf-item.is-wide .shelf-bottle::after { bottom: 12%; }
+.shelf-info { display: grid; gap: 4px; justify-items: center; margin-top: -8%; }
+.shelf-info h3 { font-size: 19px; letter-spacing: 0.1em; }
+.shelf-info h3 a:hover { color: var(--gold-soft); }
+.shelf-price { font: 400 17px/1.3 var(--display); color: var(--s-muted); font-variant-numeric: tabular-nums; }
+.shelf-add {
+  margin-top: 6px; min-height: 40px; padding: 0 4px;
+  font: 500 10.5px/1 var(--body); letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--s-fg); border-bottom: 1px solid var(--gold-soft); transition: color 0.3s, opacity 0.4s;
+}
+.shelf-add:hover { color: var(--gold-soft); }
+.shelf-add:disabled { opacity: 0.45; }
+.shelf-add:lang(ar) { font-size: 13.5px; }
+@media (hover: hover) {
+  .shelf-item .fp-obj { transition: transform 1s var(--ease); }
+  .shelf-item:hover .fp { --lift: -3%; }
+}
+@media (max-width: 760px) {
+  .shelf-head { justify-content: center; text-align: center; }
+  .shelf-head > div:first-child { justify-items: center; }
+  .shelf-track { --item: 46vw; justify-content: flex-start; }
+  .shelf-item.is-wide { flex-basis: 80vw; }
 }

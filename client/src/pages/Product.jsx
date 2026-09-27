@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { animate, AnimatePresence, motion, useMotionValue, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import Seo, { breadcrumbLd } from '../components/Seo';
 import { Reveal, SplitHeading, Parallax } from '../components/Motion';
 import { Accordion, Loading } from '../components/Bits';
@@ -9,7 +9,6 @@ import ProductCard from '../components/ProductCard';
 import AutoVideo from '../components/AutoVideo';
 import Img from '../components/Img';
 import FloatingProduct from '../components/FloatingProduct';
-import NotesStage from '../components/NotesStage';
 import { renderFor } from '../lib/renders';
 import { useProduct } from '../hooks/useProducts';
 import { useApi } from '../hooks/useApi';
@@ -30,15 +29,6 @@ function Gallery({ product, mainRef }) {
   const [zoom, setZoom] = useState(null);
   const { t } = useStore();
   const cur = media[i] || {};
-  // The notes rise tier by tier around the bottle on a slow loop:
-  // top, then heart, then base (the scroll story's order).
-  const hasNotes = product.notes?.top?.length > 0 && ['zafreon', 'elarisse'].includes(product.slug);
-  const cycle = useMotionValue(0.12);
-  useEffect(() => {
-    if (!hasNotes) return;
-    const run = animate(cycle, [0.12, 1.02], { duration: 21, repeat: Infinity, ease: 'linear' });
-    return () => run.stop();
-  }, [hasNotes, cycle]);
   return (
     <div className="pgallery">
       <div className="pgallery-main">
@@ -46,7 +36,6 @@ function Gallery({ product, mainRef }) {
           <motion.div key={i} className="pgallery-stage" initial={{ opacity: 0, scale: 1.03 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
             {cur.render ? (
               <div className={`pgallery-render product-stage stage-${product.theme || 'onyx'}`}>
-                {hasNotes && <NotesStage className="pgallery-notes" variant={product.slug} side="back" radius={1.05} emerge={false} progress={cycle} />}
                 <FloatingProduct
                   render={cur.render}
                   alt={cur.alt}
@@ -55,7 +44,6 @@ function Gallery({ product, mainRef }) {
                   className={product.slug === 'signature-duo' ? 'fp-plinth' : undefined}
                   sizes="(max-width: 960px) 70vw, 34vw"
                 />
-                {hasNotes && <NotesStage className="pgallery-notes pgallery-notes-front" variant={product.slug} side="front" radius={1.05} emerge={false} progress={cycle} />}
               </div>
             ) : cur.video ? (
               <AutoVideo src={cur.video} poster={cur.src} label={cur.alt} />

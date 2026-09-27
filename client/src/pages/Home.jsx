@@ -13,6 +13,7 @@ import { renderFor } from '../lib/renders';
 import NoteIcon from '../components/NoteIcon';
 import SeasonBand from '../components/SeasonBand';
 import ServicePromise from '../components/ServicePromise';
+import LatestShelf from '../components/LatestShelf';
 import { useApi } from '../hooks/useApi';
 import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
@@ -446,6 +447,7 @@ export default function Home() {
         jsonLd={[orgLd(), { '@context': 'https://schema.org', '@type': 'WebSite', name: 'AL BARAKAH LIFESTYLE', url: window.location.origin }]}
       />
       <Opening product={zafreon} />
+      {products.length > 0 && <LatestShelf products={products} />}
       <SeasonBand />
       <Statement />
       {products.length > 0 && <Collection products={products} />}

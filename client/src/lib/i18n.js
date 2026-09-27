@@ -134,6 +134,13 @@ const AR = {
     'لا توجد تقييمات لـ{name} بعد. كل تقييم هنا يأتي من طلب تم توصيله، وتقرؤه الدار قبل نشره.',
   'Bought it? Review it from your order': 'اشتريته؟ قيّمه من صفحة طلبك',
 
+  // ----- latest shelf -----
+  'New arrivals': 'وصل حديثاً',
+  'Latest from the house': 'أحدث ما في الدار',
+  'Shop all': 'تسوّق الكل',
+  Previous: 'السابق',
+  Next: 'التالي',
+
   // ----- service promise -----
   'Our promise': 'وعدنا',
   'Delivered across {country}': 'توصيل إلى جميع أنحاء {country}',
