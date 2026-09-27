@@ -52,11 +52,11 @@ How it runs on Vercel: the built React app, `/assets` and `/media` are served by
 
 ## How the site is built
 
-**The opening.** A real-time 3D ZAFREON bottle (Three.js via React Three Fiber) is pinned on stage while the story scrolls past it: the opening, then its top, heart and base notes. The bottle turns once and the light warms from black to oxblood. The bottle is modelled on the real flacon (thick glass, gold-foil label made from the brand logo, engraved collar, faceted crystal cap). The 3D code loads in its own chunk only when a bottle is on screen, pauses off-screen, and falls back to the campaign photograph without WebGL or with reduced motion.
+**The opening.** The ZAFREON bottle stands before a lit burgundy arch, pinned on stage while the story scrolls past it: the opening, then its top, heart and base notes, as the light warms from black to oxblood.
 
-**Product pages** include a draggable 360° view of ELARISSE and ZAFREON, the film, a zoomable gallery, interactive top/heart/base notes with ingredient photographs or line icons, Buy now, and a sticky buy bar on phones.
+**Product pages** open on the floating bottle render, followed by the film, a zoomable gallery, interactive top/heart/base notes with ingredient photographs or line icons, Buy now, and a sticky buy bar on phones.
 
-**3D notes:** as the story reaches each tier, ZAFREON's materials rise out of the bottle and orbit it in 3D: saffron threads, cardamom and black pepper; rose petals, frankincense and incense smoke; oud wood (textured from the campaign photograph), amber and patchouli.
+**Product renders** (`client/public/media/render-*.webp`, registered in `client/src/lib/renders.js`) are cut-out bottles shown floating on a lit stage in each fragrance's colours. Product cards show the bottle and fade to the campaign photograph on hover.
 
 **The film:** the ZAFREON campaign film opens from a small arch to full height as you scroll, over a blurred copy of itself, and closes on the price and Add to bag. It also appears in the Gallery header and on the ZAFREON page.
 

@@ -389,10 +389,6 @@ section:has(.track-form), section:has(.auth-form), section:has(.account) { --s-b
 .order-list small { display: block; color: var(--s-muted); }
 .status-pill { padding: 5px 12px; border: 1px solid var(--s-line-strong); border-radius: 30px; font-size: 12px; letter-spacing: 0.06em; white-space: nowrap; }
 @media (max-width: 760px) { .order-list li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-.pgallery-3d { width: 100%; height: 100%; cursor: grab; }
-.pgallery-3d:active { cursor: grabbing; }
-.pgallery-3d-onyx { background: radial-gradient(60% 50% at 50% 45%, #2a1a14, var(--black) 75%); }
-.pgallery-3d-ivory { background: radial-gradient(60% 55% at 50% 42%, #5a3b1d, #1c120c 78%); }
 
 /* ============ Home: the film ============ */
 .film { height: 260vh; background: var(--black); }

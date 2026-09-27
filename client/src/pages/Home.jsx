@@ -7,7 +7,6 @@ import TwoWorlds from '../components/TwoWorlds';
 import AutoVideo from '../components/AutoVideo';
 import ProductCard from '../components/ProductCard';
 import Img from '../components/Img';
-import BottleStage from '../components/BottleStage';
 import FloatingProduct from '../components/FloatingProduct';
 import { renderFor } from '../lib/renders';
 import NoteIcon from '../components/NoteIcon';
@@ -30,7 +29,7 @@ const CHAPTERS = [
 ];
 
 // The bottle stays on stage while the story scrolls past it: the opening,
-// then its top, heart and base notes. It turns once as the light warms.
+// then its top, heart and base notes, as the light warms.
 function Opening({ product }) {
   const ref = useRef(null);
   const [lit, setLit] = useState(false);
@@ -56,23 +55,14 @@ function Opening({ product }) {
   return (
     <section ref={ref} className={`opening ${lit ? 'is-lit' : ''}`} style={{ position: 'relative' }}>
       <motion.div className="opening-stage" style={{ backgroundColor: bg }}>
-        {/* The ingredient swarm orbits in WebGL; the bottle is the product render. */}
-        <BottleStage
-          variant="zafreon"
-          stage
-          bottle={!render}
-          progress={scrollYProgress}
-          className="opening-bottle"
-          fallback={render ? undefined : { src: '/media/hero-zafreon.webp', alt: 'ZAFREON Eau de Parfum beside saffron and oud wood' }}
-        />
         <div className="opening-glow" aria-hidden="true" />
-        {render && (
-          <div className="opening-product">
-            <motion.div className="opening-product-inner" style={{ scale: productScale, y: productY }}>
-              <FloatingProduct render={render} alt="ZAFREON Eau de Parfum, black and gold bottle with a crystal cap" eager sizes="(max-width: 860px) 60vw, 34vw" strength={0.7} />
-            </motion.div>
-          </div>
-        )}
+        {/* The bottle stands before a lit burgundy arch, the house motif. */}
+        <div className="opening-product">
+          <span className="hero-arch" aria-hidden="true" />
+          <motion.div className="opening-product-inner" style={{ scale: productScale, y: productY }}>
+            <FloatingProduct render={render} alt="ZAFREON Eau de Parfum, black and gold bottle with a crystal cap" eager sizes="(max-width: 860px) 60vw, 34vw" strength={0.7} />
+          </motion.div>
+        </div>
       </motion.div>
 
       <div className="opening-scroll">

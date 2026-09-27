@@ -7,7 +7,6 @@ import { Accordion, Loading } from '../components/Bits';
 import FragranceNotes from '../components/FragranceNotes';
 import ProductCard from '../components/ProductCard';
 import AutoVideo from '../components/AutoVideo';
-import BottleStage from '../components/BottleStage';
 import Img from '../components/Img';
 import FloatingProduct from '../components/FloatingProduct';
 import { renderFor } from '../lib/renders';
@@ -21,8 +20,6 @@ import { NotFound } from './InfoPages';
 function Gallery({ product, mainRef }) {
   const media = [...(product.images || [])];
   if (product.video?.src) media.splice(1, 0, { video: product.video.src, src: product.video.poster, alt: `${product.name} film` });
-  // The two Eaux de Parfum have a real-time 3D view; the gift set does not.
-  if (['zafreon', 'elarisse'].includes(product.slug)) media.splice(1, 0, { three: product.slug, src: media[0]?.src, alt: `${product.name} in 360°` });
   // The bottle render leads the gallery.
   const render = renderFor(product.slug);
   if (render) media.unshift({ render, src: render.sm, alt: product.images?.[0]?.alt || product.name });
@@ -46,8 +43,6 @@ function Gallery({ product, mainRef }) {
                   sizes="(max-width: 960px) 70vw, 34vw"
                 />
               </div>
-            ) : cur.three ? (
-              <BottleStage variant={cur.three} interactive className={`pgallery-3d pgallery-3d-${product.theme}`} fallback={{ src: cur.src, alt: cur.alt }} />
             ) : cur.video ? (
               <AutoVideo src={cur.video} poster={cur.src} label={cur.alt} />
             ) : (
@@ -71,7 +66,6 @@ function Gallery({ product, mainRef }) {
           <button key={k} role="tab" aria-selected={k === i} aria-label={m.alt} onClick={() => setI(k)} className={m.render ? `is-render product-stage stage-${product.theme || 'onyx'}` : undefined}>
             <img src={m.src} alt="" loading="lazy" />
             {m.video && <span aria-hidden="true">{t('Film')}</span>}
-            {m.three && <span aria-hidden="true">360°</span>}
           </button>
         ))}
       </div>

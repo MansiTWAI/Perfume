@@ -118,10 +118,10 @@
   color: var(--gold-soft); padding: 7px 10px; border: 1px solid rgba(184, 149, 90, 0.4);
 }
 .stage-ivory .pcard-badge { color: var(--gold-ink); }
+/* The campaign photograph that fades in over the bottle on hover. */
+.pcard-photo { z-index: 1; transition: opacity 0.9s var(--ease), transform 1.8s var(--ease); }
 @media (hover: hover) {
-  .pcard-render:hover .fp { --lift: -2.5%; }
-  .pcard-render:hover .product-stage::before { border-color: rgba(184, 149, 90, 0.5); inset: 16px; }
-  .pcard-render:hover .fp-shadow { opacity: 0.7; }
+  .pcard-render:hover .product-stage::before { border-color: rgba(215, 195, 160, 0.6); inset: 16px; }
 }
 
 /* ---------- Homepage hero: the render on the opening stage ---------- */
@@ -140,16 +140,47 @@
 .opening-product .fp { --pad: 4% 4% 18%; --floor: 18%; --glow: rgba(214, 150, 70, 0.3); }
 .opening-product .fp-reflect { opacity: 0.12; }
 [dir='rtl'] .opening-product { left: calc(50% - min(24vw, 400px)); }
-/* Portrait screens: the bottle above, the copy below (matches the 3D layout). */
+.opening-product-inner { position: relative; z-index: 1; }
+
+/* The lit arch behind the bottle: burgundy lacquer, gold keylines, fading
+   into the floor where the bottle stands. */
+.hero-arch,
+.hero-arch::before,
+.hero-arch::after { border-radius: 50% 50% 0 0 / 26% 26% 0 0; }
+.hero-arch {
+  position: absolute; left: 50%; bottom: 12%;
+  width: 168%; height: 94%;
+  translate: -50% 0;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 38%, rgba(214, 150, 70, 0.22), transparent 70%),
+    linear-gradient(180deg, #5a1520 0%, #3a0c13 45%, #1c0508 100%);
+  border: 1px solid rgba(210, 182, 132, 0.45);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.6), 0 0 160px rgba(110, 20, 30, 0.35);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+.hero-arch::before,
+.hero-arch::after { content: ''; position: absolute; pointer-events: none; }
+.hero-arch::before { inset: -18px; border: 1px solid rgba(210, 182, 132, 0.2); }
+.hero-arch::after { inset: 14px; border: 1px solid rgba(210, 182, 132, 0.16); }
+/* The pool of light on the floor. */
+.opening-product::before {
+  content: ''; position: absolute; left: 50%; bottom: 8%;
+  width: 190%; height: 14%; translate: -50% 0;
+  background: radial-gradient(closest-side, rgba(214, 160, 90, 0.2), transparent);
+  pointer-events: none;
+}
+
+/* Portrait screens: the bottle above, the copy below. */
 @media (max-aspect-ratio: 1 / 1) {
-  .opening-product, [dir='rtl'] .opening-product { left: 50%; top: 31%; height: min(44vh, 118vw); }
+  .opening-product, [dir='rtl'] .opening-product { left: 50%; top: 32%; height: min(40vh, 110vw); }
 }
 /* Short phones: the copy alone fills the screen, so the first panel grows and
    the bottle stands clear above it; the copy then scrolls up over the stage
    as the story panels already do. */
 @media (max-aspect-ratio: 1 / 1) and (max-height: 740px) {
   .opening-hero { min-height: calc(100svh + 30vh); }
-  .opening-product, [dir='rtl'] .opening-product { top: 33%; height: 40vh; }
+  .opening-product, [dir='rtl'] .opening-product { top: 36%; height: 38vh; }
 }
 
 /* ---------- Signature Duo band ---------- */

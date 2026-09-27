@@ -30,16 +30,18 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
       transition={{ duration: 1.1, delay: index * 0.1, ease: [0.2, 0.7, 0.2, 1] }}
     >
       {render ? (
-        // The bottle itself, floating on a stage lit in its own colours.
+        // The bottle on a stage lit in its own colours; on hover the campaign
+        // photograph fades in over it.
         <Link ref={mediaRef} to={`/fragrances/${product.slug}`} className={`pcard-media product-stage stage-${product.theme || 'onyx'}`} aria-label={`${product.name}, ${product.subtitle}`}>
           <FloatingProduct
             render={render}
             alt={a?.alt || product.name}
-            track={mediaRef}
+            tilt={false}
             reflect={product.slug !== 'signature-duo'}
             className={product.slug === 'signature-duo' ? 'fp-plinth' : undefined}
             sizes="(max-width: 800px) 60vw, 26vw"
           />
+          {a && <Img src={a.src} alt="" className="pcard-img pcard-img-2 pcard-photo" sizes={sizes} aria-hidden="true" />}
           {product.badge && <span className="pcard-badge">{t(product.badge)}</span>}
         </Link>
       ) : (
