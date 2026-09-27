@@ -229,8 +229,11 @@
 .page-hero.has-image { min-height: min(88vh, 820px); display: flex; align-items: flex-end; }
 .page-hero.has-image::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, var(--black), transparent 35%); }
 /* the image lives on the right and dissolves into black, leaving the headline clean */
-.page-hero-img { position: absolute; top: 0; right: 0; bottom: 0; width: 64%; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%); mask-image: linear-gradient(90deg, transparent 0%, #000 45%); }
-.page-hero-img::after { content: ''; position: absolute; inset: 0; background: rgba(13, 10, 9, 0.25); }
+/* The campaign images carry their own lettering, so the image fades out well
+   before the headline and sits toward the far edge. */
+.page-hero-img { position: absolute; top: 0; right: 0; bottom: 0; width: 60%; -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.35) 28%, #000 62%); mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.35) 28%, #000 62%); }
+[dir='rtl'] .page-hero-img { right: auto; left: 0; -webkit-mask-image: linear-gradient(270deg, transparent 0%, rgba(0, 0, 0, 0.35) 28%, #000 62%); mask-image: linear-gradient(270deg, transparent 0%, rgba(0, 0, 0, 0.35) 28%, #000 62%); }
+.page-hero-img::after { content: ''; position: absolute; inset: 0; background: rgba(13, 10, 9, 0.3); }
 .page-hero-img img, .page-hero-img video { width: 100%; height: 100%; object-fit: cover; }
 .page-hero-inner { position: relative; z-index: 1; width: 100%; }
 .page-hero-copy { display: grid; gap: 22px; justify-items: start; max-width: 760px; }
@@ -247,8 +250,11 @@
   .page-hero { padding: calc(var(--header-h) + 40px) 0 48px; }
   .page-hero-split { padding-top: calc(var(--header-h) + 28px); }
   .page-hero-copy { gap: 16px; }
-  .page-hero.has-image { min-height: 72svh; }
-  .page-hero-img { width: 100%; -webkit-mask-image: linear-gradient(0deg, transparent 10%, #000 70%); mask-image: linear-gradient(0deg, transparent 10%, #000 70%); }
+  /* Phones and tablets: the image above, the copy below it on solid ground,
+     rather than headline over the image's own lettering. */
+  .page-hero.has-image { display: block; min-height: 0; padding-top: 0; }
+  .page-hero-img, [dir='rtl'] .page-hero-img { position: relative; inset: auto; width: 100%; height: min(62svh, 120vw); -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 42%); mask-image: linear-gradient(0deg, transparent 0%, #000 42%); }
+  .page-hero.has-image .page-hero-inner { margin-top: calc(-1 * min(14svh, 26vw)); }
 }
 
 /* ============ Lightbox ============ */

@@ -152,6 +152,8 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 }
 .concierge-teaser b { display: block; font: 400 19px/1.25 var(--display); margin-bottom: 2px; }
 .concierge-x { position: absolute; top: 6px; inset-inline-end: 6px; width: 32px; height: 32px; font-size: 12px; color: #6b5f57; }
+/* On phones the teaser card would cover content; the button alone is enough there. */
+@media (max-width: 767px) { .concierge-teaser { display: none; } }
 /* On phones the product page's buy bar sits at the bottom. */
 @media (max-width: 960px) { .concierge-lift { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); } }
 

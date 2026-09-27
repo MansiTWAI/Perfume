@@ -12,6 +12,7 @@ import NotesStage from '../components/NotesStage';
 import { renderFor } from '../lib/renders';
 import NoteIcon from '../components/NoteIcon';
 import SeasonBand from '../components/SeasonBand';
+import ServicePromise from '../components/ServicePromise';
 import { useApi } from '../hooks/useApi';
 import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
@@ -448,6 +449,7 @@ export default function Home() {
       <SeasonBand />
       <Statement />
       {products.length > 0 && <Collection products={products} />}
+      <ServicePromise />
       {products.length > 0 && <Ingredients products={products} />}
       <Film product={zafreon} />
       <section className="section worlds-section">

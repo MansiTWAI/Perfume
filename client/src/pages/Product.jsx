@@ -253,16 +253,25 @@ export default function Product() {
         </section>
       )}
 
-      <section className="product-story">
-        <Parallax className="product-story-img" strength={70}>
-          <Img src={p.images?.[1]?.src || p.images?.[0]?.src} alt="" sizes="100vw" />
-        </Parallax>
-        <div className="container product-story-text">
-          <Reveal><p className="eyebrow">{t('The story')}</p></Reveal>
-          <Reveal delay={0.1}><p className="story-p">{p.story}</p></Reveal>
-          {p.occasions?.length > 0 && (
-            <Reveal delay={0.2}><p className="story-occasions">{t('Wear it for {list}', { list: p.occasions.join(' · ') })}</p></Reveal>
-          )}
+      {/* The campaign image framed in the house arch, beside the story. */}
+      <section className="section product-story">
+        <div className="container product-story-grid">
+          <Reveal className="product-story-frame" y={50}>
+            <Parallax className="product-story-img" strength={36}>
+              <Img src={(p.images?.[1] || p.images?.[0])?.src} alt={(p.images?.[1] || p.images?.[0])?.alt || ''} sizes="(max-width: 860px) 88vw, 40vw" />
+            </Parallax>
+          </Reveal>
+          <div className="product-story-text">
+            <Reveal><p className="eyebrow">{t('The story')}</p></Reveal>
+            <SplitHeading text={p.tagline.split(' · ').join(t(', '))} className="display-l product-story-title" />
+            <Reveal delay={0.1}><p className="story-p">{p.story}</p></Reveal>
+            {p.occasions?.length > 0 && (
+              <Reveal delay={0.2} className="story-occasions">
+                <p className="eyebrow">{t('Wear it for')}</p>
+                <ul>{p.occasions.map((o) => <li key={o}>{o}</li>)}</ul>
+              </Reveal>
+            )}
+          </div>
         </div>
       </section>
 

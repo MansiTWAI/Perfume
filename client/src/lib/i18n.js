@@ -101,6 +101,7 @@ const AR = {
   'From the first spray to the memory': 'من الرشّة الأولى إلى الذكرى',
   'The story': 'الحكاية',
   'Wear it for {list}': 'ارتدِه في {list}',
+  'Wear it for': 'ارتدِه في',
   'How to wear': 'طريقة الاستخدام',
   'How to store': 'طريقة الحفظ',
   'What is included': 'محتويات العلبة',
@@ -121,6 +122,20 @@ const AR = {
   'Next from the house': 'القادم من الدار',
   'The collection will continue into oud, amber, musk and woods, and later into beauty and lifestyle. Join the Journal letter to hear first.':
     'ستمتد المجموعة إلى العود والعنبر والمسك والأخشاب، ثم إلى الجمال وأسلوب الحياة. اشترك في رسائل المجلة لتكون أول من يعرف.',
+
+  // ----- service promise -----
+  'Our promise': 'وعدنا',
+  'Delivered across {country}': 'توصيل إلى جميع أنحاء {country}',
+  'the UAE': 'الإمارات',
+  'Complimentary over {amount}': 'مجاناً للطلبات فوق {amount}',
+  'Gulf delivery on request': 'التوصيل في الخليج عند الطلب',
+  'Arranged personally on WhatsApp.': 'نرتّبه لك شخصياً عبر واتساب.',
+  'Secure payment link': 'رابط دفع آمن',
+  'We confirm your order first, then send a secure link.': 'نؤكد طلبك أولاً، ثم نرسل لك رابطاً آمناً للدفع.',
+  'The Signature Card': 'بطاقة الإهداء',
+  'A complimentary printed gift note, in your words.': 'بطاقة إهداء مطبوعة مجاناً، بكلماتك.',
+  'A personal concierge': 'مستشار شخصي',
+  'Fragrance advice from the house on WhatsApp.': 'نصائح العطور من الدار عبر واتساب.',
 
   // ----- home -----
   'Luxury perfume house · Hyderabad': 'دار عطور فاخرة · حيدر آباد',
