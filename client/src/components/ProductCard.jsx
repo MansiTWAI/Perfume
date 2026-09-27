@@ -2,12 +2,11 @@ import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
-import { money } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
 import Img from './Img';
 
 export default function ProductCard({ product, index = 0, className = '', sizes = '(max-width: 800px) 90vw, 40vw' }) {
-  const { currency, addToCart, toast } = useStore();
+  const { priceOf, fmt, addToCart, toast, t } = useStore();
   const imgRef = useRef(null);
   const [a, b] = product.images || [];
   const soldOut = product.stock <= 0;
@@ -15,7 +14,7 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
   const add = () => {
     flyToCart(imgRef.current);
     addToCart(product);
-    toast(`${product.name} added to your bag`);
+    toast(t('{name} added to your bag', { name: product.name }));
   };
 
   return (
@@ -33,12 +32,12 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
       <div className="pcard-body">
         <div className="pcard-title">
           <h3><Link to={`/fragrances/${product.slug}`}>{product.name}</Link></h3>
-          <p>{product.family} · {product.sizeLabel.replace(' / 3.4 FL.OZ.', '')}</p>
+          <p>{product.family} · <span dir="ltr">{product.sizeLabel.replace(' / 3.4 FL.OZ.', '')}</span></p>
         </div>
         <div className="pcard-buy">
-          <span className="pcard-price">{money(product.price?.[currency], currency)}</span>
+          <span className="pcard-price">{fmt(priceOf(product))}</span>
           <button className="pcard-add" disabled={soldOut} onClick={add}>
-            {soldOut ? 'Sold out' : 'Add to bag'}
+            {t(soldOut ? 'Sold out' : 'Add to bag')}
           </button>
         </div>
       </div>

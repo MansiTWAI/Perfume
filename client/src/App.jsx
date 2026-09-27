@@ -9,6 +9,9 @@ import SmoothScroll, { scrollToTop } from './components/SmoothScroll';
 import Toasts from './components/Toasts';
 import SearchOverlay from './components/SearchOverlay';
 import SignatureFinder from './components/SignatureFinder';
+import Concierge from './components/Concierge';
+import LangPrompt from './components/LangPrompt';
+import { useStore } from './context/StoreContext';
 import Home from './pages/Home';
 
 // Everything except the homepage is split into its own chunk.
@@ -38,9 +41,16 @@ const pageMotion = {
   exit: { opacity: 0, transition: { duration: 0.35, ease: 'easeIn' } },
 };
 
+// Pages whose text is not yet translated keep English layout inside the
+// Arabic site rather than half-mirroring.
+const ENGLISH_ONLY = /^\/(journal|our-story|mission-vision|fragrance-heritage|gallery|contact|faq|shipping-returns|privacy-policy|terms|track|account)(\/|$)/;
+
 function Page({ children }) {
+  const { lang } = useStore();
+  const { pathname } = useLocation();
+  const english = lang === 'ar' && ENGLISH_ONLY.test(pathname) ? { dir: 'ltr', lang: 'en' } : {};
   return (
-    <motion.main id="main" {...pageMotion}>
+    <motion.main id="main" {...pageMotion} {...english}>
       <Suspense fallback={<div className="page-wait" />}>{children}</Suspense>
     </motion.main>
   );
@@ -70,6 +80,7 @@ const ROUTES = [
 
 export default function App() {
   const location = useLocation();
+  const { t } = useStore();
 
   useEffect(() => {
     if (!location.hash) scrollToTop();
@@ -88,7 +99,7 @@ export default function App() {
 
   return (
     <SmoothScroll>
-      <a className="skip" href="#main">Skip to content</a>
+      <a className="skip" href="#main">{t('Skip to content')}</a>
       <Preloader />
       <Header />
       <AnimatePresence mode="wait" initial={false}>
@@ -102,6 +113,8 @@ export default function App() {
       <CartDrawer />
       <SearchOverlay />
       <SignatureFinder />
+      <Concierge />
+      <LangPrompt />
       <Toasts />
     </SmoothScroll>
   );

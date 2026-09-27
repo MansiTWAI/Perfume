@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import NoteIcon from './NoteIcon';
+import { useStore } from '../context/StoreContext';
 
 const TIERS = [
   ['top', 'Top', 'The first impression'],
@@ -11,10 +12,14 @@ const TIERS = [
 // Top, heart and base notes as an editorial list. Hovering or tapping a note
 // shows what it brings, with its ingredient photograph when one exists.
 export default function FragranceNotes({ notes, name }) {
-  const all = TIERS.flatMap(([t]) => (notes?.[t] || []).map((n) => ({ ...n, tier: t })));
-  const [active, setActive] = useState(all.find((n) => n.image) || all[0]);
+  const { t } = useStore();
+  const all = TIERS.flatMap(([tier]) => (notes?.[tier] || []).map((n) => ({ ...n, tier })));
+  // Kept as tier + name so the detail follows a language change.
+  const [pick, setPick] = useState(() => all.find((n) => n.image) || all[0]);
+  const active = all.find((n) => n.tier === pick?.tier && n.name === pick?.name) || all[0];
+  const setActive = (n) => setPick({ tier: n.tier, name: n.name });
   if (!all.length) return null;
-  const tierLabel = TIERS.find((t) => t[0] === active?.tier)?.[1];
+  const tierLabel = t(TIERS.find((x) => x[0] === active?.tier)?.[1]);
 
   return (
     <div className="fnotes">
@@ -30,8 +35,8 @@ export default function FragranceNotes({ notes, name }) {
               transition={{ delay: ti * 0.12, duration: 0.9, ease: [0.2, 0.7, 0.2, 1] }}
             >
               <div className="fn-label">
-                <span>{label}</span>
-                <small>{hint}</small>
+                <span>{t(label)}</span>
+                <small>{t(hint)}</small>
               </div>
               <ul className="fn-list">
                 {notes[key].map((n) => {
@@ -47,7 +52,7 @@ export default function FragranceNotes({ notes, name }) {
                         onClick={() => setActive({ ...n, tier: key })}
                       >
                         <NoteIcon name={n.name} size={22} />
-                        {n.name}
+                        {n.label || n.name}
                       </button>
                     </li>
                   );
@@ -70,15 +75,15 @@ export default function FragranceNotes({ notes, name }) {
             >
               {active.image ? (
                 <motion.div className="fn-image" initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.2, ease: [0.2, 0.7, 0.2, 1] }}>
-                  <img src={active.image} alt={`${active.name}, from the ${name} campaign`} />
+                  <img src={active.image} alt={`${active.label || active.name}, ${name}`} />
                 </motion.div>
               ) : (
                 <motion.div className="fn-image fn-emblem" initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9 }}>
                   <NoteIcon name={active.name} size={96} />
                 </motion.div>
               )}
-              <p className="eyebrow">{tierLabel} note · {name}</p>
-              <h4>{active.name}</h4>
+              <p className="eyebrow">{t('{tier} note · {name}', { tier: tierLabel, name })}</p>
+              <h4>{active.label || active.name}</h4>
               <p>{active.description}</p>
             </motion.div>
           )}

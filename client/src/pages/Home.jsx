@@ -9,13 +9,15 @@ import ProductCard from '../components/ProductCard';
 import Img from '../components/Img';
 import BottleStage from '../components/BottleStage';
 import NoteIcon from '../components/NoteIcon';
+import SeasonBand from '../components/SeasonBand';
 import { useApi } from '../hooks/useApi';
 import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
-import { formatDate, money, whatsappLink } from '../lib/format';
+import { currencySymbol, formatDate, whatsappLink } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
 import { useSectionProgress } from '../hooks/useSectionProgress';
 import { INGREDIENTS, productsWith } from '../lib/ingredients';
+import { INGREDIENT_AR } from '../lib/i18n';
 
 const EASE = [0.2, 0.7, 0.2, 1];
 
@@ -30,6 +32,7 @@ const CHAPTERS = [
 function Opening({ product }) {
   const ref = useRef(null);
   const [lit, setLit] = useState(false);
+  const { lang, t } = useStore();
   const scrollYProgress = useSectionProgress(ref);
   const bg = useTransform(scrollYProgress, [0, 0.4, 0.75, 1], ['#0d0a09', '#150f0d', '#1f0f0e', '#2b080c']);
 
@@ -61,15 +64,24 @@ function Opening({ product }) {
         <div className="opening-panel opening-hero">
           <div className="container">
             <div className="hero-copy">
-              <h1 className="hero-kicker">Luxury perfume house · Hyderabad</h1>
-              <p className="hero-title" aria-label="Leave your signature.">
-                <span className="line"><span>Leave your</span></span>
-                <span className="line"><em>signature.</em></span>
-              </p>
-              <p className="hero-lede">Eaux de Parfum shaped by Indian richness and Middle Eastern artistry, for people who want to be remembered.</p>
+              <h1 className="hero-kicker">{t('Luxury perfume house · Hyderabad')}</h1>
+              {lang === 'ar' ? (
+                // The tagline is kept in English beneath its Arabic rendering.
+                <p className="hero-title hero-title-ar" aria-label="اترك بصمتك. leave your signature">
+                  <span className="line"><span>اترك</span></span>
+                  <span className="line"><em>بصمتك.</em></span>
+                  <span className="hero-tagline-en" lang="en">leave your signature</span>
+                </p>
+              ) : (
+                <p className="hero-title" aria-label="Leave your signature.">
+                  <span className="line"><span>Leave your</span></span>
+                  <span className="line"><em>signature.</em></span>
+                </p>
+              )}
+              <p className="hero-lede">{t('Eaux de Parfum shaped by Indian richness and Middle Eastern artistry, for people who want to be remembered.')}</p>
               <div className="hero-cta">
-                <Magnetic><Link to="/fragrances" className="btn btn-primary">Discover the collection</Link></Magnetic>
-                <span className="hero-hint">Scroll to open ZAFREON</span>
+                <Magnetic><Link to="/fragrances" className="btn btn-primary">{t('Discover the collection')}</Link></Magnetic>
+                <span className="hero-hint">{t('Scroll to open {name}', { name: 'ZAFREON' })}</span>
               </div>
             </div>
           </div>
@@ -89,24 +101,24 @@ function Opening({ product }) {
                     viewport={{ amount: 0.5 }}
                     transition={{ duration: 1, ease: EASE }}
                   >
-                    <p className="eyebrow">{String(i + 1).padStart(2, '0')} / 03 · {label}</p>
-                    <h2 className="display-l">{hint}</h2>
+                    <p className="eyebrow"><span dir="ltr">{String(i + 1).padStart(2, '0')} / 03</span> · {t(label)}</p>
+                    <h2 className="display-l">{t(hint)}</h2>
                     <ul className="chapter-notes">
                       {notes.map((n) => (
                         <li key={n.name}>
                           <NoteIcon name={n.name} size={30} />
-                          <span><b>{n.name}</b><small>{n.description}</small></span>
+                          <span><b>{n.label || n.name}</b><small>{n.description}</small></span>
                         </li>
                       ))}
                     </ul>
                     {pictured && (
                       <figure className="chapter-photo">
-                        <img src={pictured.image} alt={`${pictured.name}, from the ${product.name} campaign`} loading="lazy" />
-                        <figcaption>{pictured.name}</figcaption>
+                        <img src={pictured.image} alt={`${pictured.label || pictured.name}, ${product.name}`} loading="lazy" />
+                        <figcaption>{pictured.label || pictured.name}</figcaption>
                       </figure>
                     )}
                     {i === CHAPTERS.length - 1 && (
-                      <Link to={`/fragrances/${product.slug}`} className="text-link chapter-cta">Discover {product.name}</Link>
+                      <Link to={`/fragrances/${product.slug}`} className="text-link chapter-cta">{t('Discover {name}', { name: product.name })}</Link>
                     )}
                   </motion.div>
                 </div>
@@ -119,31 +131,31 @@ function Opening({ product }) {
 }
 
 function Statement() {
+  const { t } = useStore();
+  const text = t('A fragrance is invisible, yet it can become the most recognisable part of a person. We create for that moment: the memory that remains after the room has changed.');
   return (
     <section className="section statement">
       <div className="container statement-grid">
         <Reveal className="statement-side">
-          <p className="eyebrow">The house</p>
-          <p className="statement-note">Founded on a lifelong passion for perfume and a career in the fragrance industry that began in 2013.</p>
-          <Link to="/our-story" className="text-link">Read our story</Link>
+          <p className="eyebrow">{t('The house')}</p>
+          <p className="statement-note">{t('Founded on a lifelong passion for perfume and a career in the fragrance industry that began in 2013.')}</p>
+          <Link to="/our-story" className="text-link">{t('Read our story')}</Link>
         </Reveal>
-        <ScrollText
-          className="statement-text"
-          text="A fragrance is invisible, yet it can become the most recognisable part of a person. We create for that moment: the memory that remains after the room has changed."
-        />
+        <ScrollText key={text} className="statement-text" text={text} />
       </div>
     </section>
   );
 }
 
 function Collection({ products }) {
+  const { t } = useStore();
   const [e, z, ...rest] = products;
   return (
     <section className="section collection">
       <div className="container">
         <div className="collection-head">
-          <SplitHeading text="The Collection" className="display-xl" />
-          <Reveal delay={0.2}><p className="collection-intro">Two Eaux de Parfum with two personalities. ELARISSE is ivory, luminous and made for daylight. ZAFREON is dark, smoky and made for evenings.</p></Reveal>
+          <SplitHeading text={t('The Collection')} className="display-xl" />
+          <Reveal delay={0.2}><p className="collection-intro">{t('Two Eaux de Parfum with two personalities. ELARISSE is ivory, luminous and made for daylight. ZAFREON is dark, smoky and made for evenings.')}</p></Reveal>
         </div>
         <div className="collection-grid">
           {e && <ProductCard product={e} className="pcard-a" />}
@@ -157,7 +169,7 @@ function Collection({ products }) {
                 <p className="eyebrow">{p.family}</p>
                 <h3>{p.name}</h3>
                 <p>{p.description}</p>
-                <span className="text-link">Discover the gift set</span>
+                <span className="text-link">{t('Discover the gift set')}</span>
               </div>
             </Link>
           </Reveal>
@@ -171,7 +183,8 @@ function Collection({ products }) {
 function Ingredients({ products }) {
   const [active, setActive] = useState(0);
   const refs = useRef([]);
-  const list = INGREDIENTS.filter((i) => productsWith(products, i.key).length);
+  const { lang, t } = useStore();
+  const list = INGREDIENTS.filter((i) => productsWith(products, i.key).length).map((i) => (lang === 'ar' ? { ...i, ...INGREDIENT_AR[i.key] } : i));
 
   useEffect(() => {
     const io = new IntersectionObserver(
@@ -187,8 +200,8 @@ function Ingredients({ products }) {
     <section className="section ingredients">
       <div className="container">
         <div className="ing-head">
-          <p className="eyebrow">The materials</p>
-          <SplitHeading text="What the bottle holds" className="display-l" />
+          <p className="eyebrow">{t('The materials')}</p>
+          <SplitHeading text={t('What the bottle holds')} className="display-l" />
         </div>
         <div className="ing-grid">
           <div className="ing-visual" aria-hidden="true">
@@ -203,7 +216,7 @@ function Ingredients({ products }) {
                 transition={{ duration: 1.1, ease: EASE }}
               />
             </AnimatePresence>
-            <span className="ing-count">{String(active + 1).padStart(2, '0')} / {String(list.length).padStart(2, '0')}</span>
+            <span className="ing-count" dir="ltr">{String(active + 1).padStart(2, '0')} / {String(list.length).padStart(2, '0')}</span>
           </div>
           <ol className="ing-list">
             {list.map((ing, i) => (
@@ -213,13 +226,14 @@ function Ingredients({ products }) {
                 <h3>{ing.label || ing.key}</h3>
                 <p className="ing-story">{ing.story}</p>
                 <p className="ing-in">
-                  In{' '}
-                  {productsWith(products, ing.key).map((p, k, arr) => (
-                    <span key={p.slug}>
-                      <Link to={`/fragrances/${p.slug}`}>{p.name}</Link>
-                      {k < arr.length - 1 ? ' and ' : ''}
-                    </span>
-                  ))}
+                  {t('In {list}', {
+                    list: productsWith(products, ing.key).map((p, k, arr) => (
+                      <span key={p.slug}>
+                        <Link to={`/fragrances/${p.slug}`}>{p.name}</Link>
+                        {k < arr.length - 1 ? t(' and ') : ''}
+                      </span>
+                    )),
+                  })}
                 </p>
               </li>
             ))}
@@ -235,14 +249,15 @@ function Ingredients({ products }) {
 function Film({ product }) {
   const ref = useRef(null);
   const frame = useRef(null);
-  const { currency, addToCart, toast } = useStore();
+  const { priceOf, fmt, addToCart, toast, t, dir } = useStore();
   const scrollYProgress = useSectionProgress(ref);
   const scale = useTransform(scrollYProgress, [0, 0.45], [0.5, 1]);
   const radius = useTransform(scrollYProgress, [0, 0.45], ['50% 50% 0 0 / 30% 30% 0 0', '0% 0% 0 0 / 0% 0% 0 0']);
   const lineA = useTransform(scrollYProgress, [0.25, 0.5], [0, 1]);
   const lineB = useTransform(scrollYProgress, [0.4, 0.65], [0, 1]);
-  const lineAx = useTransform(scrollYProgress, [0.25, 0.5], [-40, 0]);
-  const lineBx = useTransform(scrollYProgress, [0.4, 0.65], [40, 0]);
+  const side = dir === 'rtl' ? -1 : 1;
+  const lineAx = useTransform(scrollYProgress, [0.25, 0.5], [-40 * side, 0]);
+  const lineBx = useTransform(scrollYProgress, [0.4, 0.65], [40 * side, 0]);
   const buy = useTransform(scrollYProgress, [0.66, 0.85], [0, 1]);
   if (!product) return null;
   return (
@@ -254,11 +269,11 @@ function Film({ product }) {
         <motion.div ref={frame} className="film-frame" style={{ scale, borderRadius: radius }}>
           <AutoVideo src={product.video?.src} poster={product.video?.poster} label={`${product.name} campaign film`} />
         </motion.div>
-        <motion.p className="film-line film-line-a" style={{ opacity: lineA, x: lineAx }}>More than a scent.</motion.p>
-        <motion.p className="film-line film-line-b" style={{ opacity: lineB, x: lineBx }}><em>A signature.</em></motion.p>
+        <motion.p className="film-line film-line-a" style={{ opacity: lineA, x: lineAx }}>{t('More than a scent.')}</motion.p>
+        <motion.p className="film-line film-line-b" style={{ opacity: lineB, x: lineBx }}><em>{t('A signature.')}</em></motion.p>
         <motion.div className="film-buy" style={{ opacity: buy }}>
           <p className="eyebrow">{product.name} · {product.subtitle}</p>
-          <p className="film-price">{money(product.price?.[currency], currency)} <small>{product.sizeLabel}</small></p>
+          <p className="film-price">{fmt(priceOf(product))} <small dir="ltr">{product.sizeLabel}</small></p>
           <div className="film-actions">
             <button
               className="btn btn-primary"
@@ -266,12 +281,12 @@ function Film({ product }) {
               onClick={() => {
                 flyToCart(frame.current?.querySelector('video'));
                 addToCart(product);
-                toast(`${product.name} added to your bag`);
+                toast(t('{name} added to your bag', { name: product.name }));
               }}
             >
-              Add to bag
+              {t('Add to bag')}
             </button>
-            <Link to={`/fragrances/${product.slug}`} className="text-link">Discover the scent</Link>
+            <Link to={`/fragrances/${product.slug}`} className="text-link">{t('Discover the scent')}</Link>
           </div>
         </motion.div>
       </div>
@@ -280,6 +295,7 @@ function Film({ product }) {
 }
 
 function Craft() {
+  const { t } = useStore();
   return (
     <section className="craft">
       <Parallax className="craft-img" strength={60}>
@@ -287,14 +303,13 @@ function Craft() {
       </Parallax>
       <div className="container craft-inner">
         <Reveal className="craft-card" y={80}>
-          <p className="eyebrow">Craftsmanship</p>
-          <h2>The bottle is only the beginning</h2>
-          <p>Luxury is a detail done thoughtfully: the weight of the bottle in the hand, the way the faceted cap catches light, the texture of the box, the first seconds after the fragrance touches skin.</p>
+          <p className="eyebrow">{t('Craftsmanship')}</p>
+          <h2>{t('The bottle is only the beginning')}</h2>
+          <p>{t('Luxury is a detail done thoughtfully: the weight of the bottle in the hand, the way the faceted cap catches light, the texture of the box, the first seconds after the fragrance touches skin.')}</p>
           <ul>
-            <li><b>100 ml</b> Eau de Parfum</li>
-            <li><b>Faceted</b> crystal-cut cap</li>
-            <li><b>Engraved</b> gold collar</li>
-            <li><b>Ivory &amp; gold</b> presentation box</li>
+            {[['100 ml', 'Eau de Parfum'], ['Faceted', 'crystal-cut cap'], ['Engraved', 'gold collar'], ['Ivory & gold', 'presentation box']].map(([b, rest]) => (
+              <li key={b}><b>{t(b)}</b> {t(rest)}</li>
+            ))}
           </ul>
         </Reveal>
       </div>
@@ -303,16 +318,16 @@ function Craft() {
 }
 
 function Markets() {
-  const { regions, region, setRegion } = useStore();
+  const { regions, region, setRegion, lang, t } = useStore();
   return (
     <section className="section markets">
       <div className="container markets-grid">
         <div>
-          <p className="eyebrow">India &amp; the Gulf</p>
-          <SplitHeading text="From Hyderabad, for India and the Gulf" className="display-l" />
+          <p className="eyebrow">{t('India & the Gulf')}</p>
+          <SplitHeading text={t('From Hyderabad, for India and the Gulf')} className="display-l" />
           <Reveal delay={0.2}>
             <p className="markets-copy">
-              Our home is Hyderabad, a city with centuries of ties to Arabia. We deliver across India and to the United Arab Emirates, with prices shown in your currency including tax.
+              {t('Our home is Hyderabad, a city with centuries of ties to Arabia. We deliver across India and to the United Arab Emirates, with prices shown in your currency including tax.')}
             </p>
           </Reveal>
         </div>
@@ -320,16 +335,16 @@ function Markets() {
           <ul className="markets-list">
             {regions.map((r) => (
               <li key={r.code} className={r.code === region.code ? 'is-current' : ''}>
-                <span className="m-name">{r.name}</span>
+                <span className="m-name">{t(r.name)}</span>
                 {r.ships ? (
-                  <span className="m-status">Delivery · prices in {r.currency}</span>
+                  <span className="m-status">{t('Delivery · prices in {currency}', { currency: currencySymbol(r.currency, lang) })}</span>
                 ) : (
-                  <a className="m-status" href={whatsappLink(`Hello Al Barakah, I would like to order from ${r.name}.`)} target="_blank" rel="noreferrer">
-                    Order by enquiry
+                  <a className="m-status" href={whatsappLink(t('Hello Al Barakah, I would like to order from {country}.', { country: t(r.name) }))} target="_blank" rel="noreferrer">
+                    {t('Order by enquiry · estimate in {currency}', { currency: currencySymbol(r.currency, lang) })}
                   </a>
                 )}
                 <button className="m-select" aria-pressed={r.code === region.code} onClick={() => setRegion(r.code)}>
-                  {r.code === region.code ? 'Selected' : 'Select'}
+                  {t(r.code === region.code ? 'Selected' : 'Select')}
                 </button>
               </li>
             ))}
@@ -341,14 +356,15 @@ function Markets() {
 }
 
 function Journal({ posts }) {
+  const { t } = useStore();
   if (!posts?.length) return null;
   const [lead, ...more] = posts;
   return (
     <section className="section journal-home">
       <div className="container">
         <div className="journal-head">
-          <SplitHeading text="The Journal" className="display-l" />
-          <Link to="/journal" className="text-link">All stories</Link>
+          <SplitHeading text={t('The Journal')} className="display-l" />
+          <Link to="/journal" className="text-link">{t('All stories')}</Link>
         </div>
         <div className="journal-grid">
           <Reveal className="jlead">
@@ -377,17 +393,17 @@ function Journal({ posts }) {
 }
 
 function Closing() {
-  const { setFinderOpen } = useStore();
+  const { setFinderOpen, t } = useStore();
   return (
     <section className="closing">
       <Parallax className="closing-img" strength={60}>
         <Img src="/media/duo-triptych.webp" alt="" sizes="100vw" />
       </Parallax>
       <div className="container closing-inner">
-        <SplitHeading text="Find the one that becomes yours." className="display-l" />
+        <SplitHeading text={t('Find the one that becomes yours.')} className="display-l" />
         <Reveal delay={0.3} className="closing-cta">
-          <Link to="/fragrances" className="btn btn-primary">Explore the collection</Link>
-          <button className="text-link" onClick={() => setFinderOpen(true)}>Take the four-question guide</button>
+          <Link to="/fragrances" className="btn btn-primary">{t('Explore the collection')}</Link>
+          <button className="text-link" onClick={() => setFinderOpen(true)}>{t('Take the four-question guide')}</button>
         </Reveal>
       </div>
     </section>
@@ -398,6 +414,7 @@ export default function Home() {
   const { products } = useProducts();
   const { data: posts } = useApi('/posts?limit=3');
   const zafreon = products.find((p) => p.video?.src);
+  const { t } = useStore();
 
   return (
     <>
@@ -407,6 +424,7 @@ export default function Home() {
         jsonLd={[orgLd(), { '@context': 'https://schema.org', '@type': 'WebSite', name: 'AL BARAKAH LIFESTYLE', url: window.location.origin }]}
       />
       <Opening product={zafreon} />
+      <SeasonBand />
       <Statement />
       {products.length > 0 && <Collection products={products} />}
       {products.length > 0 && <Ingredients products={products} />}
@@ -414,8 +432,8 @@ export default function Home() {
       <section className="section worlds-section">
         <div className="container">
           <div className="worlds-head">
-            <p className="eyebrow">Day &amp; night</p>
-            <SplitHeading text="Two worlds, one house" className="display-l" />
+            <p className="eyebrow">{t('Day & night')}</p>
+            <SplitHeading text={t('Two worlds, one house')} className="display-l" />
           </div>
           <TwoWorlds />
         </div>

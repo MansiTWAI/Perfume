@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { useProducts } from '../hooks/useProducts';
 import { api } from '../lib/api';
-import { money } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 
 const SUGGESTIONS = ['Oud', 'Saffron', 'Jasmine', 'Gift', 'Evening'];
@@ -12,7 +11,7 @@ const SUGGESTIONS = ['Oud', 'Saffron', 'Jasmine', 'Gift', 'Evening'];
 // Searches fragrances by name, family, notes, mood and occasion, and the
 // Journal by title and tags.
 export default function SearchOverlay() {
-  const { searchOpen, setSearchOpen, currency } = useStore();
+  const { searchOpen, setSearchOpen, priceOf, fmt } = useStore();
   const { products } = useProducts();
   const [q, setQ] = useState('');
   const [posts, setPosts] = useState([]);
@@ -104,7 +103,7 @@ export default function SearchOverlay() {
                           <Link to={`/fragrances/${p.slug}`} onClick={close} className="search-product">
                             <img src={p.images?.[0]?.src} alt="" width="64" height="84" />
                             <span><b>{p.name}</b><small>{why}</small></span>
-                            <span className="search-price">{money(p.price?.[currency], currency)}</span>
+                            <span className="search-price">{fmt(priceOf(p))}</span>
                           </Link>
                         </li>
                       ))}

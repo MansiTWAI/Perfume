@@ -50,6 +50,12 @@ app.get('/uploads/:name', serveUpload);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/settings', (_req, res) => res.json({ regions: REGIONS }));
+// The visitor's country, from the edge network's geolocation header, so a
+// first visit from Dubai opens in dirhams. Nothing is stored.
+app.get('/api/geo', (req, res) => {
+  const country = String(req.get('x-vercel-ip-country') || req.get('cf-ipcountry') || '').toUpperCase();
+  res.set('Cache-Control', 'private, no-store').json({ country: /^[A-Z]{2}$/.test(country) ? country : null });
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/posts', postRoutes);

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
-
-const SYMBOL = { INR: '₹', AED: 'AED' };
+import { currencySymbol } from '../lib/format';
 
 // Compact "IN · ₹" button that opens the list of markets.
 export default function RegionSelect({ align = 'right' }) {
-  const { regions, region, setRegion } = useStore();
+  const { regions, region, setRegion, lang, t } = useStore();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -27,15 +26,15 @@ export default function RegionSelect({ align = 'right' }) {
       <button className="region-btn" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span>{region.code}</span>
         <i aria-hidden="true">·</i>
-        <span>{SYMBOL[region.currency] || region.currency}</span>
-        <span className="sr-only">Change country, currently {region.name}</span>
+        <span>{currencySymbol(region.currency, lang)}</span>
+        <span className="sr-only">{t('Change country, currently {name}', { name: t(region.name) })}</span>
       </button>
       <AnimatePresence>
         {open && (
           <motion.ul
             className="region-list"
             role="listbox"
-            aria-label="Deliver to"
+            aria-label={t('Deliver to')}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -51,8 +50,8 @@ export default function RegionSelect({ align = 'right' }) {
                     setOpen(false);
                   }}
                 >
-                  <span>{r.name}</span>
-                  <small>{r.ships ? r.currency : 'On request'}</small>
+                  <span>{t(r.name)}</span>
+                  <small>{r.ships ? currencySymbol(r.currency, lang) : `${t('On request')} · ${currencySymbol(r.currency, lang)}`}</small>
                 </button>
               </li>
             ))}
