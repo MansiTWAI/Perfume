@@ -42,7 +42,7 @@ function Opening({ product }) {
   // The bottle draws a little closer as the story unfolds.
   const productScale = useTransform(scrollYProgress, [0, 1], [1, 1.07]);
   const productY = useTransform(scrollYProgress, [0, 1], ['0%', '-3%']);
-  const render = renderFor(product?.slug || 'zafreon');
+  const render = renderFor(product || 'zafreon');
 
   useEffect(() => {
     let seen = true;
@@ -175,9 +175,9 @@ function Collection({ products }) {
         {rest.map((p) => (
           <Reveal key={p._id || p.slug} className="duo-band">
             <Link to={`/fragrances/${p.slug}`} className="duo-link">
-              {renderFor(p.slug) ? (
+              {renderFor(p) ? (
                 <div className={`duo-img product-stage stage-${p.theme || 'duo'}`}>
-                  <FloatingProduct render={renderFor(p.slug)} alt={`${p.name}: ELARISSE and ZAFREON on black marble`} className="fp-plinth" reflect={false} sizes="(max-width: 800px) 90vw, 50vw" strength={0.5} />
+                  <FloatingProduct render={renderFor(p)} alt={`${p.name}: ELARISSE and ZAFREON on black marble`} className="fp-plinth" reflect={false} sizes="(max-width: 800px) 90vw, 50vw" strength={0.5} />
                 </div>
               ) : (
                 <div className="duo-img"><Img src={p.images?.[1]?.src || p.images?.[0]?.src} alt={p.images?.[1]?.alt || p.name} sizes="(max-width: 800px) 100vw, 60vw" /></div>

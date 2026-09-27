@@ -12,7 +12,7 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
   const imgRef = useRef(null);
   const mediaRef = useRef(null);
   const [a, b] = product.images || [];
-  const render = renderFor(product.slug);
+  const render = renderFor(product);
   const soldOut = product.stock <= 0;
 
   const add = () => {

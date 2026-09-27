@@ -24,6 +24,20 @@ const productSchema = new mongoose.Schema(
     theme: { type: String, enum: ['ivory', 'onyx', 'duo'], default: 'ivory' },
     images: [{ src: String, alt: String, _id: false }],
     video: { src: String, poster: String },
+    // Cut-out bottle on a transparent background (PNG or WebP with alpha):
+    // shown floating across the store. Without it, the main image is used.
+    render: { src: String, width: Number, height: Number },
+    // Arabic copy; any field left empty falls back to the built-in text or English.
+    ar: {
+      tagline: String,
+      family: String,
+      description: String,
+      story: String,
+      howToWear: String,
+      howToStore: String,
+      occasions: [String],
+      includes: [String],
+    },
     notes: {
       top: [noteSchema],
       heart: [noteSchema],

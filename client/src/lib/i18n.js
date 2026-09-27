@@ -235,6 +235,11 @@ const AR = {
   'Return home': 'العودة إلى الرئيسية',
   'View the fragrances': 'شاهد العطور',
 
+  // ----- signature finder -----
+  Back: 'رجوع',
+  'Your signature is': 'توقيعك هو',
+  'Start again': 'ابدأ من جديد',
+
   // ----- latest shelf -----
   'New arrivals': 'وصل حديثاً',
   'Latest from the house': 'أحدث ما في الدار',
@@ -567,12 +572,17 @@ export function translate(lang, key, vars) {
   return rich ? filled.map((p, i) => createElement(Fragment, { key: i }, p)) : filled.join('');
 }
 
-// Merges the Arabic copy over a product; note names stay in English (they key
-// icons and ingredient links) and gain an Arabic `label`.
+// Merges the Arabic copy over a product: the product's own Arabic fields
+// (entered in the admin) first, then the built-in copy, then English. Note
+// names stay in English (they key icons and ingredient links) and gain an
+// Arabic `label`.
 export function localizeProduct(p, lang) {
   if (lang !== 'ar' || !p) return p;
-  const ar = PRODUCT_AR[p.slug] || {};
-  const { notes: noteText = {}, ...copy } = ar;
+  const { notes: noteText = {}, ...builtIn } = PRODUCT_AR[p.slug] || {};
+  const own = Object.fromEntries(
+    Object.entries(p.ar || {}).filter(([, v]) => (Array.isArray(v) ? v.length : typeof v === 'string' && v.trim()))
+  );
+  const copy = { ...builtIn, ...own };
   const notes = p.notes && Object.fromEntries(
     Object.entries(p.notes).map(([tier, list]) => [
       tier,

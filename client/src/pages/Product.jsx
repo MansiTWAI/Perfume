@@ -23,7 +23,7 @@ function Gallery({ product, mainRef }) {
   const media = [...(product.images || [])];
   if (product.video?.src) media.splice(1, 0, { video: product.video.src, src: product.video.poster, alt: `${product.name} film` });
   // The bottle render leads the gallery.
-  const render = renderFor(product.slug);
+  const render = renderFor(product);
   if (render) media.unshift({ render, src: render.sm, alt: product.images?.[0]?.alt || product.name });
   const [i, setI] = useState(0);
   const [zoom, setZoom] = useState(null);

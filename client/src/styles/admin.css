@@ -135,3 +135,5 @@
 .a-tabs button.is-on { border-color: var(--a-accent); color: var(--a-accent); }
 .a-reply { display: grid; gap: 6px; font-size: 13px; margin-top: 10px; }
 .a-reply textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--a-line); border-radius: 6px; resize: vertical; }
+.a-rtl { display: grid; gap: 14px; }
+.a-rtl input, .a-rtl textarea { text-align: right; font-family: var(--body); }

@@ -9,7 +9,7 @@ const MAX = 10;
 
 // A product without a cut-out render still appears, from its first image.
 const imageFor = (p) =>
-  renderFor(p.slug) || (p.images?.[0]?.src && { src: p.images[0].src, sm: p.images[0].src, w: 600, h: 800, sw: 600 });
+  renderFor(p) || (p.images?.[0]?.src && { src: p.images[0].src, w: 600, h: 800 });
 
 // The newest products as bottles standing on the page: no cards, no boxes,
 // just the render, its shadow and its reflection on a lit floor.
