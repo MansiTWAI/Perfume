@@ -4,6 +4,133 @@ import { PageHero } from '../components/Bits';
 import { Reveal } from '../components/Motion';
 import { api } from '../lib/api';
 import { CONTACT, mapLink, whatsappLink } from '../lib/format';
+import { useStore } from '../context/StoreContext';
+
+const CARD_FILE = '/media/al-barakah-lifestyle-business-card.jpg';
+const SITE = `https://${CONTACT.web}`;
+
+// The rows on the card, each with its own link and copy button.
+const ROWS = [
+  { key: 'phone', label: 'Phone & WhatsApp', value: CONTACT.phone, href: `tel:+${CONTACT.phoneRaw}` },
+  { key: 'email', label: 'Email', value: CONTACT.email, href: `mailto:${CONTACT.email}` },
+  { key: 'web', label: 'Website', value: CONTACT.web, href: SITE },
+  { key: 'address', label: 'Studio', value: CONTACT.address, href: mapLink, external: true },
+];
+
+const ALL_DETAILS = [
+  'AL BARAKAH LIFESTYLE',
+  'Fragrances · Beauty · Lifestyle',
+  CONTACT.name,
+  CONTACT.phone,
+  CONTACT.email,
+  CONTACT.web,
+  CONTACT.address,
+].join('\n');
+
+// vCard 3.0, so the card can be saved straight into a phone's contacts.
+function vcard() {
+  return [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    'N:Nizam;;;Mrs;',
+    `FN:${CONTACT.name}`,
+    'ORG:AL BARAKAH LIFESTYLE',
+    `TEL;TYPE=CELL,VOICE:+${CONTACT.phoneRaw}`,
+    `EMAIL;TYPE=INTERNET:${CONTACT.email}`,
+    `URL:${SITE}`,
+    'ADR;TYPE=WORK:;;Plot Number 61\\, Friends Colony\\, Jalpally;Hyderabad;Telangana;;India',
+    'NOTE:Fragrances · Beauty · Lifestyle. leave your signature',
+    'END:VCARD',
+  ].join('\r\n');
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Older browsers and non-secure pages: a hidden textarea.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+}
+
+const CopyIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
+);
+const TickIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+);
+
+// The house business card, with every detail one tap from the clipboard,
+// the card itself to download, and a contact file for phones.
+function BusinessCard() {
+  const { toast } = useStore();
+  const [copied, setCopied] = useState(null);
+
+  const copy = async (key, text, what) => {
+    if (await copyText(text)) {
+      setCopied(key);
+      toast(`${what} copied`);
+      setTimeout(() => setCopied((k) => (k === key ? null : k)), 1800);
+    } else {
+      toast('Copying is blocked in this browser. Select the text instead.', 'warn');
+    }
+  };
+
+  const saveContact = () => {
+    const url = URL.createObjectURL(new Blob([vcard()], { type: 'text/vcard;charset=utf-8' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'AL-BARAKAH-LIFESTYLE-Mrs-Nizam.vcf' });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  return (
+    <div className="bcard">
+      <p className="eyebrow">Speak with the house</p>
+      <a className="bcard-image" href={CARD_FILE} target="_blank" rel="noreferrer" aria-label="Open the business card at full size">
+        <img
+          src="/media/business-card.webp"
+          srcSet="/media/business-card-800.webp 800w, /media/business-card.webp 1280w"
+          sizes="(max-width: 860px) 92vw, 40vw"
+          alt="AL BARAKAH LIFESTYLE business card for Mrs Nizam: burgundy and gold with the Arabic calligraphy logo, front and back"
+          width="1280"
+          height="853"
+          loading="lazy"
+        />
+      </a>
+      <p className="contact-name">{CONTACT.name}</p>
+      <ul className="bcard-rows">
+        {ROWS.map((r) => (
+          <li key={r.key}>
+            <span className="bcard-label">{r.label}</span>
+            <a className="bcard-value" href={r.href} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.value}</a>
+            <button type="button" className={`bcard-copy ${copied === r.key ? 'is-done' : ''}`} onClick={() => copy(r.key, r.value, r.label)} aria-label={`Copy ${r.label.toLowerCase()}`}>
+              {copied === r.key ? <TickIcon /> : <CopyIcon />}
+              <span>{copied === r.key ? 'Copied' : 'Copy'}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="bcard-actions">
+        <button type="button" className="btn btn-ghost bcard-save" onClick={saveContact}>Save to contacts</button>
+        <button type="button" className="btn btn-ghost" onClick={() => copy('all', ALL_DETAILS, 'All details')}>
+          {copied === 'all' ? 'Copied' : 'Copy all details'}
+        </button>
+        <a className="btn btn-ghost" href={CARD_FILE} download="AL-BARAKAH-LIFESTYLE-business-card.jpg">Download card</a>
+      </div>
+    </div>
+  );
+}
 
 export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', topic: 'Product question', message: '' });
@@ -29,14 +156,8 @@ export default function Contact() {
       <section className="section">
         <div className="container contact-grid">
           <Reveal className="contact-info">
-            <div>
-              <p className="eyebrow">Speak with the house</p>
-              <p className="contact-name">{CONTACT.name}</p>
-            </div>
+            <BusinessCard />
             <dl>
-              <div><dt>WhatsApp &amp; phone</dt><dd><a href={`tel:+${CONTACT.phoneRaw}`}>{CONTACT.phone}</a></dd></div>
-              <div><dt>Email</dt><dd><a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></dd></div>
-              <div><dt>Studio</dt><dd><a href={mapLink} target="_blank" rel="noreferrer">{CONTACT.address}</a></dd></div>
               <div><dt>Delivery</dt><dd>Across India and to the United Arab Emirates. Other Gulf countries on request.</dd></div>
             </dl>
             <a className="btn btn-primary" href={whatsappLink('Hello Al Barakah, I have a question.')} target="_blank" rel="noreferrer">Message us on WhatsApp</a>
