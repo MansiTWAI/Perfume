@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Seo, { breadcrumbLd } from '../components/Seo';
 import { PageHero, Lightbox } from '../components/Bits';
+import { useStore } from '../context/StoreContext';
 
 const ITEMS = [
   { src: '/media/elarisse-campaign.webp', alt: 'ELARISSE bottle and box beneath palace arches at sunset', tags: ['ELARISSE', 'Campaigns'], size: 'xl' },
@@ -22,18 +23,19 @@ const ITEMS = [
 const FILTERS = ['All', 'Brand', 'ELARISSE', 'ZAFREON', 'Packaging', 'Campaigns', 'Details', 'Lifestyle'];
 
 export default function Gallery() {
+  const { t } = useStore();
   const [f, setF] = useState('All');
   const [idx, setIdx] = useState(null);
   const list = ITEMS.filter((i) => f === 'All' || i.tags.includes(f));
   return (
     <>
       <Seo title="Luxury Perfume Gallery | AL BARAKAH LIFESTYLE" description="The AL BARAKAH LIFESTYLE gallery: ELARISSE and ZAFREON campaigns, packaging, brand identity and details." jsonLd={breadcrumbLd([['Home', '/'], ['Gallery', '/gallery']])} />
-      <PageHero eyebrow="Gallery" title="The house, in pictures" layout="split" video="/media/zafreon-film.mp4" poster="/media/zafreon-film-poster.jpg" alt="ZAFREON campaign film" lede="Campaigns, packaging and details from the world of ELARISSE and ZAFREON." />
+      <PageHero eyebrow={t('Gallery')} title={t('The house, in pictures')} layout="split" video="/media/zafreon-film.mp4" poster="/media/zafreon-film-poster.jpg" alt="ZAFREON campaign film" lede={t('Campaigns, packaging and details from the world of ELARISSE and ZAFREON.')} />
       <section className="section">
         <div className="container">
-          <div className="chips center-chips" role="group" aria-label="Filter gallery">
+          <div className="chips center-chips" role="group" aria-label={t('Filter gallery')}>
             {FILTERS.map((x) => (
-              <button key={x} className="chip" aria-pressed={f === x} onClick={() => setF(x)}>{x}</button>
+              <button key={x} className="chip" aria-pressed={f === x} onClick={() => setF(x)}>{t(x)}</button>
             ))}
           </div>
           <motion.div layout className="masonry">
@@ -51,7 +53,7 @@ export default function Gallery() {
                  
                 >
                   <img src={it.src} alt={it.alt} loading="lazy" />
-                  <span className="m-cap">{it.tags[0]}</span>
+                  <span className="m-cap">{t(it.tags[0])}</span>
                 </motion.button>
               ))}
             </AnimatePresence>

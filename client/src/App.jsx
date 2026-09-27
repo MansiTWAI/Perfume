@@ -43,7 +43,8 @@ const pageMotion = {
 
 // Pages whose text is not yet translated keep English layout inside the
 // Arabic site rather than half-mirroring.
-const ENGLISH_ONLY = /^\/(journal|our-story|mission-vision|fragrance-heritage|gallery|contact|faq|shipping-returns|privacy-policy|terms|track|account)(\/|$)/;
+// Legal pages await a reviewed translation; article bodies are English in the database.
+const ENGLISH_ONLY = /^\/(privacy-policy|terms)(\/|$)|^\/journal\/./;
 
 function Page({ children }) {
   const { lang } = useStore();

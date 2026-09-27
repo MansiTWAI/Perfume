@@ -10,9 +10,8 @@
    Letter-spacing breaks the joins between Arabic letters, and Arabic has no
    italic, so both go. Small uppercase labels grow: Arabic at 11px is hard to read. */
 body :lang(ar) { letter-spacing: 0 !important; }
-em:lang(ar),
-i:lang(ar),
-.markets-list li.is-current .m-name:lang(ar) { font-style: normal; }
+/* Arabic has no italic; browsers would slant it artificially. */
+body :lang(ar) { font-style: normal !important; }
 body:lang(ar) { line-height: 1.85; }
 h1:lang(ar),
 h2:lang(ar),

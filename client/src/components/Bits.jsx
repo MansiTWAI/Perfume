@@ -110,6 +110,8 @@ export function PostCard({ post, large, index = 0 }) {
   return (
     <motion.article
       className={`postcard ${large ? 'postcard-lg' : ''}`}
+      lang="en"
+      dir="ltr"
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}

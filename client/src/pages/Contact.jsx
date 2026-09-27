@@ -72,16 +72,16 @@ const TickIcon = () => (
 // The house business card, with every detail one tap from the clipboard,
 // the card itself to download, and a contact file for phones.
 function BusinessCard() {
-  const { toast } = useStore();
+  const { toast, t } = useStore();
   const [copied, setCopied] = useState(null);
 
   const copy = async (key, text, what) => {
     if (await copyText(text)) {
       setCopied(key);
-      toast(`${what} copied`);
+      toast(t('{what} copied', { what: t(what) }));
       setTimeout(() => setCopied((k) => (k === key ? null : k)), 1800);
     } else {
-      toast('Copying is blocked in this browser. Select the text instead.', 'warn');
+      toast(t('Copying is blocked in this browser. Select the text instead.'), 'warn');
     }
   };
 
@@ -96,8 +96,8 @@ function BusinessCard() {
 
   return (
     <div className="bcard">
-      <p className="eyebrow">Speak with the house</p>
-      <a className="bcard-image" href={CARD_FILE} target="_blank" rel="noreferrer" aria-label="Open the business card at full size">
+      <p className="eyebrow">{t('Speak with the house')}</p>
+      <a className="bcard-image" href={CARD_FILE} target="_blank" rel="noreferrer" aria-label={t('Open the business card at full size')}>
         <img
           src="/media/business-card.webp"
           srcSet="/media/business-card-800.webp 800w, /media/business-card.webp 1280w"
@@ -112,27 +112,31 @@ function BusinessCard() {
       <ul className="bcard-rows">
         {ROWS.map((r) => (
           <li key={r.key}>
-            <span className="bcard-label">{r.label}</span>
-            <a className="bcard-value" href={r.href} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.value}</a>
-            <button type="button" className={`bcard-copy ${copied === r.key ? 'is-done' : ''}`} onClick={() => copy(r.key, r.value, r.label)} aria-label={`Copy ${r.label.toLowerCase()}`}>
+            <span className="bcard-label">{t(r.label)}</span>
+            <a className="bcard-value" dir="ltr" href={r.href} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.value}</a>
+            <button type="button" className={`bcard-copy ${copied === r.key ? 'is-done' : ''}`} onClick={() => copy(r.key, r.value, r.label)} aria-label={t('Copy {what}', { what: t(r.label) })}>
               {copied === r.key ? <TickIcon /> : <CopyIcon />}
-              <span>{copied === r.key ? 'Copied' : 'Copy'}</span>
+              <span>{t(copied === r.key ? 'Copied' : 'Copy')}</span>
             </button>
           </li>
         ))}
       </ul>
       <div className="bcard-actions">
-        <button type="button" className="btn btn-ghost bcard-save" onClick={saveContact}>Save to contacts</button>
+        <button type="button" className="btn btn-ghost bcard-save" onClick={saveContact}>{t('Save to contacts')}</button>
         <button type="button" className="btn btn-ghost" onClick={() => copy('all', ALL_DETAILS, 'All details')}>
-          {copied === 'all' ? 'Copied' : 'Copy all details'}
+          {t(copied === 'all' ? 'Copied' : 'Copy all details')}
         </button>
-        <a className="btn btn-ghost" href={CARD_FILE} download="AL-BARAKAH-LIFESTYLE-business-card.jpg">Download card</a>
+        <a className="btn btn-ghost" href={CARD_FILE} download="AL-BARAKAH-LIFESTYLE-business-card.jpg">{t('Download card')}</a>
       </div>
     </div>
   );
 }
 
+// Topic values stay in English for the house's inbox; only the labels translate.
+const TOPICS = ['Product question', 'Order & delivery', 'Gifting & corporate orders', 'Middle East delivery', 'Press & collaborations'];
+
 export default function Contact() {
+  const { t } = useStore();
   const [form, setForm] = useState({ name: '', email: '', phone: '', topic: 'Product question', message: '' });
   const [state, setState] = useState({ busy: false, done: false, error: '' });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -152,38 +156,34 @@ export default function Contact() {
   return (
     <>
       <Seo title="Contact AL BARAKAH LIFESTYLE | Perfume & Lifestyle Brand India" description="Contact AL BARAKAH LIFESTYLE in Hyderabad for orders, gifting and fragrance questions. WhatsApp +91 91112 79997 or email you@albarakah.me." jsonLd={[orgLd(), breadcrumbLd([['Home', '/'], ['Contact', '/contact']])]} />
-      <PageHero eyebrow="Contact" title="We would love to hear from you" layout="split" image="/media/emblem.webp" fit="contain" alt="The AL BARAKAH LIFESTYLE emblem on burgundy stationery" lede="Orders, gifting, wholesale and press. We reply personally from Hyderabad." />
+      <PageHero eyebrow={t('Contact')} title={t('We would love to hear from you')} layout="split" image="/media/emblem.webp" fit="contain" alt="The AL BARAKAH LIFESTYLE emblem on burgundy stationery" lede={t('Orders, gifting, wholesale and press. We reply personally from Hyderabad.')} />
       <section className="section">
         <div className="container contact-grid">
           <Reveal className="contact-info">
             <BusinessCard />
             <dl>
-              <div><dt>Delivery</dt><dd>Across India and to the United Arab Emirates. Other Gulf countries on request.</dd></div>
+              <div><dt>{t('Delivery')}</dt><dd>{t('Across India and to the United Arab Emirates. Other Gulf countries on request.')}</dd></div>
             </dl>
-            <a className="btn btn-primary" href={whatsappLink('Hello Al Barakah, I have a question.')} target="_blank" rel="noreferrer">Message us on WhatsApp</a>
+            <a className="btn btn-primary" href={whatsappLink(t('Hello Al Barakah, I have a question.'))} target="_blank" rel="noreferrer">{t('Message us on WhatsApp')}</a>
           </Reveal>
           <Reveal delay={0.1}>
             <form className="form" onSubmit={submit}>
               <div className="form-row">
-                <label>Name<input required value={form.name} onChange={set('name')} autoComplete="name" /></label>
-                <label>Email<input type="email" required value={form.email} onChange={set('email')} autoComplete="email" /></label>
+                <label>{t('Name')}<input required value={form.name} onChange={set('name')} autoComplete="name" /></label>
+                <label>{t('Email')}<input type="email" dir="ltr" required value={form.email} onChange={set('email')} autoComplete="email" /></label>
               </div>
               <div className="form-row">
-                <label>Phone (optional)<input value={form.phone} onChange={set('phone')} autoComplete="tel" /></label>
-                <label>Topic
+                <label>{t('Phone (optional)')}<input type="tel" dir="ltr" value={form.phone} onChange={set('phone')} autoComplete="tel" /></label>
+                <label>{t('Topic')}
                   <select value={form.topic} onChange={set('topic')}>
-                    <option>Product question</option>
-                    <option>Order &amp; delivery</option>
-                    <option>Gifting &amp; corporate orders</option>
-                    <option>Middle East delivery</option>
-                    <option>Press &amp; collaborations</option>
+                    {TOPICS.map((x) => <option key={x} value={x}>{t(x)}</option>)}
                   </select>
                 </label>
               </div>
-              <label>Message<textarea required rows="6" value={form.message} onChange={set('message')} /></label>
+              <label>{t('Message')}<textarea required rows="6" value={form.message} onChange={set('message')} /></label>
               {state.error && <p className="form-error" role="alert">{state.error}</p>}
-              {state.done && <p className="form-ok" role="status">Thank you. Your message has reached the house and we will reply soon.</p>}
-              <button className="btn btn-primary" disabled={state.busy}>{state.busy ? 'Sending…' : 'Send message'}</button>
+              {state.done && <p className="form-ok" role="status">{t('Thank you. Your message has reached the house and we will reply soon.')}</p>}
+              <button className="btn btn-primary" disabled={state.busy}>{t(state.busy ? 'Sending…' : 'Send message')}</button>
             </form>
           </Reveal>
         </div>

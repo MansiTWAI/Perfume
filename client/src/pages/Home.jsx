@@ -384,7 +384,7 @@ function Journal({ posts }) {
           <Link to="/journal" className="text-link">{t('All stories')}</Link>
         </div>
         <div className="journal-grid">
-          <Reveal className="jlead">
+          <Reveal className="jlead" lang="en" dir="ltr">
             <Link to={`/journal/${lead.slug}`}>
               <div className="jlead-img"><Img src={lead.cover?.src} alt={lead.cover?.alt || ''} sizes="(max-width: 800px) 100vw, 55vw" /></div>
               <p className="eyebrow">{lead.category} · {lead.readingMinutes} min</p>
@@ -394,7 +394,7 @@ function Journal({ posts }) {
           </Reveal>
           <ul className="jlist">
             {more.map((p, i) => (
-              <Reveal as="li" key={p._id} delay={0.1 + i * 0.1}>
+              <Reveal as="li" key={p._id} delay={0.1 + i * 0.1} lang="en" dir="ltr">
                 <Link to={`/journal/${p.slug}`}>
                   <span className="eyebrow">{p.category}</span>
                   <h3>{p.title}</h3>

@@ -6,6 +6,7 @@ import { PageHero } from '../components/Bits';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { ReviewForm } from '../components/Reviews';
+import { useStore } from '../context/StoreContext';
 
 function Lamp({ lit, current, label, date }) {
   return (
@@ -24,6 +25,7 @@ function Lamp({ lit, current, label, date }) {
 
 export default function Track() {
   const [params] = useSearchParams();
+  const { t } = useStore();
   const [id, setId] = useState(params.get('id') || '');
   const [email, setEmail] = useState(params.get('email') || '');
   const [order, setOrder] = useState(null);
@@ -66,31 +68,31 @@ export default function Track() {
   return (
     <>
       <Seo title="Track your order" description="Track your AL BARAKAH LIFESTYLE order with your tracking ID and email." />
-      <PageHero eyebrow="Track your order" title="Follow the lamps home" layout="split" image="/media/panel-elarisse.webp" alt="ELARISSE beneath ivory arches" lede="Enter your tracking ID and the email used at checkout." />
+      <PageHero eyebrow={t('Track your order')} title={t('Follow the lamps home')} layout="split" image="/media/panel-elarisse.webp" alt="ELARISSE beneath ivory arches" lede={t('Enter your tracking ID and the email used at checkout.')} />
       <section className="section">
         <div className="container">
           <form className="form track-form" onSubmit={lookup}>
-            <label>Tracking ID<input required value={id} onChange={(e) => setId(e.target.value)} placeholder="ABL…" /></label>
-            <label>Email used at checkout<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-            <button className="btn btn-primary" disabled={busy}>{busy ? 'Finding…' : 'Track'}</button>
+            <label>{t('Tracking ID')}<input required dir="ltr" value={id} onChange={(e) => setId(e.target.value)} placeholder="ABL…" /></label>
+            <label>{t('Email used at checkout')}<input type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <button className="btn btn-primary" disabled={busy}>{t(busy ? 'Finding…' : 'Track')}</button>
           </form>
           {error && <p className="form-error center" role="alert">{error}</p>}
           {order && (
             <motion.div className="track-result" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
               <div className="track-head">
                 <div>
-                  <p className="eyebrow">Order {order.orderNumber} · to {order.city}, {order.country}</p>
-                  <h2>{order.status}</h2>
+                  <p className="eyebrow">{t('Order {n} · to {place}', { n: order.orderNumber, place: `${order.city}, ${t(order.country)}` })}</p>
+                  <h2>{t(order.status)}</h2>
                 </div>
                 <div className="track-meta">
-                  {order.eta && <p>Expected: <b>{order.eta}</b></p>}
-                  {order.carrier && <p>Courier: <b>{order.carrier}</b></p>}
-                  {order.carrierUrl && <a href={order.carrierUrl} target="_blank" rel="noreferrer" className="text-link">Courier tracking →</a>}
+                  {order.eta && <p>{t('Expected:')} <b>{order.eta}</b></p>}
+                  {order.carrier && <p>{t('Courier:')} <b>{order.carrier}</b></p>}
+                  {order.carrierUrl && <a href={order.carrierUrl} target="_blank" rel="noreferrer" className="text-link">{t('Courier tracking')}</a>}
                 </div>
               </div>
               <div className="lamps">
                 {order.stages.map((s, i) => (
-                  <Lamp key={s} label={s} lit={i <= idx} current={i === idx} date={i <= idx ? dateFor(s) : null} />
+                  <Lamp key={s} label={t(s)} lit={i <= idx} current={i === idx} date={i <= idx ? dateFor(s) : null} />
                 ))}
               </div>
               <ul className="track-items">

@@ -39,7 +39,7 @@ export function RatingSummary({ summary }) {
     <a href="#reviews" className="rating-summary">
       <Stars value={summary.average} />
       <span>{summary.average.toFixed(1)}</span>
-      <span className="rating-count">{t('{n} verified reviews', { n: summary.count })}</span>
+      <span className="rating-count">{t(summary.count === 1 ? '{n} verified review' : '{n} verified reviews', { n: summary.count })}</span>
     </a>
   );
 }
@@ -61,7 +61,7 @@ export default function Reviews({ data, name }) {
             <div className="reviews-score">
               <b>{data.average.toFixed(1)}</b>
               <Stars value={data.average} size={18} />
-              <span>{t('{n} verified reviews', { n: data.count })}</span>
+              <span>{t(data.count === 1 ? '{n} verified review' : '{n} verified reviews', { n: data.count })}</span>
             </div>
           )}
         </div>
@@ -101,6 +101,7 @@ export default function Reviews({ data, name }) {
 
 // On the Track page: one form per delivered fragrance not yet reviewed.
 export function ReviewForm({ trackingId, email, item, onDone }) {
+  const { t } = useStore();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [title, setTitle] = useState('');
@@ -109,7 +110,7 @@ export function ReviewForm({ trackingId, email, item, onDone }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!rating) return setState({ busy: false, error: 'Please choose a rating.', done: '' });
+    if (!rating) return setState({ busy: false, error: t('Please choose a rating.'), done: '' });
     setState({ busy: true, error: '', done: '' });
     try {
       const res = await api('/reviews', { method: 'POST', body: { trackingId, email, slug: item.slug, rating, title, body } });
@@ -126,27 +127,27 @@ export function ReviewForm({ trackingId, email, item, onDone }) {
       <div className="review-form-head">
         <img src={item.image} alt="" width="56" height="56" />
         <div>
-          <p className="eyebrow">Review your fragrance</p>
+          <p className="eyebrow">{t('Review your fragrance')}</p>
           <h3>{item.name}</h3>
         </div>
       </div>
       <fieldset className="rate">
-        <legend>Your rating</legend>
+        <legend>{t('Your rating')}</legend>
         <div className="rate-stars" onMouseLeave={() => setHover(0)}>
           {[1, 2, 3, 4, 5].map((n) => (
             <label key={n} onMouseEnter={() => setHover(n)}>
               <input type="radio" name={`rating-${item.slug}`} value={n} checked={rating === n} onChange={() => setRating(n)} />
-              <span className="sr-only">{n} {n === 1 ? 'star' : 'stars'}</span>
+              <span className="sr-only">{t('{n} out of 5 stars', { n })}</span>
               <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path d={STAR} className={n <= (hover || rating) ? 'star-full' : 'star-empty'} /></svg>
             </label>
           ))}
         </div>
       </fieldset>
-      <label>Headline (optional)<input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="In a few words" /></label>
-      <label>Your review<textarea required minLength={20} maxLength={1200} rows="5" value={body} onChange={(e) => setBody(e.target.value)} placeholder="How does it wear on you? When do you reach for it?" /></label>
-      <p className="fine">Only your first name, initial and city are shown. Reviews appear once the house has read them.</p>
+      <label>{t('Headline (optional)')}<input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder={t('In a few words')} /></label>
+      <label>{t('Your review')}<textarea required minLength={20} maxLength={1200} rows="5" value={body} onChange={(e) => setBody(e.target.value)} placeholder={t('How does it wear on you? When do you reach for it?')} /></label>
+      <p className="fine">{t('Only your first name, initial and city are shown. Reviews appear once the house has read them.')}</p>
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
-      <button className="btn btn-primary" disabled={state.busy}>{state.busy ? 'Sending…' : 'Submit review'}</button>
+      <button className="btn btn-primary" disabled={state.busy}>{t(state.busy ? 'Sending…' : 'Submit review')}</button>
     </form>
   );
 }
