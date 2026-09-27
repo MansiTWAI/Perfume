@@ -60,7 +60,12 @@ h3:lang(ar),
 }
 .lang-btn[lang='ar'] { font: 400 17px/1 var(--display); }
 .lang-btn:hover { color: var(--ivory); background: rgba(215, 195, 160, 0.12); }
-@media (max-width: 420px) { .lang-btn { min-width: 38px; padding: 0 6px; } }
+/* Small phones: the header is full; the switch lives in the menu instead. */
+.lang-btn-menu { display: none; }
+@media (max-width: 480px) {
+  .site-header .lang-btn { display: none; }
+  .lang-btn-menu { display: inline-grid; place-items: center; border: 1px solid rgba(215, 195, 160, 0.3); }
+}
 
 /* ---------- Majlis mode: visitors shopping from the Gulf ---------- */
 .site-footer,
@@ -122,7 +127,8 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 
 /* ---------- WhatsApp concierge ---------- */
 .concierge {
-  position: fixed; z-index: 45;
+  /* under the full-screen menu (45), above the product buy bar (40) */
+  position: fixed; z-index: 44;
   inset-inline-end: max(16px, env(safe-area-inset-right, 0px));
   bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   display: grid; justify-items: end; gap: 12px;

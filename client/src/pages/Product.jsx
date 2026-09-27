@@ -9,6 +9,8 @@ import ProductCard from '../components/ProductCard';
 import AutoVideo from '../components/AutoVideo';
 import BottleStage from '../components/BottleStage';
 import Img from '../components/Img';
+import FloatingProduct from '../components/FloatingProduct';
+import { renderFor } from '../lib/renders';
 import { useProduct } from '../hooks/useProducts';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
@@ -21,6 +23,9 @@ function Gallery({ product, mainRef }) {
   if (product.video?.src) media.splice(1, 0, { video: product.video.src, src: product.video.poster, alt: `${product.name} film` });
   // The two Eaux de Parfum have a real-time 3D view; the gift set does not.
   if (['zafreon', 'elarisse'].includes(product.slug)) media.splice(1, 0, { three: product.slug, src: media[0]?.src, alt: `${product.name} in 360°` });
+  // The bottle render leads the gallery.
+  const render = renderFor(product.slug);
+  if (render) media.unshift({ render, src: render.sm, alt: product.images?.[0]?.alt || product.name });
   const [i, setI] = useState(0);
   const [zoom, setZoom] = useState(null);
   const { t } = useStore();
@@ -30,7 +35,18 @@ function Gallery({ product, mainRef }) {
       <div className="pgallery-main">
         <AnimatePresence mode="wait">
           <motion.div key={i} className="pgallery-stage" initial={{ opacity: 0, scale: 1.03 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
-            {cur.three ? (
+            {cur.render ? (
+              <div className={`pgallery-render product-stage stage-${product.theme || 'onyx'}`}>
+                <FloatingProduct
+                  render={cur.render}
+                  alt={cur.alt}
+                  eager
+                  reflect={product.slug !== 'signature-duo'}
+                  className={product.slug === 'signature-duo' ? 'fp-plinth' : undefined}
+                  sizes="(max-width: 960px) 70vw, 34vw"
+                />
+              </div>
+            ) : cur.three ? (
               <BottleStage variant={cur.three} interactive className={`pgallery-3d pgallery-3d-${product.theme}`} fallback={{ src: cur.src, alt: cur.alt }} />
             ) : cur.video ? (
               <AutoVideo src={cur.video} poster={cur.src} label={cur.alt} />
@@ -52,7 +68,7 @@ function Gallery({ product, mainRef }) {
       </div>
       <div className="pgallery-thumbs" role="tablist" aria-label={t('Product images')}>
         {media.map((m, k) => (
-          <button key={k} role="tab" aria-selected={k === i} aria-label={m.alt} onClick={() => setI(k)}>
+          <button key={k} role="tab" aria-selected={k === i} aria-label={m.alt} onClick={() => setI(k)} className={m.render ? `is-render product-stage stage-${product.theme || 'onyx'}` : undefined}>
             <img src={m.src} alt="" loading="lazy" />
             {m.video && <span aria-hidden="true">{t('Film')}</span>}
             {m.three && <span aria-hidden="true">360°</span>}
@@ -115,7 +131,7 @@ export default function Product() {
   const noteLine = (tier) => (p.notes?.[tier] || []).map((n) => n.label || n.name).join(t(', '));
 
   const add = (source) => {
-    flyToCart(source || mainImg.current);
+    flyToCart(source || mainImg.current || document.querySelector('.pgallery .fp-img'));
     addToCart(p, qty);
     toast(t('{name} added to your bag', { name: p.name }));
   };

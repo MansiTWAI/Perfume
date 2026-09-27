@@ -8,6 +8,8 @@ import AutoVideo from '../components/AutoVideo';
 import ProductCard from '../components/ProductCard';
 import Img from '../components/Img';
 import BottleStage from '../components/BottleStage';
+import FloatingProduct from '../components/FloatingProduct';
+import { renderFor } from '../lib/renders';
 import NoteIcon from '../components/NoteIcon';
 import SeasonBand from '../components/SeasonBand';
 import { useApi } from '../hooks/useApi';
@@ -35,6 +37,10 @@ function Opening({ product }) {
   const { lang, t } = useStore();
   const scrollYProgress = useSectionProgress(ref);
   const bg = useTransform(scrollYProgress, [0, 0.4, 0.75, 1], ['#0d0a09', '#150f0d', '#1f0f0e', '#2b080c']);
+  // The bottle draws a little closer as the story unfolds.
+  const productScale = useTransform(scrollYProgress, [0, 1], [1, 1.07]);
+  const productY = useTransform(scrollYProgress, [0, 1], ['0%', '-3%']);
+  const render = renderFor(product?.slug || 'zafreon');
 
   useEffect(() => {
     let seen = true;
@@ -50,14 +56,23 @@ function Opening({ product }) {
   return (
     <section ref={ref} className={`opening ${lit ? 'is-lit' : ''}`} style={{ position: 'relative' }}>
       <motion.div className="opening-stage" style={{ backgroundColor: bg }}>
+        {/* The ingredient swarm orbits in WebGL; the bottle is the product render. */}
         <BottleStage
           variant="zafreon"
           stage
+          bottle={!render}
           progress={scrollYProgress}
           className="opening-bottle"
-          fallback={{ src: '/media/hero-zafreon.webp', alt: 'ZAFREON Eau de Parfum beside saffron and oud wood' }}
+          fallback={render ? undefined : { src: '/media/hero-zafreon.webp', alt: 'ZAFREON Eau de Parfum beside saffron and oud wood' }}
         />
         <div className="opening-glow" aria-hidden="true" />
+        {render && (
+          <div className="opening-product">
+            <motion.div className="opening-product-inner" style={{ scale: productScale, y: productY }}>
+              <FloatingProduct render={render} alt="ZAFREON Eau de Parfum, black and gold bottle with a crystal cap" eager sizes="(max-width: 860px) 60vw, 34vw" strength={0.7} />
+            </motion.div>
+          </div>
+        )}
       </motion.div>
 
       <div className="opening-scroll">
@@ -164,7 +179,13 @@ function Collection({ products }) {
         {rest.map((p) => (
           <Reveal key={p._id || p.slug} className="duo-band">
             <Link to={`/fragrances/${p.slug}`} className="duo-link">
-              <div className="duo-img"><Img src={p.images?.[1]?.src || p.images?.[0]?.src} alt={p.images?.[1]?.alt || p.name} sizes="(max-width: 800px) 100vw, 60vw" /></div>
+              {renderFor(p.slug) ? (
+                <div className={`duo-img product-stage stage-${p.theme || 'duo'}`}>
+                  <FloatingProduct render={renderFor(p.slug)} alt={`${p.name}: ELARISSE and ZAFREON on black marble`} className="fp-plinth" reflect={false} sizes="(max-width: 800px) 90vw, 50vw" strength={0.5} />
+                </div>
+              ) : (
+                <div className="duo-img"><Img src={p.images?.[1]?.src || p.images?.[0]?.src} alt={p.images?.[1]?.alt || p.name} sizes="(max-width: 800px) 100vw, 60vw" /></div>
+              )}
               <div className="duo-text">
                 <p className="eyebrow">{p.family}</p>
                 <h3>{p.name}</h3>
@@ -395,11 +416,17 @@ function Journal({ posts }) {
 function Closing() {
   const { setFinderOpen, t } = useStore();
   return (
-    <section className="closing">
-      <Parallax className="closing-img" strength={60}>
-        <Img src="/media/duo-triptych.webp" alt="" sizes="100vw" />
-      </Parallax>
+    <section className="closing closing-scene">
       <div className="container closing-inner">
+        {/* The two signatures, one set a step behind the other. */}
+        <Reveal className="closing-products" y={60}>
+          <Link to="/fragrances/elarisse" className="closing-bottle closing-bottle-back" aria-label="ELARISSE">
+            <FloatingProduct render={renderFor('elarisse')} alt="" sizes="(max-width: 860px) 36vw, 16vw" strength={0.6} />
+          </Link>
+          <Link to="/fragrances/zafreon" className="closing-bottle closing-bottle-front" aria-label="ZAFREON">
+            <FloatingProduct render={renderFor('zafreon')} alt="" sizes="(max-width: 860px) 40vw, 18vw" strength={0.6} />
+          </Link>
+        </Reveal>
         <SplitHeading text={t('Find the one that becomes yours.')} className="display-l" />
         <Reveal delay={0.3} className="closing-cta">
           <Link to="/fragrances" className="btn btn-primary">{t('Explore the collection')}</Link>

@@ -1,0 +1,184 @@
+/* ============ Product renders: floating bottles and their stages ============ */
+
+/* ---------- The floating product ---------- */
+.fp {
+  --rx: 0deg; --ry: 0deg; --gx: 50%; --lift: 0%;
+  --pad: 7% 10% 17%;           /* room around the bottle: top, sides, floor */
+  --floor: 17%;                /* where the bottle stands, from the bottom */
+  --glow: rgba(210, 160, 90, 0.2);
+  position: relative; width: 100%; height: 100%;
+  isolation: isolate;
+}
+.fp-float {
+  position: absolute; inset: var(--pad);
+  display: grid; place-items: end center;
+  container-type: size;
+  animation: fpFloat 7s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.fp-obj {
+  position: relative;
+  /* as large as the box allows, keeping the render's own proportions */
+  width: min(100cqw, 100cqh * var(--arn, 0.58));
+  aspect-ratio: var(--ar);
+  transform: perspective(1100px) translateY(var(--lift)) rotateX(var(--rx)) rotateY(var(--ry));
+  transform-style: preserve-3d;
+  transition: transform 1s var(--ease);
+  will-change: transform;
+}
+.fp.is-tilting .fp-obj { transition: transform 0.18s linear; }
+.fp-img, .fp-reflect { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.fp-img { filter: drop-shadow(0 26px 30px rgba(0, 0, 0, 0.35)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.25)); }
+
+/* A light sweep that follows the pointer, clipped to the bottle's own shape. */
+.fp-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 246, 225, 0.42) 48%, rgba(255, 255, 255, 0.1) 54%, transparent 64%) no-repeat;
+  background-size: 320% 100%;
+  background-position: var(--gx) 0;
+  -webkit-mask: var(--mask) center / contain no-repeat;
+  mask: var(--mask) center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 0.7s var(--ease), background-position 0.3s linear;
+}
+.fp.is-tilting .fp-sheen { opacity: 1; }
+
+/* The bottle's reflection on a polished floor. */
+.fp-reflect {
+  top: 100%; bottom: auto; height: 100%;
+  transform: scaleY(-1);
+  opacity: 0.16;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 26%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 26%);
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+/* Contact shadow on the floor; it tightens as the bottle rises. */
+.fp-shadow {
+  position: absolute; left: 50%; bottom: calc(var(--floor) - 2.5%);
+  width: 52%; height: 6%;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.18) 60%, transparent);
+  animation: fpShadow 7s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  pointer-events: none;
+}
+/* Warm light behind the bottle. */
+.fp-glow {
+  position: absolute; inset: 8% 12% 12%;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  z-index: -1; pointer-events: none;
+}
+
+@keyframes fpFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.4%); } }
+@keyframes fpShadow { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 1; } 50% { transform: translateX(-50%) scale(0.86); opacity: 0.7; } }
+
+/* The gift-set render stands on its own marble plinth: no floor effects. */
+/* The plinth runs off the bottom edge, as if the marble continues below. */
+.fp-plinth { --pad: 8% 7% 0; --floor: 0%; }
+.fp-plinth .fp-shadow { display: none; }
+.fp-plinth .fp-float { animation: none; }
+.product-stage:has(.fp-plinth)::before { border-bottom-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-float, .fp-shadow { animation: none; }
+}
+
+/* ---------- Stages: each fragrance lit in its own colours ---------- */
+.product-stage { position: relative; overflow: hidden; }
+.product-stage::before {
+  /* a hairline gold frame set just inside the edge */
+  content: ''; position: absolute; inset: 12px; z-index: 2; pointer-events: none;
+  border: 1px solid rgba(184, 149, 90, 0.22);
+  transition: border-color 0.8s var(--ease), inset 0.8s var(--ease);
+}
+.stage-ivory { background: radial-gradient(120% 85% at 50% 32%, #fffaf0 0%, #f1e6d2 52%, #e0cfb1 100%); }
+.stage-ivory .fp { --glow: rgba(255, 214, 150, 0.55); }
+.stage-ivory .fp-reflect { opacity: 0.22; }
+.stage-ivory .fp-shadow { background: radial-gradient(closest-side, rgba(90, 60, 30, 0.42), rgba(90, 60, 30, 0.12) 60%, transparent); }
+.stage-onyx { background: radial-gradient(120% 85% at 50% 30%, #2e2019 0%, #141010 55%, #0a0807 100%); }
+.stage-onyx .fp { --glow: rgba(210, 150, 80, 0.24); }
+.stage-duo { background: radial-gradient(120% 85% at 50% 28%, #611a24 0%, #2b080c 62%, #170407 100%); }
+.stage-duo .fp { --glow: rgba(230, 170, 100, 0.22); }
+
+/* ---------- Product cards ---------- */
+.pcard-render .pcard-media { aspect-ratio: 4 / 5; }
+/* The gift set's marble runs past the card edges so the bottles can be larger. */
+.pcard-render .fp-plinth, .pgallery-render .fp-plinth { --pad: 18% -16% 0; }
+/* Name and price share a row; a long name wraps within its own column. */
+@media (min-width: 768px) {
+  .pcard-render .pcard-body { flex-wrap: nowrap; }
+  .pcard-render .pcard-title { flex: 1; min-width: 0; }
+}
+.pcard-badge {
+  position: absolute; top: 24px; inset-inline-start: 24px; z-index: 3;
+  font: 500 10px/1 var(--body); letter-spacing: 0.26em; text-transform: uppercase;
+  color: var(--gold-soft); padding: 7px 10px; border: 1px solid rgba(184, 149, 90, 0.4);
+}
+.stage-ivory .pcard-badge { color: var(--gold-ink); }
+@media (hover: hover) {
+  .pcard-render:hover .fp { --lift: -2.5%; }
+  .pcard-render:hover .product-stage::before { border-color: rgba(184, 149, 90, 0.5); inset: 16px; }
+  .pcard-render:hover .fp-shadow { opacity: 0.7; }
+}
+
+/* ---------- Homepage hero: the render on the opening stage ---------- */
+.opening-product {
+  position: absolute; z-index: 1; pointer-events: auto;
+  /* beside the copy: right in English, left in Arabic (see gulf.css) */
+  left: calc(50% + min(24vw, 400px)); top: 52%;
+  height: min(70vh, 860px); aspect-ratio: 427 / 900;
+  translate: -50% -50%;
+  opacity: 0; filter: brightness(0.25) blur(6px);
+  transform: translateY(40px);
+  transition: opacity 2s 0.3s var(--ease), filter 2.4s 0.3s var(--ease), transform 2.4s 0.3s var(--ease);
+}
+.opening.is-lit .opening-product { opacity: 1; filter: none; transform: none; }
+.opening-product-inner { width: 100%; height: 100%; }
+.opening-product .fp { --pad: 4% 4% 18%; --floor: 18%; --glow: rgba(214, 150, 70, 0.3); }
+.opening-product .fp-reflect { opacity: 0.12; }
+[dir='rtl'] .opening-product { left: calc(50% - min(24vw, 400px)); }
+/* Portrait screens: the bottle above, the copy below (matches the 3D layout). */
+@media (max-aspect-ratio: 1 / 1) {
+  .opening-product, [dir='rtl'] .opening-product { left: 50%; top: 31%; height: min(44vh, 118vw); }
+}
+/* Short phones: the copy alone fills the screen, so the first panel grows and
+   the bottle stands clear above it; the copy then scrolls up over the stage
+   as the story panels already do. */
+@media (max-aspect-ratio: 1 / 1) and (max-height: 740px) {
+  .opening-hero { min-height: calc(100svh + 30vh); }
+  .opening-product, [dir='rtl'] .opening-product { top: 33%; height: 40vh; }
+}
+
+/* ---------- Signature Duo band ---------- */
+.duo-img.product-stage { aspect-ratio: 16 / 11; }
+
+/* ---------- Product page gallery ---------- */
+.pgallery-main:has(.pgallery-render) { background: transparent; }
+.pgallery-render { width: 100%; height: 100%; }
+.pgallery-render .fp { --pad: 8% 14% 16%; --floor: 16%; }
+.pgallery-thumbs button.is-render img { object-fit: contain; padding: 10% 14%; }
+
+/* ---------- Closing scene: the two signatures ---------- */
+.closing-scene { min-height: 0; background: radial-gradient(70% 60% at 50% 38%, #2a130f 0%, var(--black) 70%); }
+.closing-scene::after { display: none; }
+.closing-scene .closing-inner { gap: 28px; padding-block: clamp(80px, 10vw, 140px); }
+.closing-products {
+  position: relative; width: min(560px, 90vw); height: clamp(300px, 38vw, 480px);
+  margin-bottom: clamp(8px, 2vw, 24px);
+}
+.closing-bottle { position: absolute; bottom: 0; display: block; }
+.closing-bottle .fp { --pad: 4% 4% 16%; --floor: 16%; }
+.closing-bottle-back { left: 8%; width: 42%; height: 86%; opacity: 0.92; }
+.closing-bottle-back .fp { --delay: -3.5s; --glow: rgba(255, 210, 140, 0.18); }
+.closing-bottle-front { right: 8%; width: 46%; height: 100%; z-index: 1; }
+.closing-bottle:focus-visible { outline-offset: -8px; }
+
+/* ---------- Small screens ---------- */
+@media (max-width: 560px) {
+  .product-stage::before { inset: 8px; }
+  .pcard-badge { top: 18px; inset-inline-start: 18px; }
+  .pgallery-render .fp { --pad: 8% 16% 16%; }
+}

@@ -69,6 +69,9 @@ const AR = {
     'يتم ترتيب التوصيل إلى {country} عند الطلب، وستوجّهك صفحة الطلب إلى واتساب.',
   'Proceed to checkout': 'المتابعة لإتمام الطلب',
   'Sold out': 'نفدت الكمية',
+  Signature: 'توقيع',
+  Bold: 'جريء',
+  Gift: 'هدية',
   'Add to bag': 'أضف إلى الحقيبة',
   '{name} added to your bag': 'تمت إضافة {name} إلى حقيبتك',
 

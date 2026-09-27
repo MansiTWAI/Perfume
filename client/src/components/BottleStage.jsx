@@ -37,7 +37,7 @@ class SceneBoundary extends Component {
 // Real-time bottle with a photographic fallback. Visitors who prefer reduced
 // motion still get the 3D bottle, held still apart from their own scrolling.
 // Rendering pauses whenever the stage is off-screen.
-export default function BottleStage({ variant, progress, interactive, stage, fallback, className = '' }) {
+export default function BottleStage({ variant, progress, interactive, stage, fallback, bottle = true, className = '' }) {
   const ref = useRef(null);
   const [enabled, setEnabled] = useState(hasWebGL);
   const [calm] = useState(prefersCalm);
@@ -59,7 +59,7 @@ export default function BottleStage({ variant, progress, interactive, stage, fal
         <div className="bottle-canvas" aria-hidden={!interactive} role={interactive ? 'img' : undefined} aria-label={interactive ? `${variant} bottle, drag to turn` : undefined}>
           <SceneBoundary onFail={() => setEnabled(false)}>
             <Suspense fallback={null}>
-              <BottleScene variant={variant} progress={progress} interactive={interactive} stage={stage} calm={calm} active={visible} onReady={() => setReady(true)} />
+              <BottleScene variant={variant} progress={progress} interactive={interactive} stage={stage} calm={calm} active={visible} bottle={bottle} onReady={() => setReady(true)} />
             </Suspense>
           </SceneBoundary>
         </div>

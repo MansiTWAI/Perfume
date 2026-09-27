@@ -27,12 +27,12 @@ const Icon = {
 };
 
 // English ⇄ Arabic. Each option is labelled in its own language.
-function LangToggle() {
+function LangToggle({ className = 'lang-btn' }) {
   const { lang, setLang } = useStore();
   const next = lang === 'ar' ? 'en' : 'ar';
   return (
     <button
-      className="lang-btn"
+      className={className}
       onClick={() => setLang(next)}
       lang={next}
       aria-label={next === 'ar' ? 'تصفّح بالعربية' : 'Read in English'}
@@ -143,6 +143,7 @@ export default function Header() {
               <button className="text-btn" onClick={() => { setMenu(false); setFinderOpen(true); }}>{t('Find your signature')}</button>
               <Link to="/account" className="text-btn">{t(user ? 'Your account' : 'Sign in')}</Link>
               <Link to="/track" className="text-btn">{t('Track an order')}</Link>
+              <LangToggle className="lang-btn lang-btn-menu" />
               <RegionSelect align="left" />
             </div>
           </motion.div>

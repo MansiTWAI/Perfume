@@ -8,17 +8,19 @@ export function flyToCart(sourceEl) {
   if (!from.width) return;
   const ghost = sourceEl.cloneNode(false);
   const size = Math.min(from.width, from.height, 160);
+  // Cut-out renders fly as the bottle itself, not a round thumbnail.
+  const cutout = sourceEl.classList.contains('fp-img');
   Object.assign(ghost.style, {
     position: 'fixed',
     left: `${from.left + from.width / 2 - size / 2}px`,
     top: `${from.top + from.height / 2 - size / 2}px`,
     width: `${size}px`,
     height: `${size}px`,
-    objectFit: 'cover',
-    borderRadius: '50%',
+    objectFit: cutout ? 'contain' : 'cover',
+    borderRadius: cutout ? '0' : '50%',
     zIndex: 999,
     pointerEvents: 'none',
-    boxShadow: '0 20px 40px rgba(0,0,0,.35)',
+    boxShadow: cutout ? 'none' : '0 20px 40px rgba(0,0,0,.35)',
   });
   ghost.removeAttribute('srcset');
   document.body.appendChild(ghost);

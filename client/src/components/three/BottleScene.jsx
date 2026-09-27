@@ -104,10 +104,13 @@ function Bottle({ variant, progress, pointer, autoRotate, calm }) {
 // On the home stage the bottle sits beside the copy on wide screens (to its
 // right in English, to its left in Arabic) and above it on phones.
 function Placement({ stage, mirror, children }) {
-  const { viewport } = useThree();
+  const { viewport, size } = useThree();
   const narrow = viewport.aspect < 1;
   const side = mirror ? -1 : 1;
-  const pos = !stage ? [0, 0, 0] : narrow ? [0, 0.5, 0] : [side * Math.min(viewport.width * 0.24, 1.35), -0.12, 0];
+  // 24% of the width from centre, but never more than 400px, so on very wide
+  // screens the bottle stays beside the copy (matches .opening-product).
+  const frac = Math.min(0.24, 400 / size.width);
+  const pos = !stage ? [0, 0, 0] : narrow ? [0, 0.5, 0] : [side * viewport.width * frac, -0.12, 0];
   const scale = !stage ? 1 : narrow ? Math.min(viewport.width / 2.3, 0.72) : 0.9;
   return (
     <group position={pos} scale={scale}>
@@ -133,7 +136,9 @@ function Reveal({ onReady, calm }) {
   return null;
 }
 
-export default function BottleScene({ variant = 'zafreon', progress, interactive = false, stage = false, calm = false, active = true, onReady }) {
+// `bottle={false}` keeps the lights and the orbiting notes but leaves the
+// bottle itself to a photographic render layered over the canvas.
+export default function BottleScene({ variant = 'zafreon', progress, interactive = false, stage = false, calm = false, active = true, onReady, bottle = true }) {
   const pointer = useRef({ x: 0, y: 0 });
   const { dir } = useStore();
 
@@ -160,8 +165,8 @@ export default function BottleScene({ variant = 'zafreon', progress, interactive
       <spotLight position={[3, 4, 3]} angle={0.4} penumbra={0.9} intensity={28} color="#ffd6a0" />
       <pointLight position={[-2.5, 1.5, -2]} intensity={10} color="#ffb870" />
       <Placement stage={stage} mirror={dir === 'rtl'}>
-        <Bottle variant={variant} progress={progress} pointer={pointer} autoRotate={interactive} calm={calm} />
-        <ContactShadows position={[0, -0.9, 0]} opacity={0.55} scale={4} blur={2.6} far={1.4} color="#000000" />
+        {bottle && <Bottle variant={variant} progress={progress} pointer={pointer} autoRotate={interactive} calm={calm} />}
+        {bottle && <ContactShadows position={[0, -0.9, 0]} opacity={0.55} scale={4} blur={2.6} far={1.4} color="#000000" />}
         {stage && <NoteField progress={progress} calm={calm} />}
       </Placement>
       <Environment resolution={256}>
