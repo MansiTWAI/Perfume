@@ -1,15 +1,31 @@
+import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Seo from '../components/Seo';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { money, whatsappLink } from '../lib/format';
+import { payOnline } from '../lib/payments';
 
 export default function OrderSuccess() {
   const { orderNumber } = useParams();
   const { state } = useLocation();
   const { lang, t } = useStore();
   useSolidHeader();
+  // Online payment: 'paid', 'pending' (window closed) or an error message.
+  const [payment, setPayment] = useState(state?.payment || null);
+  const [paying, setPaying] = useState(false);
+  async function retry() {
+    setPaying(true);
+    try {
+      await payOnline({ orderNumber, email: state?.email });
+      setPayment('paid');
+    } catch (e) {
+      setPayment(e.dismissed ? 'pending' : e.message);
+    } finally {
+      setPaying(false);
+    }
+  }
   return (
     <section className="section page-pad success">
       <Seo title="Thank you" />
@@ -18,6 +34,14 @@ export default function OrderSuccess() {
         <motion.p className="eyebrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>{t('Order {n}', { n: orderNumber })}</motion.p>
         <motion.h1 className="display-l" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>{t('Your signature is on its way.')}</motion.h1>
         <p className="section-lede">{t('Thank you. We have received your order and will confirm it shortly by WhatsApp or email.')}</p>
+        {payment === 'paid' && <p className="pay-note is-ok" role="status">✓ {t('Payment received. Thank you.')}</p>}
+        {payment && payment !== 'paid' && (
+          <div className="pay-note" role="alert">
+            <p>{payment === 'pending' ? t('Your order is saved, but the payment was not completed.') : payment}</p>
+            <button className="btn btn-primary" onClick={retry} disabled={paying}>{t(paying ? 'Opening…' : 'Pay now')}</button>
+            <small>{t('You can also pay later from your order page.')}</small>
+          </div>
+        )}
         {state?.trackingId && (
           <div className="tracking-box">
             <p className="eyebrow">{t('Your tracking ID')}</p>

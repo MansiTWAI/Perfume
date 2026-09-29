@@ -1,3 +1,5 @@
+import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
+
 // Markets, currencies and delivery rules.
 //
 // Only India and the UAE are confirmed delivery markets (see the brand's
@@ -50,3 +52,11 @@ export function shippingFor(region, subtotal) {
   if (!rule) return 0;
   return subtotal >= rule.freeOver ? 0 : rule.flat;
 }
+
+// Payment methods a market offers right now: its own, plus online payment
+// when Razorpay is configured and supports the currency.
+export const paymentsFor = (region) => [
+  ...(region?.payments || []),
+  ...(region?.ships && razorpayConfigured() && ONLINE_CURRENCIES.includes(region.currency) ? ['online'] : []),
+];
+export const publicRegions = () => REGIONS.map((r) => (r.ships ? { ...r, payments: paymentsFor(r) } : r));

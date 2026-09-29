@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
     // Shared by the website and the mobile app: the bag and saved fragrances.
     cart: [{ slug: { type: String, required: true }, qty: { type: Number, min: 1, max: 10, default: 1 }, _id: false }],
     wishlist: [{ type: String }],
+    // Raised to sign the account out everywhere (password change, reset, "sign out all devices").
+    tokenVersion: { type: Number, default: 0 },
+    // Password reset by email: only a hash of the one-time token is kept.
+    passwordReset: { hash: String, expiresAt: Date },
   },
   { timestamps: true }
 );

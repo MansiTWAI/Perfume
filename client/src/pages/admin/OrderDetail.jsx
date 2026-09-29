@@ -237,6 +237,12 @@ export function OrderRow({ order, onSaved }) {
                 <ol className="a-history">
                   {order.history.map((h, i) => <li key={i}><b>{h.status}</b> · {new Date(h.at).toLocaleString('en-GB')}{h.note && <><br /><small>{h.note}</small></>}</li>)}
                 </ol>
+                {order.payment?.providerPaymentId && (
+                  <p className="a-muted a-hint" style={{ marginTop: 14 }}>
+                    Paid online (Razorpay) {order.payment.paidAt && `on ${new Date(order.payment.paidAt).toLocaleString('en-GB')}`}<br />
+                    Payment <b>{order.payment.providerPaymentId}</b> · Razorpay order {order.payment.providerOrderId}
+                  </p>
+                )}
                 {order.edits?.length > 0 && (
                   <>
                     <h3 style={{ marginTop: 16 }}>Changed by the customer</h3>

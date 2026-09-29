@@ -760,3 +760,10 @@ a.acct-stat:hover { border-color: var(--s-line-strong); }
   .od-edit-bar .btn { flex: 1; }
   .my-order-actions { width: 100%; justify-content: space-between; }
 }
+
+/* Payments and password reset */
+.pay-note { display: grid; gap: 10px; justify-items: center; padding: 18px 22px; margin: 18px auto; max-width: 520px; border: 1px solid #e6c28f; background: #fff7ea; color: var(--ink); }
+.pay-note.is-ok { border-color: #b9d4ae; background: #f1f7ee; color: #3f6534; }
+.pay-note small { color: var(--s-muted); }
+.od-paynow { border-color: #e6c28f; background: #fff7ea; }
+.auth-forgot { justify-self: center; font-size: 13px; }

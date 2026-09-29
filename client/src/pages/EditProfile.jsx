@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AccountLayout from '../components/AccountLayout';
 import { useStore } from '../context/StoreContext';
 import { api, getToken } from '../lib/api';
@@ -106,7 +106,7 @@ function Email() {
 }
 
 function Password() {
-  const { t } = useStore();
+  const { login, t } = useStore();
   const [f, setF] = useState({ current: '', next: '', confirm: '' });
   const [show, setShow] = useState(false);
   const [state, run] = useSection();
@@ -115,9 +115,10 @@ function Password() {
     e.preventDefault();
     if (f.next !== f.confirm) return;
     run(async () => {
-      await api('/auth/me/password', { method: 'POST', body: { current: f.current, next: f.next } });
+      const d = await api('/auth/me/password', { method: 'POST', body: { current: f.current, next: f.next } });
+      login(d.token, d.user); // this device stays signed in; others are signed out
       setF({ current: '', next: '', confirm: '' });
-    }, t('Your password is changed.'));
+    }, t('Your password is changed. Other devices have been signed out.'));
   };
   const type = show ? 'text' : 'password';
   return (
@@ -137,6 +138,36 @@ function Password() {
   );
 }
 
+function Devices() {
+  const { logout, t } = useStore();
+  const navigate = useNavigate();
+  const [state, run] = useSection();
+  const [sure, setSure] = useState(false);
+  const go = () =>
+    run(async () => {
+      await api('/auth/logout-all', { method: 'POST' });
+      logout();
+      navigate('/account');
+    }, '');
+  return (
+    <div className="acct-card">
+      <div className="acct-card-head"><h2>{t('Signed-in devices')}</h2></div>
+      <p className="fine">{t('Signs you out on every phone, tablet and computer, including this one. Use it if you lost a device or signed in somewhere public.')}</p>
+      <Status state={state} />
+      <div className="acct-form-foot">
+        {sure ? (
+          <>
+            <button className="btn btn-ghost" onClick={() => setSure(false)} disabled={state.busy}>{t('Keep me signed in')}</button>
+            <button className="btn btn-danger" onClick={go} disabled={state.busy}>{t(state.busy ? 'One moment…' : 'Sign out everywhere')}</button>
+          </>
+        ) : (
+          <button className="btn btn-ghost" onClick={() => setSure(true)}>{t('Sign out everywhere')}</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EditProfile() {
   const { user, t } = useStore();
   const { hash } = useLocation();
@@ -150,6 +181,7 @@ export default function EditProfile() {
           <Details />
           <Email />
           <Password />
+          <Devices />
         </div>
       )}
     </AccountLayout>

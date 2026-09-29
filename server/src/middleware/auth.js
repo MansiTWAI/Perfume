@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
 export const signToken = (user) =>
-  jwt.sign({ sub: user._id.toString(), role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  jwt.sign({ sub: user._id.toString(), role: user.role, v: user.tokenVersion || 0 }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 async function readUser(req) {
   const header = req.headers.authorization || '';
@@ -10,7 +10,10 @@ async function readUser(req) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    return await User.findById(payload.sub);
+    const user = await User.findById(payload.sub);
+    // Tokens issued before a password change or 'sign out everywhere' stop working.
+    if (!user || (payload.v || 0) !== (user.tokenVersion || 0)) return null;
+    return user;
   } catch {
     return null;
   }

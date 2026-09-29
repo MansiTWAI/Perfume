@@ -11,6 +11,7 @@ import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor } f
 import { trackingUrl, isUrl } from '../../../shared/couriers.js';
 import { placeOrder } from '../services/placeOrder.js';
 import { reserve, release } from '../services/orderStock.js';
+import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
 import { orderFilter, describeFilters } from '../services/filters.js';
 import { newWorkbook, addTableSheet, sendWorkbook, fileName, tzLabel } from '../services/excel.js';
 import { buildOrdersWorkbook, buildTemplate, readOrderSheet, planOrderImport, applyOrderChanges, MAX_IMPORT_ROWS } from '../services/orderSheet.js';
@@ -76,6 +77,8 @@ function customerView(o) {
     trackingNumber: o.trackingNumber || '',
     eta: o.eta || '',
     editable: canEdit(o),
+    // Online payment can be started (POST /payments/razorpay/order).
+    canPayOnline: razorpayConfigured() && ONLINE_CURRENCIES.includes(o.currency) && o.paymentStatus === 'pending' && o.status !== 'Cancelled',
     edits: (o.edits || []).map((e) => ({ at: e.at, summary: e.summary })),
   };
 }

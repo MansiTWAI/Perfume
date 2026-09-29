@@ -36,6 +36,8 @@ const Account = lazy(() => import('./pages/Account'));
 const MyOrders = lazy(() => import('./pages/MyOrders'));
 const OrderDetails = lazy(() => import('./pages/OrderDetails'));
 const EditProfile = lazy(() => import('./pages/EditProfile'));
+const ForgotPassword = lazy(() => import('./pages/PasswordReset').then((m) => ({ default: m.ForgotPassword })));
+const ResetPassword = lazy(() => import('./pages/PasswordReset').then((m) => ({ default: m.ResetPassword })));
 const Admin = lazy(() => import('./pages/admin/Admin'));
 
 const pageMotion = {
@@ -83,6 +85,8 @@ const ROUTES = [
   ['/profile/orders', MyOrders],
   ['/profile/orders/:orderId', OrderDetails],
   ['/profile/edit', EditProfile],
+  ['/forgot-password', ForgotPassword],
+  ['/reset-password', ResetPassword],
   ['*', NotFound],
 ];
 

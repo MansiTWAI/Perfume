@@ -48,6 +48,8 @@ Admin studio: **/admin**, with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` from your en
    | `SITE_URL` | your live URL, e.g. `https://albarakah.me` (used in the sitemap and share tags) |
    | `NODE_ENV` | `production` |
    | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | optional: admin image uploads go to Cloudinary (server-side, signed). Without them, uploads are stored in MongoDB. |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (`SMTP_SECURE=true` for port 465) | optional: sends password-reset emails. Without them, "Forgot password" answers that email is not set up. |
+   | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | optional: turns on "Pay online" (UPI, cards, netbanking) for India. Webhook: Razorpay Dashboard → Webhooks → `https://<site>/api/payments/razorpay/webhook`, events `payment.captured` and `order.paid`. |
 
 4. In **MongoDB Atlas → Network Access**, allow `0.0.0.0/0`. Vercel functions do not have fixed IP addresses.
 5. Deploy. The database is seeded once, from your computer, with `npm run seed` using the same `MONGODB_URI`. Re-run it after changing `ADMIN_PASSWORD`.

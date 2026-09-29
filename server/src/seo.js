@@ -22,7 +22,7 @@ const PAGES = {
   '/terms': ['Terms & Conditions | AL BARAKAH LIFESTYLE', 'Terms and conditions for the AL BARAKAH LIFESTYLE website and online orders.'],
   '/track': ['Track your order | AL BARAKAH LIFESTYLE', 'Track your AL BARAKAH LIFESTYLE order.'],
 };
-const PRIVATE = ['/checkout', '/account', '/order', '/profile'];
+const PRIVATE = ['/checkout', '/account', '/order', '/profile', '/forgot-password', '/reset-password'];
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

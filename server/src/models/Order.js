@@ -36,6 +36,8 @@ const orderSchema = new mongoose.Schema(
     total: Number,
     paymentMethod: { type: String, default: 'pay-on-confirmation' },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded'], default: 'pending' },
+    // Online payment (Razorpay): the provider's ids, for reconciliation and refunds.
+    payment: { provider: String, providerOrderId: String, amount: Number, providerPaymentId: String, paidAt: Date },
     giftNote: { enabled: Boolean, name: String, occasion: String, message: String },
     status: { type: String, enum: ORDER_STATUSES, default: ORDER_STAGES[0] },
     history: [{ status: String, at: { type: Date, default: Date.now }, note: String, _id: false }],

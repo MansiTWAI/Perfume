@@ -47,6 +47,7 @@ export function AuthForm() {
       </label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="btn btn-primary btn-block" disabled={busy}>{t(busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account')}</button>
+      {mode === 'login' && <Link to="/forgot-password" className="text-link auth-forgot">{t('Forgot your password?')}</Link>}
     </form>
   );
 }

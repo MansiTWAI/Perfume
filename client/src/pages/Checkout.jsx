@@ -6,12 +6,14 @@ import SignatureCard, { OCCASIONS } from '../components/SignatureCard';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { api } from '../lib/api';
+import { payOnline } from '../lib/payments';
 import { whatsappLink } from '../lib/format';
 import { seasonFor } from '../lib/seasons';
 
 const PAY_LABEL = {
   cod: ['Cash on delivery', 'Pay when your order arrives.'],
   'pay-on-confirmation': ['Pay on confirmation', 'We confirm your order by WhatsApp or email and send a secure payment link.'],
+  online: ['Pay online now', 'UPI, cards, netbanking or wallets, securely through Razorpay.'],
 };
 
 const PHONE_CODE = { IN: '+91', AE: '+971' };
@@ -94,7 +96,18 @@ export default function Checkout() {
         },
       });
       clearCart();
-      navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email } });
+      // Online payment opens straight away; the order is already saved, so a
+      // closed or failed payment can be finished later from the order page.
+      let payment = null;
+      if (pay === 'online') {
+        try {
+          await payOnline({ orderNumber: res.orderNumber, email: f.email });
+          payment = 'paid';
+        } catch (e) {
+          payment = e.dismissed ? 'pending' : e.message;
+        }
+      }
+      navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email, payment } });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -4,7 +4,7 @@
 // show to the person placing the order.
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
-import { ORDER_STAGES, regionByCode, shippingFor } from '../config/commerce.js';
+import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/commerce.js';
 import { code } from '../utils.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -18,7 +18,8 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
   if (!customer?.name || !customer?.email || !customer?.phone || !a.line1 || !a.city || !a.postalCode) {
     throw fail(400, 'Please complete your name, contact details and delivery address.');
   }
-  const method = region.payments.includes(paymentMethod) ? paymentMethod : region.payments[0];
+  const methods = paymentsFor(region);
+  const method = methods.includes(paymentMethod) ? paymentMethod : methods[0];
 
   const lines = [];
   for (const it of items.slice(0, 20)) {

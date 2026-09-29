@@ -12,10 +12,10 @@ The spec is checked against the Express routes: every route in the code is docum
 
 | Environment | Base URL |
 | --- | --- |
-| Production | `https://perfume-tau-nine.vercel.app/api` (Vercel; or your custom domain once it is added, see `SITE_URL`) |
-| Local | `http://localhost:5000/api` (or `http://localhost:5173/api` through the Vite proxy) |
+| Production | `https://perfume-tau-nine.vercel.app/api/v1` (Vercel; or your custom domain once it is added, see `SITE_URL`) |
+| Local | `http://localhost:5000/api/v1` (or `http://localhost:5173/api/v1` through the Vite proxy) |
 
-All paths below are relative to the base URL.
+All paths below are relative to the base URL. **Use `/api/v1` in apps**: it is the versioned, stable address. `/api/...` is the same API without the version (the website uses it) and stays as an alias. Every API response carries the header `API-Version: 1`. Breaking changes, if ever needed, will go to `/api/v2` while `/api/v1` keeps working.
 
 ## Headers
 
@@ -30,11 +30,21 @@ Responses are JSON (`application/json`), except Excel downloads (`.xlsx`, with `
 ## Authentication and the token flow
 
 1. `POST /auth/register` `{ name, email, password }` or `POST /auth/login` `{ email, password }`.
-2. The response is `{ token, user }`. Store the token securely (Keychain / Keystore on mobile, `localStorage` on the website).
+2. The response is `{ token, refreshToken, user }`. Store both tokens securely (Keychain / Keystore on mobile).
 3. Send `Authorization: Bearer <token>` on every request that needs a signed-in user.
-4. Tokens are JWTs valid for **7 days**. On any `401`, drop the token and ask the customer to sign in again. There is no refresh token; signing in again issues a new one.
-5. `GET /auth/me` returns the current user (use it on app start to check the stored token).
-6. Sign-out is client-side: delete the token (and, on the website, the local bag).
+4. The access `token` is a JWT valid for **7 days**. The `refreshToken` is valid for **60 days** and can be used **once**.
+5. On a `401` from any endpoint, call `POST /auth/refresh` `{ refreshToken }`. It returns a **new** `token` and a **new** `refreshToken`; save both (the old refresh token no longer works). If refresh also returns `401`, ask the customer to sign in again.
+6. `GET /auth/me` returns the current user (use it on app start to check the stored token).
+7. Sign out this device: `POST /auth/logout` `{ refreshToken }`, then delete both tokens. Sign out everywhere: `POST /auth/logout-all`.
+8. Changing the password (`POST /auth/me/password`) returns a fresh session for this device and signs out every other device. Resetting it by email does the same.
+
+**Security:** refresh tokens are stored only as hashes; presenting a refresh token that was already used ends that whole sign-in (it means the token was copied). Sign-in, sign-up, refresh and password reset are rate limited (30 per 15 minutes per connection).
+
+### Forgotten password
+
+1. `POST /auth/forgot-password` `{ email }`. The answer is always the same, so it cannot reveal who has an account.
+2. The customer gets an email with a link `<SITE_URL>/reset-password?token=…` (one hour, single use). The website has the page; an app can open it in the browser or handle the link itself.
+3. `POST /auth/reset-password` `{ token, password }` sets the password and returns a session (signed in).
 
 ```http
 POST /api/auth/login
@@ -72,11 +82,29 @@ Permissions are enforced on the server for every request. A customer asking for 
 
 ## Errors
 
-Every error is JSON with a human-readable `message` you can show to the customer:
+Every error is JSON with a stable, machine-readable `code` and a human-readable `message`:
 
 ```json
-{ "message": "Only 2 of ZAFREON left in stock." }
+{ "code": "OUT_OF_STOCK", "message": "Only 2 of ZAFREON left in stock." }
 ```
+
+**Branch on `code`**, and use it to show your own (e.g. Arabic) text; `message` is English and safe to show as is. Codes are never renamed or removed; new ones may be added, so treat unknown codes by their HTTP status.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR`, `INVALID_EMAIL`, `INVALID_PHONE`, `WEAK_PASSWORD` | Input problems (400) |
+| `AUTH_REQUIRED`, `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `WRONG_PASSWORD`, `REFRESH_TOKEN_INVALID`, `RESET_TOKEN_INVALID` | Sign-in problems |
+| `ADMIN_ONLY`, `FORBIDDEN` | Not allowed (403) |
+| `NOT_FOUND`, `ORDER_NOT_FOUND`, `CART_ITEM_NOT_FOUND` | Not found (404) |
+| `OUT_OF_STOCK`, `PRODUCT_UNAVAILABLE`, `CART_EMPTY`, `CART_FULL`, `REGION_NOT_SUPPORTED` | Bag and checkout |
+| `ORDER_NOT_EDITABLE`, `ORDER_ALREADY_CANCELLED`, `ORDER_NOT_DELIVERED`, `ALREADY_REVIEWED` | Order rules |
+| `PAYMENT_NOT_CONFIGURED`, `PAYMENT_VERIFICATION_FAILED`, `PAYMENT_PROVIDER_ERROR`, `ALREADY_PAID` | Online payment |
+| `ALREADY_EXISTS`, `CONFLICT` | Duplicates and other conflicts (409) |
+| `RATE_LIMITED` | Too many requests (429) |
+| `INVALID_SPREADSHEET`, `IMPORT_EXPIRED`, `IMPORT_NOT_PENDING`, `INVALID_UPLOAD`, `UPLOAD_FAILED`, `PAYLOAD_TOO_LARGE`, `GONE` | Admin files and uploads |
+| `EMAIL_NOT_CONFIGURED`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`, `SERVER_ERROR` | Server side (5xx) |
+
+The full list is the `Error.code` enum in `/api/openapi.json`.
 
 | Status | Meaning |
 | --- | --- |
@@ -88,9 +116,10 @@ Every error is JSON with a human-readable `message` you can show to the customer
 | `409` | Conflict: out of stock, email already used, order already shipped/paid/cancelled, Excel import already applied |
 | `410` | Excel preview older than one hour |
 | `413` | Upload larger than 4 MB |
-| `429` | Rate limit (checkout 20 / 15 min, reviews 10 / hour, contact + newsletter 10 / 15 min, email/password changes 20 / 15 min) |
+| `429` | Rate limit (sign-in / sign-up / refresh / reset 30 per 15 min, checkout 20 / 15 min, payments 30 / 15 min, reviews 10 / hour, contact + newsletter 10 / 15 min, email/password changes 20 / 15 min) |
 | `500` | Unexpected server error (`"Something went wrong on our side. Please try again."`) |
-| `502` | Cloud image storage rejected an upload |
+| `502` | An outside service failed (image storage, email, payment provider) |
+| `503` | A feature is not configured on the server (email, online payment) |
 
 ## Conventions
 
@@ -107,14 +136,14 @@ Every error is JSON with a human-readable `message` you can show to the customer
 | Area | Endpoints |
 | --- | --- |
 | Health & settings | `GET /health`, `GET /settings`, `GET /geo` |
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
+| Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/logout-all`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `GET /auth/me` |
 | Profile & address | `PATCH /auth/me` (name, phone, saved address), `POST /auth/me/email`, `POST /auth/me/password` |
 | Products, search & filter | `GET /products`, `GET /products/{slug}` |
 | Cart | `GET /cart`, `PUT /cart`, `DELETE /cart`, `POST /cart/items`, `PATCH /cart/items/{slug}`, `DELETE /cart/items/{slug}` |
 | Wishlist | `GET /wishlist`, `POST /wishlist/{slug}`, `DELETE /wishlist/{slug}` |
 | Checkout & orders | `POST /orders`, `GET /orders/mine`, `GET /orders/{orderId}`, `PATCH /orders/mine/{orderId}`, `POST /orders/mine/{orderId}/cancel` |
 | Order status | `GET /orders/{orderId}` (signed in), `GET /orders/track/{trackingId}?email=` (public) |
-| Payments | Methods per market in `GET /settings` → `regions[].payments`; status in each order's `paymentStatus` |
+| Payments | `POST /payments/razorpay/order`, `POST /payments/razorpay/verify`, `POST /payments/razorpay/webhook`; methods per market in `GET /settings` |
 | Reviews | `GET /reviews/product/{slug}`, `GET /reviews/eligible/{trackingId}?email=`, `POST /reviews` |
 | Journal | `GET /posts`, `GET /posts/categories`, `GET /posts/{slug}` |
 | Contact | `POST /enquiries`, `POST /subscribers` |
@@ -149,7 +178,23 @@ Rules: quantities 1–10 per line, at most 20 lines; unknown or hidden products 
 3. Empty the bag: `DELETE /cart`.
 4. Show the order: `GET /orders/{orderNumber}`. Poll it (every ~30 s while the screen is open) to follow the status.
 
-Payment methods today are `cod` (cash on delivery, India) and `pay-on-confirmation` (the house confirms on WhatsApp/email and sends a payment link). There is no card gateway yet, so there is no payment-intent endpoint; `paymentStatus` (`pending` → `paid` / `refunded`) is set by the house. When a gateway is added, its endpoints will be documented here.
+**Payment methods** (per market in `GET /settings` → `regions[].payments`):
+
+| Method | Market | How it is paid |
+| --- | --- | --- |
+| `online` | India (when Razorpay is configured) | UPI, cards, netbanking, wallets through Razorpay, right after placing the order |
+| `cod` | India | Cash on delivery |
+| `pay-on-confirmation` | India, UAE | The house confirms by WhatsApp/email and sends a payment link |
+
+**Paying online (Razorpay):**
+
+1. Place the order with `paymentMethod: "online"` (`POST /orders`). The order is saved and stock reserved; `paymentStatus` is `pending`.
+2. `POST /payments/razorpay/order` `{ orderNumber, email }` (or signed in) returns `keyId`, `razorpayOrderId`, `amount` (paise), `currency` and `prefill`.
+3. Open Razorpay Checkout (web: `checkout.razorpay.com/v1/checkout.js`; Android/iOS: Razorpay's SDK) with those values.
+4. On success, send its `razorpay_order_id`, `razorpay_payment_id` and `razorpay_signature` to `POST /payments/razorpay/verify`. The server checks the signature and marks the order `paid` (and Confirmed).
+5. If the customer closes the payment window, the order stays `pending` with `canPayOnline: true`; they can pay later from the order page (repeat steps 2–4). The Razorpay webhook also marks the order paid if the app was closed mid-payment.
+
+The amount is always the saved order total; the key secret never leaves the server. UAE online payment is not enabled yet.
 
 **Statuses:** `Order Placed → Confirmed → Packed → Shipped → Out for Delivery → Delivered`, or `Cancelled` from any step. Each change adds a `history` entry `{ status, at, note }`; the order's `stages` array is the timeline to draw. The customer sees the courier name, `trackingNumber` and `eta` — not a courier link.
 
@@ -160,6 +205,13 @@ Payment methods today are `cod` (cash on delivery, India) and `pay-on-confirmati
 | `details` | Order Placed, Confirmed, Packed | name, phone, address, gift card |
 | `items` | Order Placed, Confirmed, and unpaid | quantities (`qty: 0` removes a line; at least one must remain) |
 | `cancel` | Order Placed, Confirmed, Packed | `POST /orders/mine/{orderId}/cancel` — stock is returned |
+
+## Changelog
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| **1.4.0** | 2026-09-29 | `/api/v1` versioned base path (`/api` stays as an alias); `code` on every error; refresh tokens (`/auth/refresh`), `/auth/logout`, `/auth/logout-all`; password reset by email; a password change signs out other devices and returns a fresh session; online payment with Razorpay (`/payments/razorpay/*`, `canPayOnline` on orders, `online` payment method); sign-in rate limiting; fully typed Product and Order models in the spec. Additive: existing clients keep working. |
+| 1.3.0 | 2026-09-29 | Cart and wishlist APIs; product search/filter/sort; customer order details, editing and cancelling; profile and address; Admin users, Excel import/export, order filters; OpenAPI spec and `/api/docs`. |
 
 ## Images
 

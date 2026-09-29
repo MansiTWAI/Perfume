@@ -5,7 +5,7 @@ import { useLive } from '../hooks/useLive';
 import { formatDate, money } from '../lib/format';
 import { AuthForm, ACTIVE } from './Account';
 
-export const PAYMENT_METHOD = { cod: 'Cash on delivery', 'pay-on-confirmation': 'Pay on confirmation' };
+export const PAYMENT_METHOD = { cod: 'Cash on delivery', 'pay-on-confirmation': 'Pay on confirmation', online: 'Online payment' };
 export const PAYMENT_STATUS = { pending: 'Payment pending', paid: 'Paid', refunded: 'Refunded' };
 export const statusTone = (s) => (s === 'Delivered' ? 'is-done' : s === 'Cancelled' ? 'is-cancelled' : 'is-active');
 

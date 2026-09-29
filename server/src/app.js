@@ -17,10 +17,12 @@ import reviewRoutes from './routes/reviews.js';
 import uploadRoutes, { serveUpload } from './routes/uploads.js';
 import userRoutes from './routes/users.js';
 import cartRoutes from './routes/cart.js';
+import paymentRoutes from './routes/payments.js';
 import { openapi, docsPage } from './docs/openapi.js';
+import { errorCodes } from './middleware/errors.js';
 import Product from './models/Product.js';
 import Post from './models/Post.js';
-import { REGIONS } from './config/commerce.js';
+import { publicRegions } from './config/commerce.js';
 import { renderPage } from './seo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,7 +38,16 @@ app.set('trust proxy', 1); // behind Vercel / Nginx: real client IPs for rate li
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || true }));
-app.use(express.json({ limit: '1mb' }));
+// The raw body is kept for verifying payment webhook signatures.
+app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
+// Versioned API: /api/v1/... is the stable address for apps; /api/... is the
+// same API (used by the website) and stays as an alias.
+app.use((req, res, next) => {
+  if (req.url === '/api/v1' || req.url.startsWith('/api/v1/') || req.url.startsWith('/api/v1?')) req.url = `/api${req.url.slice(7)}`;
+  if (req.url.startsWith('/api')) res.set('API-Version', '1');
+  next();
+});
+app.use(errorCodes);
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // Every request waits for the (cached) database connection. On serverless
@@ -56,7 +67,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 // API reference for the website, the admin studio and the mobile app.
 app.get('/api/openapi.json', (_req, res) => res.json(openapi(SITE_URL)));
 app.get('/api/docs', (_req, res) => res.type('html').send(docsPage));
-app.get('/api/settings', (_req, res) => res.json({ regions: REGIONS }));
+app.get('/api/settings', (_req, res) => res.json({ regions: publicRegions() }));
 // The visitor's country, from the edge network's geolocation header, so a
 // first visit from Dubai opens in dirhams. Nothing is stored.
 app.get('/api/geo', (req, res) => {
@@ -70,6 +81,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api', cartRoutes); // /api/cart and /api/wishlist
 app.use('/api', contactRoutes);
 

@@ -7,6 +7,7 @@ import { useStore } from '../context/StoreContext';
 import { useLive } from '../hooks/useLive';
 import { api } from '../lib/api';
 import { formatDate, money, whatsappLink } from '../lib/format';
+import { payOnline } from '../lib/payments';
 import { AuthForm } from './Account';
 import { PAYMENT_METHOD, PAYMENT_STATUS, statusTone } from './MyOrders';
 
@@ -183,6 +184,20 @@ export default function OrderDetails() {
   const [saved, setSaved] = useState(null); // the order as returned by a save, until the next refresh
   const [editing, setEditing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [paying, setPaying] = useState(false);
+  async function pay() {
+    setPaying(true);
+    try {
+      await payOnline({ orderNumber: o.orderNumber, email: o.customer.email });
+      toast(t('Payment received. Thank you.'));
+      setSaved(null);
+      reload();
+    } catch (e) {
+      if (!e.dismissed) toast(e.message, 'warn');
+    } finally {
+      setPaying(false);
+    }
+  }
   const o = saved && live && new Date(saved.updatedAt) > new Date(live.updatedAt) ? saved : live || saved;
   useEffect(() => setSaved(null), [orderId]);
   const fmt = (n) => money(n, o?.currency, lang);
@@ -219,6 +234,15 @@ export default function OrderDetails() {
     const lastEdit = o.edits?.at(-1);
     body = (
       <>
+        {o.canPayOnline && (
+          <div className="od-editable od-paynow">
+            <div>
+              <b>{t('Payment pending: {amount}', { amount: fmt(o.total) })}</b>
+              <small>{t('Pay securely by UPI, card, netbanking or wallet.')}</small>
+            </div>
+            <button className="btn btn-primary" onClick={pay} disabled={paying}>{t(paying ? 'Opening…' : 'Pay now')}</button>
+          </div>
+        )}
         {o.editable?.details && (
           <div className="od-editable">
             <div>
