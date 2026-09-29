@@ -3,6 +3,7 @@
 One backend, one MongoDB database and one set of REST endpoints serve the website, the admin studio and the mobile app. A product, price, stock level or order changed in one place is immediately what every other client reads. There is no separate mobile database or mobile-only business logic.
 
 - **Interactive reference (every endpoint, schema and example):** `GET /api/docs`
+- **PDF edition:** [docs/API-Reference.pdf](API-Reference.pdf) (guide, every endpoint with examples, data models)
 - **Machine-readable spec (OpenAPI 3.0):** `GET /api/openapi.json` — import it into Postman, Insomnia, or an OpenAPI code generator for the app.
 
 The spec is checked against the Express routes: every route in the code is documented, and nothing documented is missing from the code.
@@ -11,7 +12,7 @@ The spec is checked against the Express routes: every route in the code is docum
 
 | Environment | Base URL |
 | --- | --- |
-| Production | `https://<your-domain>/api` (the Vercel deployment; `SITE_URL`) |
+| Production | `https://perfume-tau-nine.vercel.app/api` (Vercel; or your custom domain once it is added, see `SITE_URL`) |
 | Local | `http://localhost:5000/api` (or `http://localhost:5173/api` through the Vite proxy) |
 
 All paths below are relative to the base URL.
