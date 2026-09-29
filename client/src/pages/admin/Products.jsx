@@ -188,7 +188,7 @@ export function ProductEdit() {
             ))}
             <button type="button" className="a-btn" onClick={() => set('images', [...(p.images || []), { src: '', alt: '' }])}>+ Add image</button>
             <h3>Film (optional)</h3>
-            <ImageField value={p.video?.src} onChange={(src) => setIn('video', 'src', src)} label="Video" />
+            <ImageField value={p.video?.src} onChange={(src) => setIn('video', 'src', src)} label="Video" kind="video" />
             <ImageField value={p.video?.poster} onChange={(src) => setIn('video', 'poster', src)} label="Poster" />
           </section>
 

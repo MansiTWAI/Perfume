@@ -4,24 +4,9 @@ import { motion } from 'framer-motion';
 import Seo from '../components/Seo';
 import { PageHero } from '../components/Bits';
 import { api } from '../lib/api';
-import { formatDate } from '../lib/format';
 import { ReviewForm } from '../components/Reviews';
 import { useStore } from '../context/StoreContext';
-
-function Lamp({ lit, current, label, date }) {
-  return (
-    <div className={`lamp ${lit ? 'is-lit' : ''} ${current ? 'is-now' : ''}`}>
-      <span className="lamp-flame">
-        <svg viewBox="0 0 30 30" aria-hidden="true">
-          <path d="M15 3c4 6 6 9 0 16-6-7-4-10 0-16z" />
-          <path d="M5 21c4 5 16 5 20 0" fill="none" strokeWidth="1.4" />
-        </svg>
-      </span>
-      <b>{label}</b>
-      <small>{date || '—'}</small>
-    </div>
-  );
-}
+import OrderTimeline from '../components/OrderTimeline';
 
 export default function Track() {
   const [params] = useSearchParams();
@@ -59,11 +44,6 @@ export default function Track() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const idx = order ? order.stages.indexOf(order.status) : -1;
-  const dateFor = (s) => {
-    const h = order?.history?.filter((x) => x.status === s).pop();
-    return h ? formatDate(h.at) : null;
-  };
 
   return (
     <>
@@ -87,14 +67,10 @@ export default function Track() {
                 <div className="track-meta">
                   {order.eta && <p>{t('Expected:')} <b>{order.eta}</b></p>}
                   {order.carrier && <p>{t('Courier:')} <b>{order.carrier}</b></p>}
-                  {order.carrierUrl && <a href={order.carrierUrl} target="_blank" rel="noreferrer" className="text-link">{t('Courier tracking')}</a>}
+                  {order.trackingNumber && <p>{t('Tracking number:')} <b dir="ltr">{order.trackingNumber}</b></p>}
                 </div>
               </div>
-              <div className="lamps">
-                {order.stages.map((s, i) => (
-                  <Lamp key={s} label={t(s)} lit={i <= idx} current={i === idx} date={i <= idx ? dateFor(s) : null} />
-                ))}
-              </div>
+              <OrderTimeline status={order.status} stages={order.stages} history={order.history} />
               <ul className="track-items">
                 {order.items.map((it) => (
                   <li key={it.name}><img src={it.image} alt="" width="48" height="48" />{it.name} × {it.qty}</li>

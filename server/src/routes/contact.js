@@ -37,7 +37,10 @@ r.patch(
   '/enquiries/:id',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const e = await Enquiry.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+    const { status } = req.body || {};
+    if (!['new', 'replied', 'closed'].includes(status)) return res.status(400).json({ message: 'Status must be new, replied or closed.' });
+    const e = await Enquiry.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    if (!e) return res.status(404).json({ message: 'Enquiry not found.' });
     res.json(e);
   })
 );

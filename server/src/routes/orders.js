@@ -1,10 +1,19 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import User from '../models/User.js';
+import OrderImport from '../models/OrderImport.js';
 import { optionalAuth, requireAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
-import { ORDER_STAGES, regionByCode, shippingFor } from '../config/commerce.js';
-import { code } from '../utils.js';
+import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor } from '../config/commerce.js';
+import { trackingUrl, isUrl } from '../../../shared/couriers.js';
+import { placeOrder } from '../services/placeOrder.js';
+import { reserve, release } from '../services/orderStock.js';
+import { orderFilter, describeFilters } from '../services/filters.js';
+import { newWorkbook, addTableSheet, sendWorkbook, fileName, tzLabel } from '../services/excel.js';
+import { buildOrdersWorkbook, buildTemplate, readOrderSheet, planOrderImport, applyOrderChanges, MAX_IMPORT_ROWS } from '../services/orderSheet.js';
 
 const r = Router();
 const placeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { message: 'Too many orders from this connection. Please try again in a few minutes, or order on WhatsApp.' } });
@@ -16,73 +25,60 @@ r.post(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const { items = [], customer, region: regionCode = 'IN', paymentMethod, giftNote } = req.body || {};
-    const region = regionByCode(regionCode);
-    if (!region?.ships) {
-      return res.status(400).json({ message: 'We do not deliver to this country yet. Please contact us on WhatsApp.' });
+    try {
+      const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, userId: req.user?._id });
+      res.status(201).json({ orderNumber: order.orderNumber, trackingId: order.trackingId, total: order.total, currency: order.currency });
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ message: e.message });
+      throw e;
     }
-    const { currency } = region;
-    if (!Array.isArray(items) || !items.length) return res.status(400).json({ message: 'Your bag is empty.' });
-    const a = customer?.address || {};
-    if (!customer?.name || !customer?.email || !customer?.phone || !a.line1 || !a.city || !a.postalCode) {
-      return res.status(400).json({ message: 'Please complete your name, contact details and delivery address.' });
-    }
-    const method = region.payments.includes(paymentMethod) ? paymentMethod : region.payments[0];
-
-    const lines = [];
-    for (const it of items.slice(0, 20)) {
-      const qty = Math.min(Math.max(parseInt(it.qty, 10) || 1, 1), 10);
-      const p = await Product.findOne({ slug: it.slug, published: true });
-      if (!p) return res.status(400).json({ message: `${it.slug} is no longer available.` });
-      if (p.stock < qty) return res.status(409).json({ message: `Only ${p.stock} of ${p.name} left in stock.` });
-      lines.push({ p, qty });
-    }
-
-    // Reserve stock atomically; roll back if any line fails.
-    const reserved = [];
-    for (const { p, qty } of lines) {
-      const ok = await Product.updateOne({ _id: p._id, stock: { $gte: qty } }, { $inc: { stock: -qty } });
-      if (!ok.modifiedCount) {
-        for (const x of reserved) await Product.updateOne({ _id: x.p._id }, { $inc: { stock: x.qty } });
-        return res.status(409).json({ message: `${p.name} just sold out. Please update your bag.` });
-      }
-      reserved.push({ p, qty });
-    }
-
-    const orderItems = lines.map(({ p, qty }) => ({
-      product: p._id,
-      slug: p.slug,
-      name: p.name,
-      image: p.images?.[0]?.src,
-      qty,
-      unitPrice: p.price[currency],
-    }));
-    const subtotal = orderItems.reduce((s, i) => s + i.unitPrice * i.qty, 0);
-    const shipping = shippingFor(region, subtotal);
-
-    const order = await Order.create({
-      orderNumber: 'AB-' + new Date().getFullYear().toString().slice(2) + code(5),
-      trackingId: 'ABL' + code(9),
-      user: req.user?._id,
-      customer: { ...customer, address: { ...a, country: region.name } },
-      items: orderItems,
-      currency,
-      subtotal,
-      shipping,
-      total: subtotal + shipping,
-      paymentMethod: method,
-      giftNote: giftNote?.enabled
-        ? {
-            enabled: true,
-            name: String(giftNote.name || '').slice(0, 40),
-            occasion: String(giftNote.occasion || '').slice(0, 40),
-            message: String(giftNote.message || '').slice(0, 160),
-          }
-        : { enabled: false },
-      history: [{ status: ORDER_STAGES[0], note: 'We have received your order.' }],
-    });
-    res.status(201).json({ orderNumber: order.orderNumber, trackingId: order.trackingId, total: order.total, currency });
   })
 );
+
+// A customer's orders: placed while signed in, or with their account email.
+const ownedBy = (user) => ({ $or: [{ user: user._id }, { 'customer.email': user.email }] });
+
+// Until an order ships the customer can correct the delivery details and
+// the gift card, or cancel it. Quantities can change only before it is
+// packed, and only while it is unpaid (a paid order would need a refund).
+const DETAILS_EDITABLE = ['Order Placed', 'Confirmed', 'Packed'];
+const ITEMS_EDITABLE = ['Order Placed', 'Confirmed'];
+const canEdit = (o) => ({
+  details: DETAILS_EDITABLE.includes(o.status),
+  items: ITEMS_EDITABLE.includes(o.status) && o.paymentStatus !== 'paid',
+  cancel: DETAILS_EDITABLE.includes(o.status),
+});
+
+// What a customer may see of their own order. Internal notes, the linked
+// account id and courier links stay with the team.
+function customerView(o) {
+  const region = REGIONS.find((x) => x.ships && x.currency === o.currency);
+  return {
+    _id: o._id,
+    orderNumber: o.orderNumber,
+    trackingId: o.trackingId,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    status: o.status,
+    stages: ORDER_STAGES,
+    history: (o.history || []).map((h) => ({ status: h.status, at: h.at, note: h.note })),
+    items: (o.items || []).map((i) => ({ slug: i.slug, name: i.name, image: i.image, qty: i.qty, unitPrice: i.unitPrice, lineTotal: (i.unitPrice || 0) * (i.qty || 0) })),
+    currency: o.currency,
+    taxLabel: region?.taxLabel || '',
+    subtotal: o.subtotal,
+    shipping: o.shipping,
+    total: o.total,
+    paymentMethod: o.paymentMethod,
+    paymentStatus: o.paymentStatus,
+    customer: { name: o.customer?.name, email: o.customer?.email, phone: o.customer?.phone, address: o.customer?.address },
+    giftNote: o.giftNote?.enabled ? { enabled: true, name: o.giftNote.name, occasion: o.giftNote.occasion, message: o.giftNote.message } : { enabled: false },
+    carrier: o.carrier || '',
+    trackingNumber: o.trackingNumber || '',
+    eta: o.eta || '',
+    editable: canEdit(o),
+    edits: (o.edits || []).map((e) => ({ at: e.at, summary: e.summary })),
+  };
+}
 
 // Public tracking: tracking ID plus the email used at checkout.
 r.get(
@@ -100,7 +96,7 @@ r.get(
       stages: ORDER_STAGES,
       history: order.history,
       carrier: order.carrier,
-      carrierUrl: order.carrierUrl,
+      trackingNumber: order.trackingNumber,
       eta: order.eta,
       items: order.items.map((i) => ({ slug: i.slug, name: i.name, qty: i.qty, image: i.image })),
       city: order.customer.address.city,
@@ -114,18 +110,333 @@ r.get(
   '/mine',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const orders = await Order.find({ $or: [{ user: req.user._id }, { 'customer.email': req.user.email }] }).sort({ createdAt: -1 });
-    res.json(orders);
+    const orders = await Order.find(ownedBy(req.user)).sort({ createdAt: -1 }).lean();
+    res.json(orders.map(customerView));
   })
 );
 
 // ----- admin -----
+// Filters: status, paymentStatus, currency, product, customer (user id), q,
+// period (24h, 1d, 7d, 1m, 2m, 3m, custom + from/to, all) and tz.
+// Without `paged=1` it returns the latest 200 as a plain array, as before.
+const httpError = (res, e) => (e.status ? res.status(e.status).json({ message: e.message }) : null);
+
 r.get(
   '/',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const filter = req.query.status ? { status: req.query.status } : {};
-    res.json(await Order.find(filter).sort({ createdAt: -1 }).limit(200));
+    let filter;
+    try {
+      ({ filter } = await orderFilter(req.query));
+    } catch (e) {
+      if (httpError(res, e)) return;
+      throw e;
+    }
+    if (req.query.paged !== '1') return res.json(await Order.find(filter).sort({ createdAt: -1 }).limit(200));
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const [items, total] = await Promise.all([
+      Order.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Order.countDocuments(filter),
+    ]);
+    res.json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
+  })
+);
+
+// The house places an order for a customer (phone or WhatsApp orders). Same
+// pricing and stock rules as the checkout; linked to their account by email.
+r.post(
+  '/admin',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { items, customer, region, paymentMethod, paymentStatus, giftNote, notes } = req.body || {};
+    const email = String(customer?.email || '').toLowerCase().trim();
+    const account = email ? await User.findOne({ email }).select('_id') : null;
+    try {
+      const order = await placeOrder({
+        items, customer: { ...customer, email }, regionCode: region, paymentMethod, giftNote,
+        userId: account?._id, historyNote: 'Order placed by the house on your behalf.',
+      });
+      if (paymentStatus === 'paid' || notes) {
+        if (paymentStatus === 'paid') order.paymentStatus = 'paid';
+        if (notes) order.notes = String(notes).slice(0, 2000);
+        await order.save();
+      }
+      res.status(201).json(order);
+    } catch (e) {
+      if (httpError(res, e)) return;
+      throw e;
+    }
+  })
+);
+
+// ----- Excel: export, template, import (preview → confirm) and history -----
+r.get(
+  '/export',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    let filter, period;
+    try {
+      ({ filter, period } = await orderFilter(req.query));
+    } catch (e) {
+      if (httpError(res, e)) return;
+      throw e;
+    }
+    const orders = await Order.find(filter).sort({ createdAt: -1 }).lean(); // read-only
+    const tz = period.tz;
+    const generated = new Date();
+    const meta = [
+      ['Report period', period.label],
+      ['Filters', describeFilters(req.query)],
+      ['Orders', orders.length],
+      ['Generated', `${generated.toISOString().slice(0, 16).replace('T', ' ')} UTC by ${req.user.name}`],
+      ['Times shown in', tzLabel(tz)],
+    ];
+    const wb = newWorkbook();
+    buildOrdersWorkbook(wb, orders, { title: 'Orders', meta, tz });
+
+    // Summary and one-row-per-item detail sheets for reporting.
+    const by = (key) => Object.entries(orders.reduce((m, o) => ((m[o[key]] = (m[o[key]] || 0) + 1), m), {}));
+    const value = orders.reduce((m, o) => ((m[o.currency] = (m[o.currency] || 0) + (o.total || 0)), m), {});
+    addTableSheet(wb, 'Summary', {
+      title: 'Orders summary',
+      meta,
+      columns: [
+        { key: 'group', header: 'Group', width: 18 },
+        { key: 'label', header: 'Value', width: 22 },
+        { key: 'count', header: 'Orders', type: 'int', width: 10 },
+        { key: 'amount', header: 'Order value', type: 'money', width: 18 },
+      ],
+      rows: [
+        ...by('status').map(([label, count]) => ({ group: 'Order status', label, count })),
+        ...by('paymentStatus').map(([label, count]) => ({ group: 'Payment status', label, count })),
+        ...Object.entries(value).map(([cur, amount]) => ({ group: 'Order value', label: cur, count: orders.filter((o) => o.currency === cur).length, amount, currency: cur })),
+      ],
+      tz,
+    });
+    addTableSheet(wb, 'Order Items', {
+      title: 'Order items',
+      meta: [['Report period', period.label]],
+      columns: [
+        { key: 'orderNumber', header: 'Order ID', width: 14, freeze: true },
+        { key: 'createdAt', header: 'Order Date', type: 'datetime', width: 18 },
+        { key: 'customer', header: 'Customer', width: 22 },
+        { key: 'productId', header: 'Product ID', width: 26 },
+        { key: 'slug', header: 'Product Code', width: 14 },
+        { key: 'name', header: 'Product', width: 22 },
+        { key: 'qty', header: 'Quantity', type: 'int', width: 10 },
+        { key: 'unitPrice', header: 'Unit Price', type: 'money', width: 14 },
+        { key: 'lineTotal', header: 'Line Total', type: 'money', width: 14 },
+        { key: 'currency', header: 'Currency', width: 10 },
+        { key: 'paymentStatus', header: 'Payment Status', width: 15 },
+        { key: 'status', header: 'Order Status', width: 17 },
+      ],
+      rows: orders.flatMap((o) =>
+        (o.items || []).map((i) => ({
+          orderNumber: o.orderNumber, createdAt: o.createdAt, customer: o.customer?.name, productId: i.product ? String(i.product) : '',
+          slug: i.slug, name: i.name, qty: i.qty, unitPrice: i.unitPrice, lineTotal: (i.unitPrice || 0) * (i.qty || 0),
+          currency: o.currency, paymentStatus: o.paymentStatus, status: o.status,
+        }))
+      ),
+      tz,
+    });
+    await sendWorkbook(res, wb, fileName('orders', period));
+  })
+);
+
+r.get(
+  '/template',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    // ?prefill=1 (+ the order filters): one row per matching order, gold columns blank.
+    if (req.query.prefill !== '1') return sendWorkbook(res, buildTemplate(newWorkbook()), 'orders_update_template.xlsx');
+    let filter, period;
+    try {
+      ({ filter, period } = await orderFilter(req.query));
+    } catch (e) {
+      if (httpError(res, e)) return;
+      throw e;
+    }
+    const orders = await Order.find(filter).sort({ createdAt: -1 }).limit(MAX_IMPORT_ROWS).lean();
+    const filters = describeFilters(req.query);
+    const scope = `the orders from ${period.label.toLowerCase()}${filters === 'none' ? '' : ` (${filters})`}`;
+    await sendWorkbook(res, buildTemplate(newWorkbook(), { orders, tz: period.tz, scope }), fileName('orders_update_template', period));
+  })
+);
+
+const sheetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, /\.xlsx$/i.test(file.originalname)),
+});
+const receiveSheet = (req, res, next) =>
+  sheetUpload.single('file')(req, res, (err) => {
+    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ message: 'That file is larger than 4 MB. Split it into smaller files.' });
+    next(err);
+  });
+
+const PREVIEW_TTL = 60 * 60 * 1000; // a preview can be confirmed for one hour
+const MAX_LISTED = 1000; // issues and changes sent to the screen; the rest are in the error report
+
+function importSummary(job, { full = false } = {}) {
+  const j = job.toObject ? job.toObject() : job;
+  return {
+    id: j._id,
+    fileName: j.fileName,
+    fileSize: j.fileSize,
+    sheetName: j.sheetName,
+    status: j.status,
+    admin: { name: j.adminName, email: j.adminEmail },
+    totals: j.totals,
+    createdAt: j.createdAt,
+    committedAt: j.committedAt,
+    transactional: j.transactional,
+    error: j.error,
+    ...(full && {
+      errors: (j.rowErrors || []).slice(0, MAX_LISTED),
+      errorsTotal: (j.rowErrors || []).length,
+      warnings: (j.rowWarnings || []).slice(0, MAX_LISTED),
+      changes: (j.changes || []).slice(0, MAX_LISTED).map((c) => ({ row: c.row, orderNumber: c.orderNumber, diffs: c.diffs })),
+      changesTotal: (j.changes || []).length,
+      expiresAt: j.status === 'previewed' ? new Date(new Date(j.createdAt).getTime() + PREVIEW_TTL) : undefined,
+    }),
+  };
+}
+
+// Step 1: upload → validate → preview. Nothing in the orders changes here.
+r.post(
+  '/import/preview',
+  requireAdmin,
+  receiveSheet,
+  asyncHandler(async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Choose an Excel file (.xlsx) to upload.' });
+    let sheet;
+    try {
+      sheet = await readOrderSheet(req.file.buffer);
+    } catch (e) {
+      if (httpError(res, e)) return;
+      throw e;
+    }
+    const EMPTY = 'Add a row for each order you want to update: its Order ID, plus the new values in the gold columns. Then upload the file again.';
+    if (!sheet.rows.length) return res.status(400).json({ message: `No orders found in this file. ${EMPTY}` });
+    const plan = await planOrderImport(sheet);
+    if (plan.samples === sheet.rows.length) return res.status(400).json({ message: `This is the blank template (it only has the sample row). ${EMPTY}` });
+    if (sheet.unknown.length) {
+      plan.warnings.unshift({ row: sheet.headerRow, orderId: '', field: '', message: `These columns are not recognised and were ignored: ${sheet.unknown.join(', ')}.` });
+    }
+    const job = await OrderImport.create({
+      admin: req.user._id,
+      adminName: req.user.name,
+      adminEmail: req.user.email,
+      fileName: String(req.file.originalname).slice(0, 200),
+      fileSize: req.file.size,
+      sheetName: sheet.sheetName,
+      totals: { rows: sheet.rows.length, updated: 0, created: 0, failed: new Set(plan.errors.map((e) => e.row)).size, skipped: plan.unchanged + plan.samples, warnings: plan.warnings.length },
+      changes: plan.changes,
+      rowErrors: plan.errors,
+      rowWarnings: plan.warnings,
+    });
+    res.status(201).json(importSummary(job, { full: true }));
+  })
+);
+
+// Step 2: confirm → write to the database.
+r.post(
+  '/imports/:id/commit',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const job = await OrderImport.findById(req.params.id);
+    if (!job) return res.status(404).json({ message: 'Import not found.' });
+    if (job.status !== 'previewed') return res.status(409).json({ message: `This import is already ${job.status}.` });
+    if (Date.now() - job.createdAt.getTime() > PREVIEW_TTL) {
+      job.status = 'expired';
+      await job.save();
+      return res.status(410).json({ message: 'This preview is more than an hour old. Upload the file again to check it against the latest orders.' });
+    }
+    // Claim the job so a double click cannot apply it twice.
+    const claimed = await OrderImport.updateOne({ _id: job._id, status: 'previewed' }, { $set: { status: 'committed', committedAt: new Date() } });
+    if (!claimed.modifiedCount) return res.status(409).json({ message: 'This import is already being applied.' });
+    try {
+      const { updated, conflicts, transactional } = await applyOrderChanges(job.changes);
+      job.status = 'committed';
+      job.committedAt = new Date();
+      job.transactional = transactional;
+      job.totals.updated = updated;
+      job.totals.failed += conflicts.length;
+      job.rowErrors.push(...conflicts);
+      for (const c of job.changes) c.patch = undefined;
+      job.markModified('changes');
+      await job.save();
+      res.json(importSummary(job, { full: true }));
+    } catch (e) {
+      job.status = 'failed';
+      job.error = 'The update could not be completed. Export the orders again to check their current state before retrying.';
+      await job.save();
+      throw e;
+    }
+  })
+);
+
+r.post(
+  '/imports/:id/cancel',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const job = await OrderImport.findOneAndUpdate({ _id: req.params.id, status: 'previewed' }, { $set: { status: 'cancelled' }, $unset: { changes: 1 } }, { new: true });
+    if (!job) return res.status(409).json({ message: 'This import can no longer be cancelled.' });
+    res.json(importSummary(job));
+  })
+);
+
+r.get(
+  '/imports',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const jobs = await OrderImport.find().sort({ createdAt: -1 }).limit(limit).select('-changes -rowErrors -rowWarnings').lean();
+    res.json(jobs.map((j) => importSummary(j)));
+  })
+);
+
+r.get(
+  '/imports/:id',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const job = await OrderImport.findById(req.params.id).lean();
+    if (!job) return res.status(404).json({ message: 'Import not found.' });
+    res.json(importSummary(job, { full: true }));
+  })
+);
+
+// Every error, warning and change of one import, as a workbook.
+r.get(
+  '/imports/:id/report',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const job = await OrderImport.findById(req.params.id).lean();
+    if (!job) return res.status(404).json({ message: 'Import not found.' });
+    const wb = newWorkbook();
+    const meta = [['File', job.fileName], ['Uploaded', `${job.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC by ${job.adminName}`], ['Status', job.status]];
+    const issueCols = [
+      { key: 'row', header: 'Excel Row', type: 'int', width: 10 },
+      { key: 'orderId', header: 'Order ID', width: 14 },
+      { key: 'field', header: 'Column', width: 20 },
+      { key: 'message', header: 'Problem', width: 90, wrap: true },
+    ];
+    addTableSheet(wb, 'Errors', { title: 'Rows that were not applied', meta, columns: issueCols, rows: job.rowErrors || [] });
+    addTableSheet(wb, 'Warnings', { title: 'Warnings', meta, columns: issueCols, rows: job.rowWarnings || [] });
+    addTableSheet(wb, 'Changes', {
+      title: job.status === 'committed' ? 'Changes applied' : 'Changes in the preview',
+      meta,
+      columns: [
+        { key: 'row', header: 'Excel Row', type: 'int', width: 10 },
+        { key: 'orderNumber', header: 'Order ID', width: 14 },
+        { key: 'field', header: 'Column', width: 22 },
+        { key: 'from', header: 'Before', width: 36, wrap: true },
+        { key: 'to', header: 'After', width: 36, wrap: true },
+      ],
+      rows: (job.changes || []).flatMap((c) => c.diffs.map((d) => ({ row: c.row, orderNumber: c.orderNumber, ...d }))),
+    });
+    await sendWorkbook(res, wb, `import_report_${String(job._id).slice(-6)}.xlsx`);
   })
 );
 
@@ -135,7 +446,7 @@ r.get(
   asyncHandler(async (_req, res) => {
     const [byStatus, revenue, count] = await Promise.all([
       Order.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
-      Order.aggregate([{ $group: { _id: '$currency', total: { $sum: '$total' } } }]),
+      Order.aggregate([{ $match: { status: { $ne: ORDER_CANCELLED } } }, { $group: { _id: '$currency', total: { $sum: '$total' } } }]),
       Order.countDocuments(),
     ]);
     res.json({ byStatus, revenue, count, stages: ORDER_STAGES });
@@ -148,17 +459,215 @@ r.patch(
   asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found.' });
-    const { status, carrier, carrierUrl, eta, paymentStatus, note } = req.body || {};
-    if (status && ORDER_STAGES.includes(status) && status !== order.status) {
-      order.status = status;
-      order.history.push({ status, note: note || '' });
+    const { status, carrier, carrierUrl, trackingNumber, eta, paymentStatus, note, notes, customer } = req.body || {};
+    const problems = [];
+    const text = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+    // Customer details (name, contact, delivery address). The country stays
+    // tied to the market the order was priced in.
+    if (customer && typeof customer === 'object') {
+      const a = customer.address || {};
+      const fields = [
+        ['name', customer.name, 120, true, 'Name'],
+        ['email', customer.email, 160, true, 'Email'],
+        ['phone', customer.phone, 40, true, 'Phone'],
+        ['address.line1', a.line1, 200, true, 'Address line 1'],
+        ['address.line2', a.line2, 200, false, 'Address line 2'],
+        ['address.city', a.city, 80, true, 'City'],
+        ['address.state', a.state, 80, false, 'State'],
+        ['address.postalCode', a.postalCode, 20, true, 'Postal code'],
+      ];
+      for (const [path, value, max, required, label] of fields) {
+        if (value === undefined) continue;
+        const v = text(value, max);
+        if (required && !v) problems.push(`${label} cannot be empty.`);
+        else if (path === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) problems.push('Enter a valid email address.');
+        else if (path === 'phone' && v.replace(/\D/g, '').length < 6) problems.push('Enter a valid phone number.');
+        else order.set(`customer.${path}`, path === 'email' ? v.toLowerCase() : v);
+      }
     }
-    if (carrier !== undefined) order.carrier = carrier;
-    if (carrierUrl !== undefined) order.carrierUrl = carrierUrl;
-    if (eta !== undefined) order.eta = eta;
+
+    // Cancelling returns the items to stock; reopening a cancelled order
+    // reserves them again (and is refused if they are no longer in stock).
+    let stockMove = null;
+    if (status && ORDER_STATUSES.includes(status) && status !== order.status) {
+      if (status === ORDER_CANCELLED) stockMove = 'release';
+      else if (order.status === ORDER_CANCELLED) stockMove = 'reserve';
+      order.status = status;
+      order.history.push({ status, note: text(note, 300) });
+    }
+    if (carrier !== undefined) order.carrier = text(carrier, 80);
+    if (trackingNumber !== undefined) order.trackingNumber = text(trackingNumber, 80);
+    let typedLink = false;
+    if (carrierUrl !== undefined) {
+      const link = text(carrierUrl, 500);
+      if (link && !isUrl(link)) {
+        // A tracking number typed into the link field: keep it as the number.
+        if (/^[A-Za-z0-9-]{4,40}$/.test(link) && !order.trackingNumber) order.trackingNumber = link;
+        else problems.push('The courier tracking link must start with http:// or https://.');
+      } else {
+        order.carrierUrl = link;
+        typedLink = !!link;
+      }
+    }
+    // Known courier + tracking number: build the customer's tracking link.
+    const built = trackingUrl(order.carrier, order.trackingNumber);
+    if (built && !typedLink) order.carrierUrl = built;
+    if (order.carrierUrl && !isUrl(order.carrierUrl)) order.carrierUrl = '';
+    if (eta !== undefined) order.eta = text(eta, 60);
     if (paymentStatus) order.paymentStatus = paymentStatus;
+    if (notes !== undefined) order.notes = String(notes).slice(0, 2000);
+    if (problems.length) return res.status(400).json({ message: problems.join(' ') });
+    const lines = order.items.filter((i) => i.product && i.qty > 0);
+    if (stockMove === 'release') {
+      for (const i of lines) await Product.updateOne({ _id: i.product }, { $inc: { stock: i.qty } });
+    }
+    if (stockMove === 'reserve') {
+      const done = [];
+      for (const i of lines) {
+        const ok = await Product.updateOne({ _id: i.product, stock: { $gte: i.qty } }, { $inc: { stock: -i.qty } });
+        if (!ok.modifiedCount) {
+          for (const d of done) await Product.updateOne({ _id: d.product }, { $inc: { stock: d.qty } });
+          return res.status(409).json({ message: `${i.name} no longer has ${i.qty} in stock, so this order cannot be reopened.` });
+        }
+        done.push(i);
+      }
+    }
     await order.save();
     res.json(order);
+  })
+);
+
+// One of the signed-in customer's own orders, by Order ID (or id). Anyone
+// else's order is simply "not found". Registered last so the named admin
+// routes above (stats, export, imports…) are matched first.
+r.get(
+  '/:orderId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const key = String(req.params.orderId).trim();
+    const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
+    const order = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
+    if (!order) return res.status(404).json({ message: 'We could not find this order in your account.' });
+    res.json(customerView(order));
+  })
+);
+
+// ----- the customer changes or cancels their own order -----
+const findMine = (req) => {
+  const key = String(req.params.orderId).trim();
+  const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
+  return Order.findOne({ $and: [match, ownedBy(req.user)] });
+};
+const clip = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+r.patch(
+  '/mine/:orderId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const order = await findMine(req);
+    if (!order) return res.status(404).json({ message: 'We could not find this order in your account.' });
+    const can = canEdit(order);
+    if (!can.details) return res.status(409).json({ message: `This order is ${order.status.toLowerCase()}, so it can no longer be changed. Message us on WhatsApp and we will help.` });
+    const { customer, giftNote, items } = req.body || {};
+    const summary = [];
+
+    if (customer && typeof customer === 'object') {
+      const a = customer.address || {};
+      const fields = [
+        ['name', customer.name, 120, true, 'Name'],
+        ['phone', customer.phone, 40, true, 'Phone'],
+        ['address.line1', a.line1, 200, true, 'Address line 1'],
+        ['address.line2', a.line2, 200, false, 'Address line 2'],
+        ['address.city', a.city, 80, true, 'City'],
+        ['address.state', a.state, 80, false, 'State'],
+        ['address.postalCode', a.postalCode, 20, true, 'Postal code'],
+      ];
+      let changed = false;
+      for (const [path, value, max, required, label] of fields) {
+        if (value === undefined) continue;
+        const v = clip(value, max);
+        if (required && !v) return res.status(400).json({ message: `${label} cannot be empty.` });
+        if (path === 'phone' && v.replace(/\D/g, '').length < 6) return res.status(400).json({ message: 'Please enter a valid phone number.' });
+        if ((order.get(`customer.${path}`) || '') !== v) {
+          order.set(`customer.${path}`, v);
+          changed = true;
+        }
+      }
+      if (changed) summary.push('delivery details');
+    }
+
+    if (giftNote && typeof giftNote === 'object') {
+      const next = giftNote.enabled
+        ? { enabled: true, name: clip(giftNote.name, 40), occasion: clip(giftNote.occasion, 40), message: clip(giftNote.message, 160) }
+        : { enabled: false };
+      const cur = order.giftNote || {};
+      if (!!cur.enabled !== next.enabled || (next.enabled && (cur.name !== next.name || cur.occasion !== next.occasion || cur.message !== next.message))) {
+        order.giftNote = next;
+        summary.push(next.enabled ? 'Signature Card' : 'removed the Signature Card');
+      }
+    }
+
+    // Quantities: each line keeps the price it was ordered at. 0 removes it.
+    let stockDelta = [];
+    if (Array.isArray(items)) {
+      const wanted = new Map(items.map((i) => [String(i.slug), Math.min(Math.max(parseInt(i.qty, 10) || 0, 0), 10)]));
+      const changes = order.items.filter((i) => wanted.has(i.slug) && wanted.get(i.slug) !== i.qty);
+      if (changes.length) {
+        if (!can.items) {
+          return res.status(409).json({
+            message: order.paymentStatus === 'paid'
+              ? 'This order is already paid, so its items cannot be changed here. Message us on WhatsApp and we will help.'
+              : `This order is ${order.status.toLowerCase()}, so its items can no longer be changed.`,
+          });
+        }
+        const remaining = order.items.reduce((n, i) => n + (wanted.has(i.slug) ? wanted.get(i.slug) : i.qty), 0);
+        if (remaining < 1) return res.status(400).json({ message: 'An order needs at least one fragrance. To stop the order, cancel it instead.' });
+        stockDelta = changes.map((i) => ({ product: i.product, name: i.name, qty: wanted.get(i.slug) - i.qty }));
+        const more = stockDelta.filter((d) => d.qty > 0);
+        const got = await reserve(more);
+        if (!got.ok) return res.status(409).json({ message: `Sorry, there is not enough ${got.failed.name} in stock for that quantity.` });
+        await release(stockDelta.filter((d) => d.qty < 0).map((d) => ({ ...d, qty: -d.qty })));
+        for (const i of changes) summary.push(wanted.get(i.slug) ? `${i.name} × ${wanted.get(i.slug)}` : `removed ${i.name}`);
+        order.items = order.items.map((i) => (wanted.has(i.slug) ? { ...i.toObject(), qty: wanted.get(i.slug) } : i)).filter((i) => i.qty > 0);
+        const region = REGIONS.find((x) => x.ships && x.currency === order.currency);
+        order.subtotal = order.items.reduce((n, i) => n + i.unitPrice * i.qty, 0);
+        order.shipping = shippingFor(region, order.subtotal);
+        order.total = order.subtotal + order.shipping;
+      }
+    }
+
+    if (!summary.length) return res.json(customerView(order.toObject()));
+    order.edits.push({ by: 'customer', summary: `Changed ${summary.join(', ')}` });
+    try {
+      await order.save();
+    } catch (e) {
+      // Put stock back if the order itself could not be saved.
+      await release(stockDelta.filter((d) => d.qty > 0));
+      await reserve(stockDelta.filter((d) => d.qty < 0).map((d) => ({ ...d, qty: -d.qty })));
+      throw e;
+    }
+    res.json(customerView(order.toObject()));
+  })
+);
+
+r.post(
+  '/mine/:orderId/cancel',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const order = await findMine(req);
+    if (!order) return res.status(404).json({ message: 'We could not find this order in your account.' });
+    if (!canEdit(order).cancel) {
+      return res.status(409).json({ message: order.status === ORDER_CANCELLED ? 'This order is already cancelled.' : `This order is ${order.status.toLowerCase()}, so it can no longer be cancelled here. Message us on WhatsApp and we will help.` });
+    }
+    const reason = clip(req.body?.reason, 200);
+    const refund = order.paymentStatus === 'paid' ? ' We will arrange your refund.' : '';
+    order.status = ORDER_CANCELLED;
+    order.history.push({ status: ORDER_CANCELLED, note: `Cancelled by you${reason ? `: ${reason}` : ''}.${refund}` });
+    order.edits.push({ by: 'customer', summary: `Cancelled the order${reason ? ` (${reason})` : ''}` });
+    await order.save();
+    await release(order.items.map((i) => ({ product: i.product, qty: i.qty })));
+    res.json(customerView(order.toObject()));
   })
 );
 

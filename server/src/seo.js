@@ -22,7 +22,7 @@ const PAGES = {
   '/terms': ['Terms & Conditions | AL BARAKAH LIFESTYLE', 'Terms and conditions for the AL BARAKAH LIFESTYLE website and online orders.'],
   '/track': ['Track your order | AL BARAKAH LIFESTYLE', 'Track your AL BARAKAH LIFESTYLE order.'],
 };
-const PRIVATE = ['/checkout', '/account', '/order'];
+const PRIVATE = ['/checkout', '/account', '/order', '/profile'];
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -52,7 +52,8 @@ export async function renderPage(template, pathname, siteUrl) {
   const meta = await lookup(clean);
   const found = !!meta;
   const m = meta || { title: `Page not found | ${SITE}`, description: PAGES['/'][1], noindex: true };
-  const image = siteUrl + (m.image || DEFAULT_IMAGE);
+  const img = m.image || DEFAULT_IMAGE;
+  const image = /^https?:\/\//i.test(img) ? img : siteUrl + img; // cloud-hosted uploads are already absolute
   const tags = [
     `<meta data-rh="true" name="description" content="${esc(m.description)}" />`,
     `<link data-rh="true" rel="canonical" href="${esc(siteUrl + clean)}" />`,

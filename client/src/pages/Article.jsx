@@ -8,7 +8,7 @@ import ProductCard from '../components/ProductCard';
 import { scrollToEl } from '../components/SmoothScroll';
 import { useApi } from '../hooks/useApi';
 import { useStore } from '../context/StoreContext';
-import { formatDate, whatsappLink } from '../lib/format';
+import { formatDate, whatsappLink, absUrl } from '../lib/format';
 import { renderMarkdown } from '../lib/markdown';
 import { NotFound } from './InfoPages';
 
@@ -52,7 +52,7 @@ export default function Article() {
     '@type': 'Article',
     headline: post.title,
     description: post.excerpt,
-    image: post.cover?.src ? [window.location.origin + post.cover.src] : undefined,
+    image: post.cover?.src ? [absUrl(post.cover.src)] : undefined,
     datePublished: post.publishedAt,
     dateModified: post.updatedAt,
     author: { '@type': 'Organization', name: post.author },

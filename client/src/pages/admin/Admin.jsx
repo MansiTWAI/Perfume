@@ -5,6 +5,8 @@ import { useStore } from '../../context/StoreContext';
 import { api } from '../../lib/api';
 import Dashboard from './Dashboard';
 import Orders from './Orders';
+import { ImportHistory } from './OrderExcel';
+import { UserList, UserDetail } from './Users';
 import { ProductList, ProductEdit } from './Products';
 import { PostList, PostEdit } from './Posts';
 import { Enquiries, Subscribers } from './Inbox';
@@ -43,6 +45,7 @@ function AdminLogin() {
 const NAV = [
   ['/admin', 'Dashboard', true],
   ['/admin/orders', 'Orders'],
+  ['/admin/users', 'Users'],
   ['/admin/products', 'Products'],
   ['/admin/reviews', 'Reviews'],
   ['/admin/journal', 'Journal'],
@@ -72,6 +75,9 @@ export default function Admin() {
         <Routes>
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="orders/imports" element={<ImportHistory />} />
+          <Route path="users" element={<UserList />} />
+          <Route path="users/:id" element={<UserDetail />} />
           <Route path="products" element={<ProductList />} />
           <Route path="products/:id" element={<ProductEdit />} />
           <Route path="reviews" element={<Reviews />} />

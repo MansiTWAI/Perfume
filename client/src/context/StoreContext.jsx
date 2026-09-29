@@ -158,7 +158,51 @@ export function StoreProvider({ children }) {
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
+    setCart([]); // the bag is kept on the account, not left on this device
   }, []);
+
+  // Signed in, the bag lives on the account (/api/cart), shared with the
+  // mobile app. On sign-in the bag from this device joins the saved one
+  // (the larger quantity wins); after that every change is saved.
+  const cartSynced = useRef(null); // id of the account the bag is in step with
+  useEffect(() => {
+    if (!user) {
+      cartSynced.current = null;
+      return undefined;
+    }
+    if (cartSynced.current === user.id) return undefined;
+    let stale = false;
+    (async () => {
+      try {
+        const local = read('ab_cart', []);
+        const saved = await api('/cart');
+        const merged = new Map(saved.items.map((i) => [i.slug, i.qty]));
+        for (const i of local) merged.set(i.slug, Math.min(10, Math.max(merged.get(i.slug) || 0, i.qty)));
+        const next = await api('/cart', { method: 'PUT', body: { items: [...merged].map(([slug, qty]) => ({ slug, qty })) } });
+        const products = new Map((await api('/products')).map((p) => [p.slug, p]));
+        if (stale) return;
+        setCart(
+          next.items
+            .filter((i) => products.has(i.slug))
+            .map((i) => {
+              const p = products.get(i.slug);
+              return { slug: p.slug, name: p.name, subtitle: p.subtitle, image: p.images?.[0]?.src, price: p.price, sizeLabel: p.sizeLabel, qty: i.qty };
+            })
+        );
+        cartSynced.current = user.id;
+      } catch {
+        /* offline or the API is down: keep the bag on this device */
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [user]);
+  useEffect(() => {
+    if (!user || cartSynced.current !== user.id) return undefined;
+    const save = setTimeout(() => api('/cart', { method: 'PUT', body: { items: cart.map((i) => ({ slug: i.slug, qty: i.qty })) } }).catch(() => {}), 500);
+    return () => clearTimeout(save);
+  }, [cart, user]);
 
   const subtotal = cart.reduce((s, i) => s + (priceOf(i) || 0) * i.qty, 0);
   const count = cart.reduce((s, i) => s + i.qty, 0);

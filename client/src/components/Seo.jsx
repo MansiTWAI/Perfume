@@ -7,6 +7,7 @@ export default function Seo({ title, description, image = '/media/duo-triptych-8
   const { pathname } = useLocation();
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const url = origin + pathname;
+  const img = /^https?:\/\//i.test(image) ? image : origin + image; // cloud-hosted uploads are already absolute
   const full = title?.includes(SITE) ? title : title ? `${title} | ${SITE}` : `Luxury Perfume & Fragrance House in India | ${SITE}`;
   const ld = Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [];
   return (
@@ -19,11 +20,11 @@ export default function Seo({ title, description, image = '/media/duo-triptych-8
       {description && <meta property="og:description" content={description} />}
       <meta property="og:type" content={type} />
       <meta property="og:url" content={url} />
-      <meta property="og:image" content={origin + image} />
+      <meta property="og:image" content={img} />
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={full} />
       {description && <meta name="twitter:description" content={description} />}
-      <meta name="twitter:image" content={origin + image} />
+      <meta name="twitter:image" content={img} />
       {ld.map((obj, i) => (
         <script key={i} type="application/ld+json">{JSON.stringify(obj)}</script>
       ))}

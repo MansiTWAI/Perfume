@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Product from '../models/Product.js';
 import { optionalAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
-import { slugify } from '../utils.js';
+import { slugify, escapeRegex } from '../utils.js';
 
 const r = Router();
 
@@ -13,8 +13,30 @@ r.get(
     const filter = isAdmin ? {} : { published: true };
     if (req.query.category) filter.category = req.query.category;
     if (req.query.featured === '1') filter.featured = true;
-    const products = await Product.find(filter).sort({ sortOrder: 1, createdAt: 1 });
-    res.json(products);
+    // Search and filters (used by the mobile app; the website filters on screen).
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ name: rx }, { family: rx }, { tagline: rx }, { description: rx }, { mood: rx }, { occasions: rx }, { 'notes.top.name': rx }, { 'notes.heart.name': rx }, { 'notes.base.name': rx }];
+    }
+    if (req.query.family) filter.family = new RegExp(`^${escapeRegex(String(req.query.family).slice(0, 60))}$`, 'i');
+    if (req.query.inStock === '1') filter.stock = { $gt: 0 };
+    const currency = ['INR', 'AED'].includes(req.query.currency) ? req.query.currency : 'INR';
+    const min = Number(req.query.minPrice);
+    const max = Number(req.query.maxPrice);
+    if (Number.isFinite(min) || Number.isFinite(max)) {
+      filter[`price.${currency}`] = { ...(Number.isFinite(min) && { $gte: min }), ...(Number.isFinite(max) && { $lte: max }) };
+    }
+    const SORTS = {
+      'price-asc': { [`price.${currency}`]: 1 },
+      'price-desc': { [`price.${currency}`]: -1 },
+      newest: { createdAt: -1 },
+      name: { name: 1 },
+    };
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 100);
+    let query = Product.find(filter).sort(SORTS[req.query.sort] || { sortOrder: 1, createdAt: 1 });
+    if (limit) query = query.limit(limit);
+    res.json(await query);
   })
 );
 

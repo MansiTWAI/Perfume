@@ -46,7 +46,7 @@ export function Subscribers() {
   }, []);
   return (
     <div>
-      <header className="a-head"><h1>Subscribers</h1><span className="a-muted">{list?.length ?? 0} people</span></header>
+      <header className="a-head"><h1>Subscribers</h1><span className="a-muted">{list?.length ?? 0} {list?.length === 1 ? 'person' : 'people'}</span></header>
       <section className="a-panel">
         {!list ? <p>Loading…</p> : list.length === 0 ? <p className="a-muted">No subscribers yet.</p> : (
           <table className="a-table">

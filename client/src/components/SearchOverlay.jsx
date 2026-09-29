@@ -11,7 +11,7 @@ const SUGGESTIONS = ['Oud', 'Saffron', 'Jasmine', 'Gift', 'Evening'];
 // Searches fragrances by name, family, notes, mood and occasion, and the
 // Journal by title and tags.
 export default function SearchOverlay() {
-  const { searchOpen, setSearchOpen, priceOf, fmt } = useStore();
+  const { searchOpen, setSearchOpen, priceOf, fmt, t } = useStore();
   const { products } = useProducts();
   const [q, setQ] = useState('');
   const [posts, setPosts] = useState([]);
@@ -43,10 +43,10 @@ export default function SearchOverlay() {
 
   useEffect(() => {
     if (term.length < 2) return setPosts([]);
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       api(`/posts?q=${encodeURIComponent(term)}&limit=4`).then((d) => setPosts(d.items)).catch(() => setPosts([]));
     }, 250);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [term]);
 
   const close = () => setSearchOpen(false);
@@ -58,7 +58,7 @@ export default function SearchOverlay() {
           className="search-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="Search"
+          aria-label={t('Search')}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -66,22 +66,22 @@ export default function SearchOverlay() {
         >
           <div className="container search-inner">
             <div className="search-bar">
-              <label htmlFor="site-search" className="sr-only">Search fragrances, notes and stories</label>
+              <label htmlFor="site-search" className="sr-only">{t('Search fragrances, notes and stories')}</label>
               <input
                 id="site-search"
                 ref={input}
                 type="search"
                 autoComplete="off"
-                placeholder="Search a fragrance, a note, a story"
+                placeholder={t('Search a fragrance, a note, a story')}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
-              <button className="text-btn" onClick={close}>Close</button>
+              <button className="text-btn" onClick={close}>{t('Close')}</button>
             </div>
 
             {!term && (
               <div className="search-suggest">
-                <p className="eyebrow">Try</p>
+                <p className="eyebrow">{t('Try')}</p>
                 <div className="chips">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>
@@ -93,9 +93,9 @@ export default function SearchOverlay() {
             {term && (
               <div className="search-results">
                 <section>
-                  <p className="eyebrow">Fragrances</p>
+                  <p className="eyebrow">{t('Fragrances')}</p>
                   {matches.length === 0 ? (
-                    <p className="muted">No fragrance matches “{q}”.</p>
+                    <p className="muted">{t('No fragrance matches “{q}”.', { q })}</p>
                   ) : (
                     <ul>
                       {matches.map(({ p, why }) => (
@@ -111,9 +111,9 @@ export default function SearchOverlay() {
                   )}
                 </section>
                 <section>
-                  <p className="eyebrow">From the Journal</p>
+                  <p className="eyebrow">{t('From the Journal')}</p>
                   {posts.length === 0 ? (
-                    <p className="muted">{term.length < 2 ? 'Keep typing…' : 'No stories match yet.'}</p>
+                    <p className="muted">{t(term.length < 2 ? 'Keep typing…' : 'No stories match yet.')}</p>
                   ) : (
                     <ul>
                       {posts.map((p) => (

@@ -292,7 +292,7 @@
 .postcard-date { font-size: 12.5px; letter-spacing: 0.06em; color: var(--s-muted); }
 
 /* ============ Lamps (order tracking) ============ */
-.lamps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; position: relative; margin: 40px 0; }
+.lamps { display: grid; grid-template-columns: repeat(var(--lamp-count, 6), minmax(0, 1fr)); gap: 10px; position: relative; margin: 40px 0; }
 .lamps::before { content: ''; position: absolute; top: 38px; left: 8%; right: 8%; height: 1px; background: var(--s-line); }
 .lamp { display: grid; justify-items: center; gap: 12px; text-align: center; position: relative; }
 .lamp-flame { width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--s-line); background: var(--s-bg); display: grid; place-items: center; transition: all 0.8s var(--ease); }

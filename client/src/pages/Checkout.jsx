@@ -47,7 +47,15 @@ export default function Checkout() {
   const navigate = useNavigate();
   useSolidHeader();
   const methods = region.payments || ['pay-on-confirmation'];
-  const [f, setF] = useState({ name: user?.name || '', email: user?.email || '', phone: '', line1: '', line2: '', city: '', state: '', postalCode: '' });
+  const [f, setF] = useState({ name: '', email: '', phone: '', line1: '', line2: '', city: '', state: '', postalCode: '' });
+  // Fill in the signed-in customer's saved details (the account can load after
+  // this page does). Only empty fields are filled, never what was typed.
+  useEffect(() => {
+    if (!user) return;
+    const a = !user.address?.region || user.address.region === region.code ? user.address || {} : {};
+    const from = { name: user.name, email: user.email, phone: user.phone, line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode };
+    setF((x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v || from[k] || ''])));
+  }, [user, region.code]);
   const [pay, setPay] = useState(methods[0]);
   // In Ramadan or around Eid the gift card opens on that occasion.
   const [gift, setGift] = useState(() => ({

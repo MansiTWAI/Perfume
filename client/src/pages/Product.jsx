@@ -15,7 +15,7 @@ import { useApi } from '../hooks/useApi';
 import Reviews, { RatingSummary } from '../components/Reviews';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
-import { whatsappLink } from '../lib/format';
+import { whatsappLink, absUrl } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
 import { NotFound } from './InfoPages';
 
@@ -142,7 +142,7 @@ export default function Product() {
     '@type': 'Product',
     name: `${p.name} ${p.subtitle}`,
     description: p.description,
-    image: (p.images || []).map((i) => window.location.origin + i.src),
+    image: (p.images || []).map((i) => absUrl(i.src)),
     brand: { '@type': 'Brand', name: 'AL BARAKAH LIFESTYLE' },
     sku: p.slug,
     category: 'Eau de Parfum',

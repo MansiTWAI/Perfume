@@ -15,6 +15,9 @@ import orderRoutes from './routes/orders.js';
 import contactRoutes from './routes/contact.js';
 import reviewRoutes from './routes/reviews.js';
 import uploadRoutes, { serveUpload } from './routes/uploads.js';
+import userRoutes from './routes/users.js';
+import cartRoutes from './routes/cart.js';
+import { openapi, docsPage } from './docs/openapi.js';
 import Product from './models/Product.js';
 import Post from './models/Post.js';
 import { REGIONS } from './config/commerce.js';
@@ -50,6 +53,9 @@ app.use(async (_req, _res, next) => {
 app.get('/uploads/:name', serveUpload);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// API reference for the website, the admin studio and the mobile app.
+app.get('/api/openapi.json', (_req, res) => res.json(openapi(SITE_URL)));
+app.get('/api/docs', (_req, res) => res.type('html').send(docsPage));
 app.get('/api/settings', (_req, res) => res.json({ regions: REGIONS }));
 // The visitor's country, from the edge network's geolocation header, so a
 // first visit from Dubai opens in dirhams. Nothing is stored.
@@ -63,6 +69,8 @@ app.use('/api/posts', postRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api', cartRoutes); // /api/cart and /api/wishlist
 app.use('/api', contactRoutes);
 
 // SEO: sitemap and robots, built from live data.
@@ -90,7 +98,7 @@ app.get('/sitemap.xml', async (_req, res, next) => {
   }
 });
 app.get('/robots.txt', (_req, res) =>
-  res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /account\nDisallow: /checkout\nSitemap: ${SITE_URL}/sitemap.xml\n`)
+  res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /account\nDisallow: /profile\nDisallow: /checkout\nSitemap: ${SITE_URL}/sitemap.xml\n`)
 );
 
 app.use('/api', (_req, res) => res.status(404).json({ message: 'Not found.' }));
@@ -116,6 +124,8 @@ if (fs.existsSync(CLIENT_DIST)) {
 app.use((err, _req, res, _next) => {
   if (err?.code === 11000) return res.status(409).json({ message: 'That slug or email is already in use.' });
   if (err?.name === 'ValidationError') return res.status(400).json({ message: err.message });
+  // A malformed id in the URL (e.g. /api/orders/abc) is simply not found.
+  if (err?.name === 'CastError' && err.kind === 'ObjectId') return res.status(404).json({ message: 'Not found.' });
   console.error(err);
   res.status(500).json({ message: 'Something went wrong on our side. Please try again.' });
 });

@@ -39,6 +39,9 @@ export const CURRENCIES = [...new Set(REGIONS.filter((r) => r.ships).map((r) => 
 
 
 export const ORDER_STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
+// Not a step on the timeline: an order can be cancelled from any stage.
+export const ORDER_CANCELLED = 'Cancelled';
+export const ORDER_STATUSES = [...ORDER_STAGES, ORDER_CANCELLED];
 
 export const regionByCode = (code) => REGIONS.find((r) => r.code === code);
 

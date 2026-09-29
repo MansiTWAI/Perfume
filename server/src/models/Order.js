@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ORDER_STAGES } from '../config/commerce.js';
+import { ORDER_STAGES, ORDER_STATUSES } from '../config/commerce.js';
 
 const orderSchema = new mongoose.Schema(
   {
@@ -37,14 +37,22 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: { type: String, default: 'pay-on-confirmation' },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded'], default: 'pending' },
     giftNote: { enabled: Boolean, name: String, occasion: String, message: String },
-    status: { type: String, enum: ORDER_STAGES, default: ORDER_STAGES[0] },
+    status: { type: String, enum: ORDER_STATUSES, default: ORDER_STAGES[0] },
     history: [{ status: String, at: { type: Date, default: Date.now }, note: String, _id: false }],
     carrier: String,
     carrierUrl: String,
+    trackingNumber: String, // courier AWB / consignment number
     eta: String,
     notes: String,
+    // Changes the customer made to the order before it shipped.
+    edits: [{ at: { type: Date, default: Date.now }, by: { type: String, default: 'customer' }, summary: String, _id: false }],
   },
   { timestamps: true }
 );
+
+// Admin lists, reports and "My orders" look orders up by these.
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ user: 1 });
+orderSchema.index({ 'customer.email': 1 });
 
 export default mongoose.model('Order', orderSchema);

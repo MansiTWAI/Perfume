@@ -51,3 +51,6 @@ export function srcSet(src) {
   if (!src || !HAS_SMALL.test(src)) return undefined;
   return `${src.replace('.webp', '-800.webp')} 800w, ${src} 1600w`;
 }
+
+// Uploaded images may live on a cloud CDN (absolute URL) or on this site (path).
+export const absUrl = (src) => (!src || /^https?:\/\//i.test(src) ? src : window.location.origin + src);

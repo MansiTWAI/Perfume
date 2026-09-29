@@ -15,7 +15,7 @@ export default function Dashboard() {
   }, []);
 
   const count = (s) => stats?.byStatus?.find((x) => x._id === s)?.n || 0;
-  const open = stats ? stats.count - count('Delivered') : 0;
+  const open = stats ? stats.count - count('Delivered') - count('Cancelled') : 0;
   const lowStock = products.filter((p) => p.stock <= 5);
 
   return (
@@ -27,6 +27,7 @@ export default function Dashboard() {
         {(stats?.revenue || []).map((r) => (
           <div className="a-tile" key={r._id}><span>Order value · {r._id}</span><b>{money(r.total, r._id)}</b></div>
         ))}
+        {count('Cancelled') > 0 && <Link to="/admin/orders?status=Cancelled" className="a-tile"><span>Cancelled</span><b>{count('Cancelled')}</b></Link>}
         <div className={`a-tile ${lowStock.length ? 'warn' : ''}`}><span>Low stock</span><b>{lowStock.length}</b></div>
       </div>
 

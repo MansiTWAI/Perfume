@@ -33,6 +33,9 @@ const Checkout = lazy(() => import('./pages/Checkout'));
 const OrderSuccess = lazy(() => import('./pages/OrderSuccess'));
 const Track = lazy(() => import('./pages/Track'));
 const Account = lazy(() => import('./pages/Account'));
+const MyOrders = lazy(() => import('./pages/MyOrders'));
+const OrderDetails = lazy(() => import('./pages/OrderDetails'));
+const EditProfile = lazy(() => import('./pages/EditProfile'));
 const Admin = lazy(() => import('./pages/admin/Admin'));
 
 const pageMotion = {
@@ -76,6 +79,10 @@ const ROUTES = [
   ['/order/:orderNumber', OrderSuccess],
   ['/track', Track],
   ['/account', Account],
+  ['/profile', Account],
+  ['/profile/orders', MyOrders],
+  ['/profile/orders/:orderId', OrderDetails],
+  ['/profile/edit', EditProfile],
   ['*', NotFound],
 ];
 

@@ -7,10 +7,18 @@ Storefront, Journal, order tracking and admin studio for AL BARAKAH LIFESTYLE, b
 ├── vercel.json        build, static output and routing for Vercel
 ├── server/src         Express app, Mongoose models, routes, seed data
 │   ├── app.js         the app (shared by Vercel and local)
-│   └── index.js       local / VPS entry point
+│   ├── index.js       local / VPS entry point
+│   ├── services/      order creation, stock, Excel, filters
+│   └── docs/          OpenAPI spec (served at /api/openapi.json and /api/docs)
+├── shared/            used by server and client: catalogue seed, couriers
+├── docs/API.md        REST API guide (auth flow, conventions, mobile notes)
 └── client             React 18 + Vite storefront (builds to client/dist)
     └── public/media   brand photography, the ZAFREON film, labels
 ```
+
+**One API for every client.** The website, the admin studio and the mobile app use the same REST API and the same MongoDB database: products, prices, stock, carts, wishlists and orders are shared. Browse the API at **`/api/docs`** (OpenAPI 3 at `/api/openapi.json`); the guide is [docs/API.md](docs/API.md).
+
+**Customer accounts:** the profile icon opens My orders, Edit profile and Sign out. `/profile` shows the account overview, `/profile/orders` every order with its live status timeline, and `/profile/orders/:orderId` the details. Customers can change the address, gift card and (before packing, unpaid) quantities, or cancel, until an order ships. Profile edits cover name, phone, the saved delivery address (used by checkout), email and password. Signed in, the bag is saved on the account.
 
 ## Run it locally
 
@@ -39,12 +47,13 @@ Admin studio: **/admin**, with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` from your en
    | `ADMIN_PASSWORD` | a strong admin password |
    | `SITE_URL` | your live URL, e.g. `https://albarakah.me` (used in the sitemap and share tags) |
    | `NODE_ENV` | `production` |
+   | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | optional: admin image uploads go to Cloudinary (server-side, signed). Without them, uploads are stored in MongoDB. |
 
 4. In **MongoDB Atlas → Network Access**, allow `0.0.0.0/0`. Vercel functions do not have fixed IP addresses.
 5. Deploy. The database is seeded once, from your computer, with `npm run seed` using the same `MONGODB_URI`. Re-run it after changing `ADMIN_PASSWORD`.
 6. Add your domain in Vercel, then submit `/sitemap.xml` in Google Search Console.
 
-How it runs on Vercel: the built React app, `/assets` and `/media` are served by Vercel's CDN. Every other path (the API, `/sitemap.xml`, `/robots.txt`, `/uploads`, and page URLs) goes to one serverless function running the Express app, which writes each page's title, description and share tags into the HTML. Images uploaded in the admin are stored in MongoDB (4 MB limit per image), because Vercel's filesystem is not persistent.
+How it runs on Vercel: the built React app, `/assets` and `/media` are served by Vercel's CDN. Every other path (the API, `/sitemap.xml`, `/robots.txt`, `/uploads`, and page URLs) goes to one serverless function running the Express app, which writes each page's title, description and share tags into the HTML. Images uploaded in the admin go to Cloudinary when the `CLOUDINARY_*` variables are set, otherwise to MongoDB (4 MB limit per image either way), because Vercel's filesystem is not persistent. Existing `/media/…` and `/uploads/…` paths keep working.
 
 ## Other hosts
 
@@ -68,13 +77,19 @@ How it runs on Vercel: the built React app, `/assets` and `/media` are served by
 
 **SEO:** real URLs and one H1 per page. The server writes each page's title, description, canonical, Open Graph and Twitter tags into the HTML, so WhatsApp and search crawlers see them without JavaScript. Also Product/Offer, Article, Organization, Breadcrumb, FAQ and ItemList JSON-LD, plus `sitemap.xml` and `robots.txt` generated from the database. Unknown pages return a real 404.
 
+## Admin: users, Excel orders and reports
+
+- **Admin → Users**: every registered account with lifetime and selected-period order counts and value (₹ and AED kept separate), search, role/activity filters, sorting, pagination, a detail page with all their orders, and **Export Excel** (sheets *Users Summary* and *User Orders*, one row per item). Orders are linked to a user exactly as on their *My orders* page: placed while signed in, or with the account email. Password hashes and tokens are never returned.
+- **Admin → Orders**: Add Order (same pricing and stock rules as checkout), filters (search, status, payment, market, product, customer, period: 24 h, yesterday, 7 days, 1/2/3 months, custom), **Export Excel** (respects every filter; sheets *Orders*, *Summary*, *Order Items*), **Download Template**, **Upload Excel** and **Import History**.
+- **Excel import**: upload → validate → preview (row-level errors and before/after diffs; nothing saved) → confirm → result. Orders are matched by the immutable Order ID; only the gold columns (customer name/phone/address, payment status, order status + note, courier, tracking URL, expected delivery, internal notes) are written. Items and prices are read-only, and new orders cannot be created from Excel (they must reserve stock). Blank cells leave values unchanged; typing `CLEAR` empties an optional field. Updates run as one MongoDB transaction, and any order edited after the preview is reported as a conflict instead of being overwritten. Up to 20,000 rows / 4 MB per file.
+
 ## Before launch — needs the brand's confirmation
 
 | Item | Where | Current state |
 | --- | --- | --- |
 | **Fragrance notes** | Admin → Products | Proposed notes based on the campaign imagery (saffron, jasmine, Taif rose, amber, frankincense, oud…). Confirm them with the perfumer, then tick **Notes approved**. |
 | Note photography | `client/public/media` | Only saffron, jasmine, amber, frankincense and oud have real photos (cropped from the campaigns). Supply photos for rose, vanilla, sandalwood etc. and set each note's image in the admin; until then they show line icons. |
-| Admin password | `server/.env` | Currently `admin123`. Change it before launch. |
+| Admin password | `ADMIN_PASSWORD` (Vercel env + `server/.env`) | Must be a long, unique password. Change it and re-run `npm run seed` before launch. |
 | Prices | Admin → Products | ₹2,499 / ₹2,799 / ₹4,999 come from the earlier demo. The AED prices (115 / 129 / 229) are placeholders. |
 | Delivery charges & GCC markets | `server/src/config/commerce.js` | ₹99 (free over ₹2,999), AED 35 (free over AED 300). Placeholders. Other GCC countries order by WhatsApp until delivery is confirmed. |
 | Payment gateway | `server/src/routes/orders.js` | No gateway yet. Orders use cash on delivery (India) or "pay on confirmation", where you send a payment link. Connect Razorpay or Stripe (India) and a UAE gateway before taking cards. |

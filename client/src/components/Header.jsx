@@ -5,6 +5,7 @@ import { useStore } from '../context/StoreContext';
 import { cx } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 import RegionSelect from './RegionSelect';
+import AccountMenu from './AccountMenu';
 
 const PRIMARY = [
   ['/fragrances', 'Fragrances'],
@@ -22,7 +23,6 @@ const MENU = [
 
 const Icon = {
   search: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M15 15l5 5" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  user: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
   bag: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8z" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
 };
 
@@ -43,7 +43,7 @@ function LangToggle({ className = 'lang-btn' }) {
 }
 
 export default function Header() {
-  const { count, setCartOpen, user, setSearchOpen, setFinderOpen, t } = useStore();
+  const { count, setCartOpen, user, logout, setSearchOpen, setFinderOpen, t } = useStore();
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -109,7 +109,7 @@ export default function Header() {
             <LangToggle />
             <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}>{Icon.search}</button>
             <div className="nav-desktop-only"><RegionSelect /></div>
-            <Link to="/account" className="icon-btn nav-desktop-only" aria-label={t(user ? 'Your account' : 'Sign in')}>{Icon.user}</Link>
+            <div className="nav-desktop-only"><AccountMenu /></div>
             <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t('Bag, {n} items', { n: count })}>
               {Icon.bag}
               <AnimatePresence>
@@ -142,6 +142,9 @@ export default function Header() {
             <div className="mobile-menu-foot">
               <button className="text-btn" onClick={() => { setMenu(false); setFinderOpen(true); }}>{t('Find your signature')}</button>
               <Link to="/account" className="text-btn">{t(user ? 'Your account' : 'Sign in')}</Link>
+              {user && <Link to="/profile/orders" className="text-btn">{t('My orders')}</Link>}
+              {user && <Link to="/profile/edit" className="text-btn">{t('Edit profile')}</Link>}
+              {user && <button type="button" className="text-btn" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>}
               <Link to="/track" className="text-btn">{t('Track an order')}</Link>
               <LangToggle className="lang-btn lang-btn-menu" />
               <RegionSelect align="left" />
