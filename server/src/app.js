@@ -85,8 +85,11 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api', cartRoutes); // /api/cart and /api/wishlist
 app.use('/api', contactRoutes);
 
+// Renamed page: keep old links and search results working.
+app.get('/shipping-returns', (_req, res) => res.redirect(301, '/shipping-policy'));
+
 // SEO: sitemap and robots, built from live data.
-const STATIC_PATHS = ['/', '/fragrances', '/our-story', '/mission-vision', '/fragrance-heritage', '/gallery', '/journal', '/contact', '/faq', '/shipping-returns', '/privacy-policy', '/terms'];
+const STATIC_PATHS = ['/', '/fragrances', '/our-story', '/mission-vision', '/fragrance-heritage', '/gallery', '/journal', '/about-us', '/contact', '/faq', '/shipping-policy', '/refund-policy', '/privacy-policy', '/terms'];
 app.get('/sitemap.xml', async (_req, res, next) => {
   try {
     const [products, posts] = await Promise.all([

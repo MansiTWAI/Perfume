@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -28,6 +28,8 @@ const Faq = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.Faq
 const Shipping = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.Shipping })));
 const Privacy = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.Terms })));
+const Refund = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.Refund })));
+const About = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.About })));
 const NotFound = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.NotFound })));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const OrderSuccess = lazy(() => import('./pages/OrderSuccess'));
@@ -49,7 +51,7 @@ const pageMotion = {
 // Pages whose text is not yet translated keep English layout inside the
 // Arabic site rather than half-mirroring.
 // Legal pages await a reviewed translation; article bodies are English in the database.
-const ENGLISH_ONLY = /^\/(privacy-policy|terms)(\/|$)|^\/journal\/./;
+const ENGLISH_ONLY = /^\/(privacy-policy|terms|shipping-policy|refund-policy|about-us)(\/|$)|^\/journal\/./;
 
 function Page({ children }) {
   const { lang } = useStore();
@@ -74,7 +76,10 @@ const ROUTES = [
   ['/gallery', Gallery],
   ['/contact', Contact],
   ['/faq', Faq],
-  ['/shipping-returns', Shipping],
+  ['/about-us', About],
+  ['/shipping-policy', Shipping],
+  ['/shipping-returns', () => <Navigate to="/shipping-policy" replace />],
+  ['/refund-policy', Refund],
   ['/privacy-policy', Privacy],
   ['/terms', Terms],
   ['/checkout', Checkout],

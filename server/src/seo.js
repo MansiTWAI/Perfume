@@ -15,11 +15,13 @@ const PAGES = {
   '/fragrance-heritage': ['Fragrance Heritage | India, Arabia & the Art of Scent', 'Attar, oud, bakhoor, saffron and jasmine: the Indian and Middle Eastern fragrance heritage behind AL BARAKAH LIFESTYLE.'],
   '/gallery': ['Luxury Perfume Gallery | AL BARAKAH LIFESTYLE', 'ELARISSE and ZAFREON campaigns, packaging and details from AL BARAKAH LIFESTYLE.'],
   '/journal': ['Luxury Fragrance Journal | Perfume Guides & Stories', 'Fragrance guides, perfume rituals, the heritage of oud and attar, and the story of AL BARAKAH LIFESTYLE.'],
-  '/contact': ['Contact AL BARAKAH LIFESTYLE | Perfume & Lifestyle Brand India', 'Contact AL BARAKAH LIFESTYLE in Hyderabad for orders, gifting and fragrance questions.'],
+  '/about-us': ['About AL BARAKAH LIFESTYLE | Premium Fragrance Brand', 'Discover the story, philosophy and fragrance journey of AL BARAKAH LIFESTYLE, a premium fragrance, beauty and lifestyle brand from Hyderabad, India.'],
+  '/contact': ['Contact AL BARAKAH LIFESTYLE | Perfume & Customer Support', 'Contact AL BARAKAH LIFESTYLE for perfume enquiries, orders, delivery support, returns, refunds and business enquiries.'],
   '/faq': ['Frequently Asked Questions | AL BARAKAH LIFESTYLE', 'Answers about our fragrances, delivery, gift notes, tracking and perfume care.'],
-  '/shipping-returns': ['Shipping & Returns | AL BARAKAH LIFESTYLE', 'Delivery across India and to the UAE, tracking and returns.'],
-  '/privacy-policy': ['Privacy Policy | AL BARAKAH LIFESTYLE', 'How AL BARAKAH LIFESTYLE collects, uses and protects personal information.'],
-  '/terms': ['Terms & Conditions | AL BARAKAH LIFESTYLE', 'Terms and conditions for the AL BARAKAH LIFESTYLE website and online orders.'],
+  '/shipping-policy': ['Shipping Policy | AL BARAKAH LIFESTYLE Perfumes', 'Learn about AL BARAKAH LIFESTYLE perfume shipping across India, delivery timelines, tracking, damaged packages and selected international destinations.'],
+  '/refund-policy': ['Refund & Cancellation Policy | AL BARAKAH LIFESTYLE', 'Understand cancellation, returns, refunds and support for damaged, incorrect or defective AL BARAKAH perfume orders.'],
+  '/privacy-policy': ['Privacy Policy | AL BARAKAH LIFESTYLE', 'Read the AL BARAKAH LIFESTYLE Privacy Policy covering personal data, cookies, payments, security and privacy choices.'],
+  '/terms': ['Terms & Conditions | AL BARAKAH LIFESTYLE', 'Read the terms governing website use, perfume orders, pricing, payments, shipping, intellectual property and customer responsibilities.'],
   '/track': ['Track your order | AL BARAKAH LIFESTYLE', 'Track your AL BARAKAH LIFESTYLE order.'],
 };
 const PRIVATE = ['/checkout', '/account', '/order', '/profile', '/forgot-password', '/reset-password'];

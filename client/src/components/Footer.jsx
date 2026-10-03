@@ -5,8 +5,8 @@ import Newsletter from './Newsletter';
 
 const COLUMNS = [
   ['Shop', [['/fragrances', 'All fragrances'], ['/fragrances/elarisse', 'ELARISSE'], ['/fragrances/zafreon', 'ZAFREON'], ['/fragrances/signature-duo', 'Signature Duo']]],
-  ['The House', [['/our-story', 'Our Story'], ['/mission-vision', 'Mission & Vision'], ['/fragrance-heritage', 'Heritage'], ['/journal', 'Journal'], ['/gallery', 'Gallery']]],
-  ['Care', [['/contact', 'Contact'], ['/faq', 'FAQ'], ['/shipping-returns', 'Shipping & Returns'], ['/track', 'Track an order']]],
+  ['The House', [['/about-us', 'About Us'], ['/our-story', 'Our Story'], ['/mission-vision', 'Mission & Vision'], ['/fragrance-heritage', 'Heritage'], ['/journal', 'Journal'], ['/gallery', 'Gallery']]],
+  ['Care', [['/contact', 'Contact'], ['/faq', 'FAQ'], ['/shipping-policy', 'Shipping Policy'], ['/refund-policy', 'Refund & Cancellation'], ['/track', 'Track an order']]],
 ];
 // Product names are the same in every language.
 const NAMES = new Set(['ELARISSE', 'ZAFREON', 'Signature Duo']);
@@ -58,6 +58,8 @@ export default function Footer() {
           <p>
             <Link to="/privacy-policy">{t('Privacy')}</Link>
             <Link to="/terms">{t('Terms')}</Link>
+            <Link to="/shipping-policy">{t('Shipping')}</Link>
+            <Link to="/refund-policy">{t('Refunds')}</Link>
           </p>
         </div>
       </div>

@@ -259,6 +259,11 @@ a.m-status { color: var(--s-fg); border-bottom: 1px solid var(--s-accent); }
 .prose li::marker { color: var(--s-accent); }
 .prose strong { color: var(--s-fg); font-weight: 500; }
 .prose a { color: var(--s-accent); text-decoration: underline; text-underline-offset: 3px; }
+.legal h2 { font-size: clamp(22px, 2.2vw, 30px); margin: 1.8em 0 0.5em; }
+.legal-updated { font-size: 15px; color: var(--s-muted); }
+.legal-summary { border: 1px solid var(--s-line-strong); border-left: 2px solid var(--gold); padding: 20px 26px 6px; margin: 1.6em 0 2em; }
+.legal-summary h2 { margin-top: 0; }
+.legal hr { border: 0; border-top: 1px solid var(--s-line); margin: 2.4em 0; }
 .table-wrap { overflow-x: auto; margin: 1.6em 0; }
 .prose table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
 .prose th, .prose td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--s-line); }

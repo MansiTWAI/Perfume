@@ -286,7 +286,7 @@ export default function Product() {
               [t('How to wear'), p.howToWear],
               [t('How to store'), p.howToStore],
               [t('What is included'), p.includes?.length ? <ul className="dash">{p.includes.map((x) => <li key={x}>{x}</li>)}</ul> : null],
-              [t('Delivery & returns'), <p key="s">{t('We deliver across India and to the United Arab Emirates. Delivery charges are shown in your bag before checkout. Read our {link}.', { link: <Link to="/shipping-returns" className="text-link">{t('shipping & returns policy')}</Link> })}</p>],
+              [t('Delivery & returns'), <p key="s">{t('We deliver across India and to the United Arab Emirates. Delivery charges are shown in your bag before checkout. Read our {link}.', { link: <Link to="/shipping-policy" className="text-link">{t('shipping & returns policy')}</Link> })}</p>],
               ...(p.faq || []).map((f) => [f.q, f.a]),
             ]}
           />

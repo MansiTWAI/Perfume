@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Seo, { breadcrumbLd, orgLd } from '../components/Seo';
 import { PageHero } from '../components/Bits';
 import { Reveal } from '../components/Motion';
@@ -7,6 +8,16 @@ import { CONTACT, mapLink, whatsappLink } from '../lib/format';
 import { useStore } from '../context/StoreContext';
 
 const CARD_FILE = '/media/al-barakah-lifestyle-business-card.jpg';
+
+const HELP_WITH = [
+  'Product information, fragrance notes, sizes and availability',
+  'Order confirmation, order status and delivery queries',
+  'Payment-related support',
+  'Damaged, incorrect or missing-product reports',
+  'Returns, cancellations and refunds',
+  'Wholesale, corporate gifting and business enquiries',
+  'Website feedback and fragrance recommendations',
+];
 const SITE = `https://${CONTACT.web}`;
 
 // The rows on the card, each with its own link and copy button.
@@ -155,7 +166,7 @@ export default function Contact() {
 
   return (
     <>
-      <Seo title="Contact AL BARAKAH LIFESTYLE | Perfume & Lifestyle Brand India" description="Contact AL BARAKAH LIFESTYLE in Hyderabad for orders, gifting and fragrance questions. WhatsApp +91 91112 79997 or email you@albarakah.me." jsonLd={[orgLd(), breadcrumbLd([['Home', '/'], ['Contact', '/contact']])]} />
+      <Seo title="Contact AL BARAKAH LIFESTYLE | Perfume & Customer Support" description="Contact AL BARAKAH LIFESTYLE for perfume enquiries, orders, delivery support, returns, refunds and business enquiries." jsonLd={[orgLd(), breadcrumbLd([['Home', '/'], ['Contact', '/contact']])]} />
       <PageHero eyebrow={t('Contact')} title={t('We would love to hear from you')} layout="split" image="/media/emblem.webp" fit="contain" alt="The AL BARAKAH LIFESTYLE emblem on burgundy stationery" lede={t('Orders, gifting, wholesale and press. We reply personally from Hyderabad.')} />
       <section className="section">
         <div className="container contact-grid">
@@ -186,6 +197,18 @@ export default function Contact() {
               <button className="btn btn-primary" disabled={state.busy}>{t(state.busy ? 'Sending…' : 'Send message')}</button>
             </form>
           </Reveal>
+        </div>
+      </section>
+      <section className="section light">
+        <div className="container narrow prose">
+          <p>{t('Whether you need help selecting a fragrance, checking an order, understanding delivery, requesting support or sharing feedback, the AL BARAKAH LIFESTYLE team is here to assist.')}</p>
+          <h2>{t('What we can help with')}</h2>
+          <ul>
+            {HELP_WITH.map((x) => <li key={x}>{t(x)}</li>)}
+          </ul>
+          <h2>{t('For faster support')}</h2>
+          <p>{t('For order-related enquiries, include your order number, registered mobile number or email address and a short description of the issue. For damaged or incorrect deliveries, photographs or video of the package and product may be requested.')}</p>
+          <p>{t('Read our {shipping} and {refund}.', { shipping: <Link to="/shipping-policy" className="text-link">{t('Shipping Policy')}</Link>, refund: <Link to="/refund-policy" className="text-link">{t('Refund & Cancellation Policy')}</Link> })}</p>
         </div>
       </section>
     </>
