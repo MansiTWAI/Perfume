@@ -39,8 +39,6 @@
 
 .light,
 .collection,
-.worlds-section,
-.markets,
 .theme-ivory,
 .collection-page,
 .journal-page,
@@ -60,7 +58,6 @@
   --s-card: #f8f4ec;
   color-scheme: light;
 }
-.worlds-section { --s-bg: var(--parchment); --s-card: #f1eadf; }
 .theme-onyx { --s-bg: var(--black); }
 .theme-duo,
 .site-footer {
@@ -83,7 +80,7 @@
 *,
 *::before,
 *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; position: relative; } /* framer-motion measures scroll offsets against it */
 html.is-loading { overflow: hidden; }
 body {
   margin: 0;
@@ -177,6 +174,12 @@ html.lenis, html.lenis body { height: auto; }
 .text-link::after { content: ''; width: 22px; height: 1px; background: var(--s-accent); transition: width 0.5s var(--ease); }
 .text-link:hover { color: var(--s-accent); }
 .text-link:hover::after { width: 38px; }
+/* On phones a long link can wrap; a trailing dash would then float beside
+   the block, so the accent becomes an underline that wraps with the text. */
+@media (max-width: 480px) {
+  .text-link { display: inline; text-decoration: underline; text-decoration-color: var(--s-accent); text-decoration-thickness: 1px; text-underline-offset: 7px; line-height: 2.2; }
+  .text-link::after { display: none; }
+}
 .text-btn { font: 500 12px/1.4 var(--body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--s-fg); }
 .text-btn:hover { color: var(--s-accent); }
 .icon-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; position: relative; transition: background 0.3s; }
@@ -202,7 +205,7 @@ html.lenis, html.lenis body { height: auto; }
   transition: transform 0.7s var(--ease), background-color 0.5s, border-color 0.5s;
   border-bottom: 1px solid transparent;
 }
-.site-header.is-scrolled, html.solid-header .site-header { background: rgba(13, 10, 9, 0.9); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-color: rgba(215, 195, 160, 0.14); }
+.site-header.is-scrolled, html.solid-header .site-header { background: rgba(13, 10, 9, 0.96); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-color: rgba(215, 195, 160, 0.14); }
 .site-header.is-hidden { transform: translateY(-100%); }
 .header-row { height: var(--header-h); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
 .header-left, .header-right { display: flex; align-items: center; gap: 4px; }
@@ -286,6 +289,7 @@ html.lenis, html.lenis body { height: auto; }
 .footer-tagline { font: italic 400 clamp(26px, 3vw, 40px)/1 var(--display); color: var(--ivory); }
 .footer-base { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-top: 24px; border-top: 1px solid var(--s-line); font-size: 13px; }
 .footer-base p:last-child { display: flex; gap: 24px; }
+.footer-base a { display: inline-block; padding-block: 6px; }
 .footer-base a:hover { color: var(--ivory); }
 .newsletter { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--s-line-strong); }
 .newsletter input { flex: 1; min-width: 0; background: transparent; border: 0; padding: 14px 0; color: var(--s-fg); font-size: 17px; outline: none; }
@@ -302,6 +306,7 @@ html.lenis, html.lenis body { height: auto; }
 /* ============ Toasts & loading ============ */
 .toasts { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 950; display: grid; gap: 8px; width: min(92vw, 420px); }
 .toast { background: var(--umber); color: var(--ivory); border: 1px solid rgba(215, 195, 160, 0.3); padding: 14px 20px; font-size: 14.5px; text-align: center; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4); }
+.toasts.is-top { bottom: auto; top: calc(16px + env(safe-area-inset-top, 0px)); }
 .toast-warn { border-color: #c98a6a; }
 .loading { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 120px 0; color: var(--s-muted); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; }
 .loading-mark { width: 40px; height: 1px; background: var(--s-accent); animation: loadLine 1.4s var(--ease) infinite; transform-origin: left; }
@@ -316,7 +321,7 @@ html.lenis, html.lenis body { height: auto; }
   .text-link { min-height: 44px; }
   .logo { min-height: 44px; }
   .fn-list button { padding-block: 8px; }
-  .contact-info dd a, .ing-in a, .site-footer address a, .footer-grid a, a.m-status { display: inline-block; padding-block: 10px; }
+  .contact-info dd a, .ing-in a, .site-footer address a, .footer-grid a { display: inline-block; padding-block: 10px; }
 }
 
 /* ============ Compact rhythm on small screens ============ */
@@ -330,3 +335,6 @@ html.lenis, html.lenis body { height: auto; }
   .section { padding-block: 60px; }
   .btn { padding: 0 22px; letter-spacing: 0.18em; }
 }
+/* Pages that open without a hero keep clear of the fixed header at every
+   size; the compact .section rhythm above must not pull them under it. */
+.section.page-pad { padding-top: calc(var(--header-h) + clamp(32px, 6vw, 72px)); }

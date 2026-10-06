@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Seo, { breadcrumbLd } from '../components/Seo';
 import { PageHero, Loading } from '../components/Bits';
 import ProductCard from '../components/ProductCard';
@@ -11,7 +11,11 @@ import Newsletter from '../components/Newsletter';
 export default function Collection() {
   const { products, loading } = useProducts();
   const { setFinderOpen, t } = useStore();
-  const [picked, setFamily] = useState('All');
+  // The chosen family lives in the URL (?family=…), so it survives a refresh,
+  // the back button and a shared link.
+  const [params, setParams] = useSearchParams();
+  const picked = params.get('family') || 'All';
+  const setFamily = (c) => setParams(c === 'All' ? {} : { family: c }, { replace: true });
   // Filters come from the product data itself, never a fixed list.
   const families = ['All', ...new Set((products || []).map((p) => p.family).filter(Boolean))];
   // Family names change with the language; an unknown one means All.

@@ -20,7 +20,6 @@ h3:lang(ar),
 .display-xl:lang(ar) { line-height: 1.35; }
 .split-mask:lang(ar) { padding-block: 0.12em 0.3em; margin-block: -0.12em -0.3em; }
 .eyebrow:lang(ar),
-.hero-kicker:lang(ar),
 .footer-h:lang(ar) { font-size: 13.5px; }
 .nav-link:lang(ar),
 .btn:lang(ar),
@@ -30,18 +29,7 @@ h3:lang(ar),
 .seg button:lang(ar) { font-size: 14.5px; }
 .region-btn:lang(ar) { font-size: 13px; }
 .pcard-add:lang(ar) { font-size: 14px; }
-.footer-tagline[lang='en'], .hero-tagline-en { font-family: var(--display); }
-
-/* The hero line in Arabic, with the English tagline kept beneath it. */
-.hero-title-ar { line-height: 1.08; }
-.hero-title-ar .line { padding-bottom: 0.18em; }
-.hero-title-ar em { color: var(--gold-soft); padding-inline-start: 0.35em; }
-.hero-tagline-en {
-  display: block; margin-top: 18px;
-  font: italic 400 clamp(18px, 1.8vw, 24px)/1 var(--display); color: var(--champagne);
-  letter-spacing: 0.04em; opacity: 0; transition: opacity 1.2s 0.9s;
-}
-.opening.is-lit .hero-tagline-en { opacity: 0.85; }
+.footer-tagline[lang='en'] { font-family: var(--display); }
 
 /* ---------- Right-to-left details logical properties can't express ---------- */
 [dir='rtl'] .nav-link::after { transform-origin: right; }
@@ -67,10 +55,8 @@ h3:lang(ar),
 }
 
 /* ---------- Majlis mode: visitors shopping from the Gulf ---------- */
-.site-footer,
-.markets { position: relative; isolation: isolate; }
+.site-footer { position: relative; isolation: isolate; }
 html[data-market='gulf'] .site-footer::before,
-html[data-market='gulf'] .markets::before,
 .season::before {
   content: '';
   position: absolute; inset: 0; z-index: -1;
@@ -81,7 +67,6 @@ html[data-market='gulf'] .markets::before,
   -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 0%, #000 20%, transparent 75%);
   mask-image: radial-gradient(ellipse 70% 80% at 50% 0%, #000 20%, transparent 75%);
 }
-html[data-market='gulf'] .markets::before { opacity: 0.22; filter: brightness(0.6); }
 html[data-market='gulf'] .section .eyebrow::before,
 html[data-market='gulf'] .season .eyebrow::before {
   content: '';
@@ -175,9 +160,3 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 .lang-prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .lang-prompt .btn { min-height: 46px; padding: 0 26px; font: 400 18px/1 var(--display); letter-spacing: 0; }
 @media (max-width: 560px) { .lang-prompt { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); } }
-
-/* The home stage: bottle and glow sit on the left when the copy reads right to left. */
-[dir='rtl'] .opening-glow { background: radial-gradient(40% 55% at 28% 55%, rgba(210, 160, 90, 0.16), transparent 70%); }
-@media (max-width: 860px) {
-  [dir='rtl'] .opening-glow { background: radial-gradient(60% 40% at 50% 34%, rgba(210, 160, 90, 0.18), transparent 70%); }
-}

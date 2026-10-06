@@ -20,6 +20,8 @@ const productSchema = new mongoose.Schema(
     compareAt: { INR: Number, AED: Number },
     stock: { type: Number, default: 0, min: 0 },
     category: { type: String, default: 'Fragrances' },
+    gender: { type: String, enum: ['unisex', 'men', 'women'], default: 'unisex' },
+    longevity: String, // e.g. "8-12 hours"
     badge: String,
     theme: { type: String, enum: ['ivory', 'onyx', 'duo'], default: 'ivory' },
     images: [{ src: String, alt: String, _id: false }],

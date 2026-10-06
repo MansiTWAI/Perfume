@@ -14,6 +14,11 @@ export function scrollToEl(el, offset = -90) {
   else el.scrollIntoView({ behavior: 'smooth' });
 }
 
+export function scrollToY(y) {
+  if (lenis) lenis.scrollTo(y, { duration: 1.1 });
+  else window.scrollTo({ top: y, behavior: 'smooth' });
+}
+
 // Lenis gives the site its slow, weighted scroll. Disabled for reduced motion.
 export default function SmoothScroll({ children }) {
   useEffect(() => {

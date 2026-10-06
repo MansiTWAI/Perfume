@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Product from '../models/Product.js';
 import { requireAuth, asyncHandler } from '../middleware/auth.js';
 import { REGIONS, regionByCode, shippingFor } from '../config/commerce.js';
+import { productKey, slugFor } from '../services/catalog.js';
 
 // The signed-in customer's bag and saved fragrances, stored on the account so
 // the website and the mobile app share them. Prices are always worked out
@@ -22,7 +23,7 @@ function unitPrice(p, region) {
   return region.fx ? Math.round(base * region.fx) : base;
 }
 
-async function priced(user, region) {
+export async function priced(user, region) {
   const slugs = user.cart.map((i) => i.slug);
   const products = new Map((await Product.find({ slug: { $in: slugs } }).lean()).map((p) => [p.slug, p]));
   const items = user.cart.map((i) => {
@@ -30,6 +31,7 @@ async function priced(user, region) {
     const available = !!p && p.published && p.stock > 0;
     const price = p ? unitPrice(p, region) : null;
     return {
+      productId: p ? String(p._id) : null,
       slug: i.slug,
       name: p?.name || i.slug,
       image: p?.images?.[0]?.src || null,
@@ -60,8 +62,9 @@ async function priced(user, region) {
 
 const send = async (req, res, status = 200) => res.status(status).json(await priced(req.user, marketFor(req)));
 
-async function checkProduct(slug) {
-  const p = await Product.findOne({ slug: String(slug || '').toLowerCase(), published: true }).select('slug stock').lean();
+// A product by slug (website) or id (app).
+async function checkProduct(key) {
+  const p = key ? await Product.findOne({ ...productKey(key), published: true }).select('slug stock').lean() : null;
   if (!p) throw Object.assign(new Error('That fragrance is not available.'), { status: 404 });
   return p;
 }
@@ -88,16 +91,16 @@ r.put('/cart', requireAuth,
   })
 );
 
-// Add to the bag (adds to the quantity already there): { slug, qty = 1 }.
+// Add to the bag (adds to the quantity already there): { slug | productId, qty | quantity = 1 }.
 r.post('/cart/items', requireAuth,
   asyncHandler(async (req, res) => {
     let p;
     try {
-      p = await checkProduct(req.body?.slug);
+      p = await checkProduct(req.body?.productId || req.body?.slug);
     } catch (e) {
       return fail(res, e);
     }
-    const qty = clampQty(req.body?.qty ?? 1) || 1;
+    const qty = clampQty(req.body?.quantity ?? req.body?.qty ?? 1) || 1;
     const line = req.user.cart.find((i) => i.slug === p.slug);
     if (line) line.qty = Math.min(MAX_QTY, line.qty + qty);
     else {
@@ -109,12 +112,14 @@ r.post('/cart/items', requireAuth,
   })
 );
 
-// Set a line's quantity: { qty } (0 removes it).
+// Set a line's quantity: { qty | quantity } (0 removes it). The line is
+// addressed by product slug or product id.
 r.patch('/cart/items/:slug', requireAuth,
   asyncHandler(async (req, res) => {
-    const line = req.user.cart.find((i) => i.slug === req.params.slug.toLowerCase());
+    const slug = await slugFor(req.params.slug);
+    const line = req.user.cart.find((i) => i.slug === slug);
     if (!line) return res.status(404).json({ message: 'That fragrance is not in your bag.' });
-    const qty = clampQty(req.body?.qty);
+    const qty = clampQty(req.body?.quantity ?? req.body?.qty);
     if (qty) line.qty = qty;
     else req.user.cart = req.user.cart.filter((i) => i !== line);
     await req.user.save();
@@ -124,7 +129,8 @@ r.patch('/cart/items/:slug', requireAuth,
 
 r.delete('/cart/items/:slug', requireAuth,
   asyncHandler(async (req, res) => {
-    req.user.cart = req.user.cart.filter((i) => i.slug !== req.params.slug.toLowerCase());
+    const slug = await slugFor(req.params.slug);
+    req.user.cart = req.user.cart.filter((i) => i.slug !== slug);
     await req.user.save();
     send(req, res);
   })
@@ -147,18 +153,19 @@ async function wishlist(user) {
       .filter((s) => bySlug.has(s))
       .map((s) => {
         const p = bySlug.get(s);
-        return { slug: p.slug, name: p.name, subtitle: p.subtitle, image: p.images?.[0]?.src || null, price: p.price, inStock: p.stock > 0 };
+        return { productId: String(p._id), slug: p.slug, name: p.name, subtitle: p.subtitle, image: p.images?.[0]?.src || null, price: p.price, inStock: p.stock > 0 };
       }),
   };
 }
 
 r.get('/wishlist', requireAuth, asyncHandler(async (req, res) => res.json(await wishlist(req.user))));
 
-r.post('/wishlist/:slug', requireAuth,
+// Save a fragrance: POST /wishlist { productId } (app) or POST /wishlist/:slug (website).
+const addToWishlist = (keyOf) =>
   asyncHandler(async (req, res) => {
     let p;
     try {
-      p = await checkProduct(req.params.slug);
+      p = await checkProduct(keyOf(req));
     } catch (e) {
       return fail(res, e);
     }
@@ -167,12 +174,14 @@ r.post('/wishlist/:slug', requireAuth,
       await req.user.save();
     }
     res.status(201).json(await wishlist(req.user));
-  })
-);
+  });
+r.post('/wishlist', requireAuth, addToWishlist((req) => req.body?.productId || req.body?.slug));
+r.post('/wishlist/:slug', requireAuth, addToWishlist((req) => req.params.slug));
 
 r.delete('/wishlist/:slug', requireAuth,
   asyncHandler(async (req, res) => {
-    req.user.wishlist = req.user.wishlist.filter((s) => s !== req.params.slug.toLowerCase());
+    const slug = await slugFor(req.params.slug);
+    req.user.wishlist = req.user.wishlist.filter((s) => s !== slug);
     await req.user.save();
     res.json(await wishlist(req.user));
   })

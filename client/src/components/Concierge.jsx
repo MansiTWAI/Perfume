@@ -31,7 +31,11 @@ export default function Concierge() {
   const hidden = HIDDEN.test(pathname) || cartOpen || (pathname === '/' && !pastHero);
 
   useEffect(() => {
-    const on = () => setPastHero(scrollY > innerHeight * 0.8);
+    // On the homepage the hero is the pinned turntable: wait until it has turned.
+    const on = () => {
+      const hero = document.querySelector('.tt-track');
+      setPastHero(scrollY > (hero ? hero.offsetHeight - innerHeight * 0.2 : innerHeight * 0.8));
+    };
     on();
     addEventListener('scroll', on, { passive: true });
     return () => removeEventListener('scroll', on);

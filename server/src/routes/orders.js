@@ -6,8 +6,10 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
 import OrderImport from '../models/OrderImport.js';
+import Address from '../models/Address.js';
 import { optionalAuth, requireAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
-import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor } from '../config/commerce.js';
+import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor, statusKey } from '../config/commerce.js';
+import { discountFor, releaseCoupon } from '../services/coupons.js';
 import { trackingUrl, isUrl } from '../../../shared/couriers.js';
 import { placeOrder } from '../services/placeOrder.js';
 import { reserve, release } from '../services/orderStock.js';
@@ -19,18 +21,60 @@ import { buildOrdersWorkbook, buildTemplate, readOrderSheet, planOrderImport, ap
 const r = Router();
 const placeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { message: 'Too many orders from this connection. Please try again in a few minutes, or order on WhatsApp.' } });
 
+// The delivery details for an order placed from the app: a saved address
+// (addressId), else the default saved address, else the account's address.
+export async function checkoutTarget(user, { addressId, customer, region } = {}) {
+  let addr = null;
+  if (addressId) {
+    addr = mongoose.isValidObjectId(addressId) ? await Address.findOne({ _id: addressId, user: user._id }) : null;
+    if (!addr) throw Object.assign(new Error('That address is not in your address book.'), { status: 404, code: 'ADDRESS_NOT_FOUND' });
+  } else if (!customer) {
+    addr = await Address.findOne({ user: user._id }).sort({ isDefault: -1, updatedAt: -1 });
+  }
+  if (addr) {
+    return {
+      regionCode: addr.countryCode,
+      customer: {
+        name: addr.fullName, email: user.email, phone: addr.phone,
+        address: { line1: addr.addressLine1, line2: addr.addressLine2, city: addr.city, state: addr.state, postalCode: addr.postalCode },
+      },
+    };
+  }
+  const a = user.address || {};
+  return {
+    regionCode: region || a.region || 'IN',
+    customer: customer || { name: user.name, email: user.email, phone: user.phone, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode } },
+  };
+}
+
 // Place an order. Prices are always recalculated from the database.
+// Website / guests: { items, customer, region, paymentMethod, giftNote, couponCode }.
+// App (signed in): { addressId, paymentMethod, couponCode, giftNote }: the
+// items come from the account's bag, which is emptied once the order is placed.
 r.post(
   '/',
   placeLimiter,
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const { items = [], customer, region: regionCode = 'IN', paymentMethod, giftNote } = req.body || {};
+    const { paymentMethod, giftNote, couponCode } = req.body || {};
+    let { items = [], customer, region: regionCode = 'IN' } = req.body || {};
+    const fromCart = !items.length && !!req.user;
     try {
-      const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, userId: req.user?._id });
-      res.status(201).json({ orderNumber: order.orderNumber, trackingId: order.trackingId, total: order.total, currency: order.currency });
+      if (fromCart) {
+        items = req.user.cart.map((i) => ({ slug: i.slug, qty: i.qty }));
+        ({ customer, regionCode } = await checkoutTarget(req.user, { addressId: req.body?.addressId, customer, region: req.body?.region }));
+      }
+      const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, couponCode, userId: req.user?._id });
+      if (fromCart) {
+        req.user.cart = [];
+        await req.user.save();
+      }
+      res.status(201).json({
+        orderNumber: order.orderNumber, trackingId: order.trackingId, total: order.total, currency: order.currency,
+        ...(req.apiV1 && { order: customerView(order.toObject()) }),
+      });
     } catch (e) {
-      if (e.status) return res.status(e.status).json({ message: e.message });
+      if (e.status) return res.status(e.status).json({ code: e.code, message: e.message });
       throw e;
     }
   })
@@ -38,6 +82,7 @@ r.post(
 
 // A customer's orders: placed while signed in, or with their account email.
 const ownedBy = (user) => ({ $or: [{ user: user._id }, { 'customer.email': user.email }] });
+const STATUS_KEY_OF_LABEL = { 'Order Placed': 'placed', Confirmed: 'confirmed', Packed: 'packed', Shipped: 'shipped', 'Out for Delivery': 'out_for_delivery', Delivered: 'delivered', Cancelled: 'cancelled' };
 
 // Until an order ships the customer can correct the delivery details and
 // the gift card, or cancel it. Quantities can change only before it is
@@ -52,25 +97,31 @@ const canEdit = (o) => ({
 
 // What a customer may see of their own order. Internal notes, the linked
 // account id and courier links stay with the team.
-function customerView(o) {
+export function customerView(o) {
   const region = REGIONS.find((x) => x.ships && x.currency === o.currency);
   return {
     _id: o._id,
+    id: String(o._id),
     orderNumber: o.orderNumber,
     trackingId: o.trackingId,
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
     status: o.status,
+    statusKey: statusKey(o),
     stages: ORDER_STAGES,
     history: (o.history || []).map((h) => ({ status: h.status, at: h.at, note: h.note })),
     items: (o.items || []).map((i) => ({ slug: i.slug, name: i.name, image: i.image, qty: i.qty, unitPrice: i.unitPrice, lineTotal: (i.unitPrice || 0) * (i.qty || 0) })),
     currency: o.currency,
     taxLabel: region?.taxLabel || '',
     subtotal: o.subtotal,
+    discount: o.discount || 0,
+    couponCode: o.coupon?.code || null,
+    tax: 0, // prices include tax (see taxLabel)
     shipping: o.shipping,
     total: o.total,
     paymentMethod: o.paymentMethod,
     paymentStatus: o.paymentStatus,
+    tracking: { carrier: o.carrier || '', trackingNumber: o.trackingNumber || '', status: statusKey(o), eta: o.eta || '' },
     customer: { name: o.customer?.name, email: o.customer?.email, phone: o.customer?.phone, address: o.customer?.address },
     giftNote: o.giftNote?.enabled ? { enabled: true, name: o.giftNote.name, occasion: o.giftNote.occasion, message: o.giftNote.message } : { enabled: false },
     carrier: o.carrier || '',
@@ -124,10 +175,22 @@ r.get(
 // Without `paged=1` it returns the latest 200 as a plain array, as before.
 const httpError = (res, e) => (e.status ? res.status(e.status).json({ message: e.message }) : null);
 
+// Customers: their order history (GET /orders in the app contract).
+// Admins: every order, with the filters above.
 r.get(
   '/',
-  requireAdmin,
-  asyncHandler(async (req, res) => {
+  requireAuth,
+  asyncHandler(async (req, res, next) => {
+    if (req.user.role === 'admin') return next();
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const filter = ownedBy(req.user);
+    const [orders, total] = await Promise.all([Order.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Order.countDocuments(filter)]);
+    res.json({ items: orders.map(customerView), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit, message: 'Orders fetched successfully' });
+  })
+);
+
+export const listOrders = asyncHandler(async (req, res) => {
     let filter;
     try {
       ({ filter } = await orderFilter(req.query));
@@ -135,16 +198,16 @@ r.get(
       if (httpError(res, e)) return;
       throw e;
     }
-    if (req.query.paged !== '1') return res.json(await Order.find(filter).sort({ createdAt: -1 }).limit(200));
+    if (req.query.paged !== '1' && !req.apiV1) return res.json(await Order.find(filter).sort({ createdAt: -1 }).limit(200));
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const [items, total] = await Promise.all([
-      Order.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Order.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       Order.countDocuments(filter),
     ]);
-    res.json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
-  })
-);
+    res.json({ items: items.map((o) => ({ ...o, id: String(o._id), statusKey: statusKey(o) })), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
+});
+r.get('/', requireAdmin, listOrders);
 
 // The house places an order for a customer (phone or WhatsApp orders). Same
 // pricing and stock rules as the checkout; linked to their account by email.
@@ -456,10 +519,9 @@ r.get(
   })
 );
 
-r.patch(
-  '/:id',
-  requireAdmin,
-  asyncHandler(async (req, res) => {
+// Admin: change an order's status, courier details, payment status, notes or
+// customer details. Also used by PATCH /admin/orders/:id/status.
+export const updateOrder = asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found.' });
     const { status, carrier, carrierUrl, trackingNumber, eta, paymentStatus, note, notes, customer } = req.body || {};
@@ -518,7 +580,7 @@ r.patch(
     if (built && !typedLink) order.carrierUrl = built;
     if (order.carrierUrl && !isUrl(order.carrierUrl)) order.carrierUrl = '';
     if (eta !== undefined) order.eta = text(eta, 60);
-    if (paymentStatus) order.paymentStatus = paymentStatus;
+    if (paymentStatus && ['pending', 'paid', 'refunded'].includes(paymentStatus)) order.paymentStatus = paymentStatus;
     if (notes !== undefined) order.notes = String(notes).slice(0, 2000);
     if (problems.length) return res.status(400).json({ message: problems.join(' ') });
     const lines = order.items.filter((i) => i.product && i.qty > 0);
@@ -537,7 +599,34 @@ r.patch(
       }
     }
     await order.save();
-    res.json(order);
+    if (stockMove === 'release' && order.coupon?.code) await releaseCoupon(order.coupon.code);
+    res.json(req.apiV1 ? { ...order.toObject(), id: String(order._id), statusKey: statusKey(order) } : order);
+});
+r.patch('/:id', requireAdmin, updateOrder);
+
+// Shipment tracking for one of the signed-in customer's orders: the courier,
+// the AWB number, the status and every step so far.
+r.get(
+  '/:orderId/tracking',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const key = String(req.params.orderId).trim();
+    const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
+    const o = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
+    if (!o) return res.status(404).json({ message: 'We could not find this order in your account.' });
+    res.json({
+      orderId: String(o._id),
+      orderNumber: o.orderNumber,
+      trackingId: o.trackingId,
+      status: statusKey(o),
+      statusLabel: o.status,
+      carrier: o.carrier || '',
+      trackingNumber: o.trackingNumber || '',
+      trackingUrl: o.carrierUrl || '',
+      eta: o.eta || '',
+      stages: ORDER_STAGES,
+      events: (o.history || []).map((h) => ({ status: STATUS_KEY_OF_LABEL[h.status] || h.status, label: h.status, at: h.at, note: h.note || '' })),
+    });
   })
 );
 
@@ -636,7 +725,8 @@ r.patch(
         const region = REGIONS.find((x) => x.ships && x.currency === order.currency);
         order.subtotal = order.items.reduce((n, i) => n + i.unitPrice * i.qty, 0);
         order.shipping = shippingFor(region, order.subtotal);
-        order.total = order.subtotal + order.shipping;
+        order.discount = discountFor(order.coupon?.code ? order.coupon : null, order.subtotal, order.currency);
+        order.total = order.subtotal - order.discount + order.shipping;
       }
     }
 
@@ -670,6 +760,7 @@ r.post(
     order.edits.push({ by: 'customer', summary: `Cancelled the order${reason ? ` (${reason})` : ''}` });
     await order.save();
     await release(order.items.map((i) => ({ product: i.product, qty: i.qty })));
+    if (order.coupon?.code) await releaseCoupon(order.coupon.code);
     res.json(customerView(order.toObject()));
   })
 );

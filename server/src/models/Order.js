@@ -32,6 +32,9 @@ const orderSchema = new mongoose.Schema(
     ],
     currency: { type: String, enum: ['INR', 'AED'], required: true },
     subtotal: Number,
+    // Coupon discount (whole units), taken off the subtotal. total = subtotal - discount + shipping.
+    discount: { type: Number, default: 0 },
+    coupon: { code: String, type: { type: String }, percent: Number, amount: Number, maxDiscount: Number },
     shipping: Number,
     total: Number,
     paymentMethod: { type: String, default: 'pay-on-confirmation' },
@@ -56,5 +59,6 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ user: 1 });
 orderSchema.index({ 'customer.email': 1 });
+orderSchema.index({ 'coupon.code': 1, user: 1 });
 
 export default mongoose.model('Order', orderSchema);

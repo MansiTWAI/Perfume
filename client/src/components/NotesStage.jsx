@@ -54,24 +54,38 @@ export default function NotesStage({ className, ...scene }) {
   const ref = useRef(null);
   const [enabled] = useState(() => !lowPower() && hasWebGL());
   const [calm] = useState(prefersCalm);
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
+  // The 3D code (a large download) is fetched only once the layer nears the screen.
+  const [seen, setSeen] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!enabled || !ref.current) return;
-    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { rootMargin: '200px' });
+    const io = new IntersectionObserver(
+      ([e]) => {
+        setVisible(e.isIntersecting);
+        if (e.isIntersecting) setSeen(true);
+      },
+      { rootMargin: '600px 0px' }
+    );
     io.observe(ref.current);
     return () => io.disconnect();
   }, [enabled]);
 
   if (!enabled) return null;
   return (
-    <div ref={ref} className={cx('notes-stage', ready && 'is-ready', className)} aria-hidden="true">
-      <SceneBoundary>
-        <Suspense fallback={null}>
-          <NotesScene {...scene} calm={calm} active={visible} onReady={() => setReady(true)} />
-        </Suspense>
-      </SceneBoundary>
+    <div
+      ref={ref}
+      className={cx('pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-[1400ms] [&_canvas]:outline-none', ready && 'opacity-100', className)}
+      aria-hidden="true"
+    >
+      {seen && (
+        <SceneBoundary>
+          <Suspense fallback={null}>
+            <NotesScene {...scene} calm={calm} active={visible} onReady={() => setReady(true)} />
+          </Suspense>
+        </SceneBoundary>
+      )}
     </div>
   );
 }

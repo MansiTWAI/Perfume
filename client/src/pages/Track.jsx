@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Thumb } from '../components/Img';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Seo from '../components/Seo';
@@ -73,7 +74,7 @@ export default function Track() {
               <OrderTimeline status={order.status} stages={order.stages} history={order.history} />
               <ul className="track-items">
                 {order.items.map((it) => (
-                  <li key={it.name}><img src={it.image} alt="" width="48" height="48" />{it.name} × {it.qty}</li>
+                  <li key={it.name}><Thumb src={it.image} width={48} height={48} />{it.name} × {it.qty}</li>
                 ))}
               </ul>
               {reviewable.length > 0 && (

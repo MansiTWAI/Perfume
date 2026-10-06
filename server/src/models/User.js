@@ -1,14 +1,34 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+export const ROLES = ['customer', 'admin', 'manager', 'support'];
+export const STAFF_ROLES = ['admin', 'manager', 'support'];
+
+// "+91 91112 79997", "0091-9111279997" → "+919111279997". Numbers without a
+// country code are kept as digits only.
+export function normalizePhone(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  let digits = s.replace(/\D/g, '');
+  if (s.startsWith('00')) digits = digits.slice(2);
+  return s.startsWith('+') || s.startsWith('00') ? `+${digits}` : digits;
+}
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+    // admin: everything; manager: catalogue, orders, coupons, content;
+    // support: orders, customers and reviews. Never taken from the client.
+    role: { type: String, enum: ROLES, default: 'customer' },
+    // Blocked accounts cannot sign in; their tokens stop working.
+    status: { type: String, enum: ['active', 'blocked'], default: 'active' },
     // Saved on the profile and used to fill in checkout.
     phone: { type: String, trim: true, maxlength: 40 },
+    // The phone in one comparable form (+ and digits), for sign-in by phone or OTP.
+    phoneNormalized: { type: String, index: true },
+    phoneVerified: { type: Boolean, default: false },
     address: {
       line1: { type: String, trim: true, maxlength: 200 },
       line2: { type: String, trim: true, maxlength: 200 },
@@ -28,6 +48,15 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+userSchema.pre('save', function (next) {
+  if (this.isModified('phone')) {
+    const n = normalizePhone(this.phone);
+    if (n !== this.phoneNormalized) this.phoneVerified = false;
+    this.phoneNormalized = n || undefined;
+  }
+  next();
+});
+
 userSchema.methods.checkPassword = function (password) {
   return bcrypt.compare(password, this.passwordHash);
 };
@@ -41,7 +70,9 @@ userSchema.methods.toSafe = function () {
     name: this.name,
     email: this.email,
     role: this.role,
+    status: this.status || 'active',
     phone: this.phone || '',
+    phoneVerified: !!this.phoneVerified,
     address: { line1: a.line1 || '', line2: a.line2 || '', city: a.city || '', state: a.state || '', postalCode: a.postalCode || '', region: a.region || '' },
     createdAt: this.createdAt,
   };

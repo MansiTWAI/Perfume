@@ -7,7 +7,7 @@ import { useStore } from '../../context/StoreContext';
 
 // On the home stage the notes circle the bottle beside the copy on wide
 // screens (to its right in English, to its left in Arabic) and above it on
-// phones; this matches the placement of .opening-product.
+// phones; this matches the bottle in the notes chapter (NotesChapter).
 function Placement({ stage, mirror, children }) {
   const { viewport, size } = useThree();
   const narrow = viewport.aspect < 1;

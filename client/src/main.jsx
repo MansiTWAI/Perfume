@@ -10,6 +10,7 @@ import './styles/pages.css';
 import './styles/products.css';
 import './styles/admin.css';
 import './styles/gulf.css';
+import './styles/tailwind.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

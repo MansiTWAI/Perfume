@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Thumb } from '../components/Img';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Seo from '../components/Seo';
@@ -26,7 +27,7 @@ function OrderSummary({ cart, subtotal, shipping, region }) {
       <ul>
         {cart.map((i) => (
           <li key={i.slug}>
-            <span className="summary-img"><img src={i.image} alt="" /><b>{i.qty}</b></span>
+            <span className="summary-img"><Thumb src={i.image} /><b>{i.qty}</b></span>
             <span className="summary-name">{i.name}<small dir="ltr">{i.sizeLabel}</small></span>
             <span>{fmt((priceOf(i) || 0) * i.qty)}</span>
           </li>
@@ -117,7 +118,7 @@ export default function Checkout() {
 
   if (!cart.length) {
     return (
-      <section className="section page-pad center checkout">
+      <section className="section page-pad center checkout checkout-empty">
         <Seo title="Checkout" />
         <h1 className="display-l">{t('Your bag is empty')}</h1>
         <p className="section-lede center-block">{t('Choose a fragrance to begin.')}</p>

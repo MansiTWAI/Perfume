@@ -18,8 +18,12 @@ import uploadRoutes, { serveUpload } from './routes/uploads.js';
 import userRoutes from './routes/users.js';
 import cartRoutes from './routes/cart.js';
 import paymentRoutes from './routes/payments.js';
+import accountRoutes from './routes/account.js';
+import storefrontRoutes from './routes/storefront.js';
+import adminRoutes from './routes/admin.js';
 import { openapi, docsPage } from './docs/openapi.js';
 import { errorCodes } from './middleware/errors.js';
+import { envelope } from './middleware/envelope.js';
 import Product from './models/Product.js';
 import Post from './models/Post.js';
 import { publicRegions } from './config/commerce.js';
@@ -40,14 +44,19 @@ app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || true }));
 // The raw body is kept for verifying payment webhook signatures.
 app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
-// Versioned API: /api/v1/... is the stable address for apps; /api/... is the
-// same API (used by the website) and stays as an alias.
+// Versioned API: /api/v1/... is the app contract (every response wrapped as
+// { success, message, data }); /api/... is the same API with plain responses,
+// used by the website and the admin studio.
 app.use((req, res, next) => {
-  if (req.url === '/api/v1' || req.url.startsWith('/api/v1/') || req.url.startsWith('/api/v1?')) req.url = `/api${req.url.slice(7)}`;
+  if (req.url === '/api/v1' || req.url.startsWith('/api/v1/') || req.url.startsWith('/api/v1?')) {
+    req.url = `/api${req.url.slice(7)}`;
+    req.apiV1 = true;
+  }
   if (req.url.startsWith('/api')) res.set('API-Version', '1');
   next();
 });
 app.use(errorCodes);
+app.use(envelope);
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // Every request waits for the (cached) database connection. On serverless
@@ -82,7 +91,10 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', cartRoutes); // /api/cart and /api/wishlist
+app.use('/api', accountRoutes); // /me, /addresses, /devices, /checkout/preview, /coupons/validate
+app.use('/api', storefrontRoutes); // /config, /categories, /search, /home
 app.use('/api', contactRoutes);
 
 // Renamed page: keep old links and search results working.

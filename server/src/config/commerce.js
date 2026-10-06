@@ -45,6 +45,22 @@ export const ORDER_STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', '
 export const ORDER_CANCELLED = 'Cancelled';
 export const ORDER_STATUSES = [...ORDER_STAGES, ORDER_CANCELLED];
 
+// Machine-readable order statuses for apps. The stored status stays the
+// readable label the website and admin studio show.
+export function statusKey(order) {
+  if (order.status === ORDER_CANCELLED) return order.paymentStatus === 'refunded' ? 'refunded' : 'cancelled';
+  if (order.status === 'Order Placed') return order.paymentMethod === 'online' && order.paymentStatus !== 'paid' ? 'pending_payment' : 'placed';
+  return { Confirmed: 'confirmed', Packed: 'packed', Shipped: 'shipped', 'Out for Delivery': 'out_for_delivery', Delivered: 'delivered' }[order.status] || 'placed';
+}
+// Status keys an admin may send, and the stored label each one sets.
+export const STATUS_FROM_KEY = {
+  placed: 'Order Placed', pending_payment: 'Order Placed', confirmed: 'Confirmed', processing: 'Confirmed',
+  packed: 'Packed', shipped: 'Shipped', in_transit: 'Shipped', out_for_delivery: 'Out for Delivery',
+  delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Cancelled',
+};
+
+export const CURRENCY_SYMBOLS = { INR: '₹', AED: 'د.إ', SAR: 'ر.س', QAR: 'ر.ق', KWD: 'د.ك', OMR: 'ر.ع.', BHD: '.د.ب' };
+
 export const regionByCode = (code) => REGIONS.find((r) => r.code === code);
 
 export function shippingFor(region, subtotal) {

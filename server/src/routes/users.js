@@ -27,13 +27,14 @@ const stats = (list) => ({
 });
 
 // Builds the users pipeline with lifetime and selected-period order stats.
-function usersPipeline(q, period) {
+export function usersPipeline(q, period) {
   const match = {};
-  if (['customer', 'admin'].includes(q.role)) match.role = q.role;
+  if (['customer', 'admin', 'manager', 'support'].includes(q.role)) match.role = q.role;
+  if (['active', 'blocked'].includes(q.status)) match.status = q.status === 'active' ? { $ne: 'blocked' } : 'blocked';
   const text = String(q.q || '').trim().slice(0, 80);
   if (text) {
     const rx = new RegExp(escapeRegex(text), 'i');
-    match.$or = [{ name: rx }, { email: rx }];
+    match.$or = [{ name: rx }, { email: rx }, { phone: rx }];
     if (mongoose.isValidObjectId(text)) match.$or.push({ _id: new mongoose.Types.ObjectId(text) });
   }
   const inPeriod = [];
@@ -71,7 +72,7 @@ function usersPipeline(q, period) {
 }
 
 // Only non-sensitive fields leave the server.
-const shape = (u) => ({
+export const shape = (u) => ({
   id: u._id,
   name: u.name,
   email: u.email,
@@ -84,7 +85,7 @@ const shape = (u) => ({
   period: u.period,
 });
 
-function readPeriod(req, res) {
+export function readPeriod(req, res) {
   try {
     return periodRange(req.query);
   } catch (e) {

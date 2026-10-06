@@ -12,10 +12,32 @@ The spec is checked against the Express routes: every route in the code is docum
 
 | Environment | Base URL |
 | --- | --- |
-| Production | `https://perfume-tau-nine.vercel.app/api/v1` (Vercel; or your custom domain once it is added, see `SITE_URL`) |
+| Production | `https://albarakah.me/api/v1` |
 | Local | `http://localhost:5000/api/v1` (or `http://localhost:5173/api/v1` through the Vite proxy) |
 
-All paths below are relative to the base URL. **Use `/api/v1` in apps**: it is the versioned, stable address. `/api/...` is the same API without the version (the website uses it) and stays as an alias. Every API response carries the header `API-Version: 1`. Breaking changes, if ever needed, will go to `/api/v2` while `/api/v1` keeps working.
+All paths below are relative to the base URL. **Use `/api/v1` in the app and the admin panel.** `/api/...` is the same API with plain response bodies; the website and the admin studio use it. Every API response carries the header `API-Version: 1`. Breaking changes, if ever needed, will go to `/api/v2` while `/api/v1` keeps working.
+
+## Response format (/api/v1)
+
+Every response has the same envelope:
+
+```json
+{ "success": true, "message": "Products fetched successfully", "data": { } }
+```
+
+Paginated lists put the list in `data` and add `pagination`:
+
+```json
+{ "success": true, "message": "Products fetched successfully", "data": [ ], "pagination": { "page": 1, "limit": 20, "total": 125, "totalPages": 7 } }
+```
+
+Errors:
+
+```json
+{ "success": false, "message": "Validation failed", "code": "VALIDATION_ERROR", "errors": [ { "field": "phone", "message": "Invalid phone number" } ] }
+```
+
+`errors` is present on validation failures. The examples further down show the `data` part.
 
 ## Headers
 
@@ -29,8 +51,8 @@ Responses are JSON (`application/json`), except Excel downloads (`.xlsx`, with `
 
 ## Authentication and the token flow
 
-1. `POST /auth/register` `{ name, email, password }` or `POST /auth/login` `{ email, password }`.
-2. The response is `{ token, refreshToken, user }`. Store both tokens securely (Keychain / Keystore on mobile).
+1. `POST /auth/register` `{ name, email, phone, password }` or `POST /auth/login` `{ identifier, password }` (identifier = email or phone). Or sign in by WhatsApp code: `POST /auth/send-otp` `{ phone, purpose: "login" }`, then `POST /auth/verify-otp` `{ phone, otp, purpose: "login" }`.
+2. The response is `{ accessToken, refreshToken, user }` (`token` is the same as `accessToken`). Store both tokens securely (Keychain / Keystore on mobile).
 3. Send `Authorization: Bearer <token>` on every request that needs a signed-in user.
 4. The access `token` is a JWT valid for **7 days**. The `refreshToken` is valid for **60 days** and can be used **once**.
 5. On a `401` from any endpoint, call `POST /auth/refresh` `{ refreshToken }`. It returns a **new** `token` and a **new** `refreshToken`; save both (the old refresh token no longer works). If refresh also returns `401`, ask the customer to sign in again.
@@ -50,12 +72,14 @@ Responses are JSON (`application/json`), except Excel downloads (`.xlsx`, with `
 POST /api/auth/login
 Content-Type: application/json
 
-{ "email": "mansi@example.com", "password": "a-long-password" }
+{ "identifier": "mansi@example.com", "password": "a-long-password" }
 ```
 
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIs…",
+  "accessToken": "eyJhbGciOiJIUzI1NiIs…",
+  "refreshToken": "q3Zb7…Xk",
   "user": {
     "id": "6a1f0c2e9b1d4c0000000001",
     "name": "Mansi Shukla",
@@ -135,19 +159,26 @@ The full list is the `Error.code` enum in `/api/openapi.json`.
 
 | Area | Endpoints |
 | --- | --- |
-| Health & settings | `GET /health`, `GET /settings`, `GET /geo` |
-| Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/logout-all`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `GET /auth/me` |
-| Profile & address | `PATCH /auth/me` (name, phone, saved address), `POST /auth/me/email`, `POST /auth/me/password` |
-| Products, search & filter | `GET /products`, `GET /products/{slug}` |
-| Cart | `GET /cart`, `PUT /cart`, `DELETE /cart`, `POST /cart/items`, `PATCH /cart/items/{slug}`, `DELETE /cart/items/{slug}` |
-| Wishlist | `GET /wishlist`, `POST /wishlist/{slug}`, `DELETE /wishlist/{slug}` |
-| Checkout & orders | `POST /orders`, `GET /orders/mine`, `GET /orders/{orderId}`, `PATCH /orders/mine/{orderId}`, `POST /orders/mine/{orderId}/cancel` |
-| Order status | `GET /orders/{orderId}` (signed in), `GET /orders/track/{trackingId}?email=` (public) |
-| Payments | `POST /payments/razorpay/order`, `POST /payments/razorpay/verify`, `POST /payments/razorpay/webhook`; methods per market in `GET /settings` |
-| Reviews | `GET /reviews/product/{slug}`, `GET /reviews/eligible/{trackingId}?email=`, `POST /reviews` |
-| Journal | `GET /posts`, `GET /posts/categories`, `GET /posts/{slug}` |
-| Contact | `POST /enquiries`, `POST /subscribers` |
-| Admin | products, journal, orders, Excel import/export, users, reviews, enquiries, subscribers, uploads — see `/api/docs` (tags starting "Admin") |
+| Health & config | `GET /health`, `GET /config` (countries, currencies, symbols), `GET /settings`, `GET /geo` |
+| Auth | `POST /auth/register` (name, email, phone, password), `POST /auth/login` (`identifier` = email or phone), `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/logout-all`, `POST /auth/send-otp`, `POST /auth/verify-otp`, `POST /auth/forgot-password`, `POST /auth/reset-password` |
+| Profile | `GET /me`, `PUT /me`, `POST /me/change-password` (also `GET/PATCH /auth/me`, `POST /auth/me/email`, `POST /auth/me/password`) |
+| Home & catalogue | `GET /home`, `GET /categories`, `GET /products` (page, limit, search, category, gender, minPrice, maxPrice, sort, currency/country), `GET /products/{id}`, `GET /products/featured`, `GET /products/bestsellers`, `GET /products/new-arrivals`, `GET /search` |
+| Wishlist | `GET /wishlist`, `POST /wishlist` `{ productId }`, `DELETE /wishlist/{productId}` |
+| Cart | `GET /cart`, `POST /cart/items` `{ productId, quantity }`, `PATCH /cart/items/{productId}`, `DELETE /cart/items/{productId}`, `DELETE /cart`, `PUT /cart` |
+| Addresses | `GET /addresses`, `POST /addresses`, `PUT /addresses/{id}`, `DELETE /addresses/{id}` |
+| Checkout & coupons | `POST /checkout/preview`, `POST /coupons/validate` |
+| Orders | `POST /orders` (app: `{ addressId, paymentMethod, couponCode }` from the cart), `GET /orders`, `GET /orders/{id}`, `GET /orders/{id}/tracking`, `PATCH /orders/mine/{id}`, `POST /orders/mine/{id}/cancel`, `GET /orders/track/{trackingId}?email=` (public) |
+| Payments | `POST /payments/create-order`, `POST /payments/verify`, `POST /payments/webhook`, `GET /payments/{paymentId}` (also `/payments/razorpay/*`) |
+| Reviews | `GET /products/{productId}/reviews`, `POST /products/{productId}/reviews` |
+| Devices | `POST /devices/register`, `DELETE /devices/{id}` |
+| Journal & contact | `GET /posts`, `GET /posts/{slug}`, `POST /enquiries`, `POST /subscribers` |
+| Admin API (`/admin`) | products (+ `/status`), categories, orders (+ `/status`, `/cancel`), customers (+ `/status`, `/role`), coupons, reviews (+ `/approve`, `/reject`), home, banners, audit-logs |
+
+Products are addressed by **id or slug** everywhere. On `/api/v1` a product has the app shape: `id`, `price` in the requested currency, `compareAtPrice`, `currency`, `volumeMl`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus all stored fields (`prices` holds every currency).
+
+**Order status keys** (`statusKey` on orders, `status` in tracking): `placed`, `pending_payment`, `confirmed`, `packed`, `shipped`, `out_for_delivery`, `delivered`, `cancelled`, `refunded`. Admins may also send `processing` (→ confirmed) and `in_transit` (→ shipped).
+
+**Roles:** `customer`, `admin` (everything), `manager` (products, categories, orders, customers, coupons, reviews, homepage), `support` (orders, customers, reviews). Roles are set by an admin (`PATCH /admin/customers/{id}/role`), never by the app.
 
 ## Cart and wishlist
 
@@ -210,6 +241,7 @@ The amount is always the saved order total; the key secret never leaves the serv
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| **1.5.0** | 2026-10-06 | App contract on `/api/v1`: `{ success, message, data, pagination }` envelope; login by email or phone (`identifier`), `phone` on register, `accessToken`; WhatsApp OTP (`/auth/send-otp`, `/auth/verify-otp`); `/me`; `/config`, `/home`, `/categories`, `/search`; products by id, featured / bestsellers / new arrivals, gender filter, pagination, app product shape; wishlist and cart by `productId`; address book; `/checkout/preview`; coupons; orders from the cart with coupon; `/orders/{id}/tracking`; payment aliases and `/payments/{paymentId}`; product reviews; push device tokens; `/admin` API with manager and support roles, customer blocking, CMS (home, banners), audit log. `/api` (website) unchanged. |
 | **1.4.0** | 2026-09-29 | `/api/v1` versioned base path (`/api` stays as an alias); `code` on every error; refresh tokens (`/auth/refresh`), `/auth/logout`, `/auth/logout-all`; password reset by email; a password change signs out other devices and returns a fresh session; online payment with Razorpay (`/payments/razorpay/*`, `canPayOnline` on orders, `online` payment method); sign-in rate limiting; fully typed Product and Order models in the spec. Additive: existing clients keep working. |
 | 1.3.0 | 2026-09-29 | Cart and wishlist APIs; product search/filter/sort; customer order details, editing and cancelling; profile and address; Admin users, Excel import/export, order filters; OpenAPI spec and `/api/docs`. |
 

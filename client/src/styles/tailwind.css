@@ -1,0 +1,8 @@
+/* Tailwind utilities for the homepage story. No preflight: see tailwind.config.js. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-ghost { color: transparent; -webkit-text-stroke: 1px rgba(210, 182, 132, 0.4); }
+}

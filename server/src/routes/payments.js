@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import Order from '../models/Order.js';
-import { optionalAuth, asyncHandler } from '../middleware/auth.js';
+import mongoose from 'mongoose';
+import { optionalAuth, requireAuth, asyncHandler } from '../middleware/auth.js';
 import { razorpayConfigured, ONLINE_CURRENCIES, createRazorpayOrder, verifyPaymentSignature, verifyWebhookSignature } from '../services/razorpay.js';
 
 // Online payment for an order that has already been placed (POST /orders).
@@ -11,10 +12,11 @@ const payLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, message: { m
 
 // The customer proves the order is theirs by signing in, or with the email
 // used at checkout (the same proof as order tracking).
+// The order is given as orderNumber (e.g. AB-26K7Q2M) or orderId (that, or the id).
 async function findPayable(req) {
-  const orderNumber = String(req.body?.orderNumber || '').toUpperCase().trim();
+  const key = String(req.body?.orderNumber || req.body?.orderId || '').trim();
   const email = String(req.body?.email || '').toLowerCase().trim();
-  const order = orderNumber && (await Order.findOne({ orderNumber }));
+  const order = key && (await Order.findOne(mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() }));
   const mine = order && ((req.user && (String(order.user) === String(req.user._id) || order.customer.email === req.user.email)) || (email && order.customer.email === email));
   if (!mine) throw Object.assign(new Error('We could not find this order in your account.'), { status: 404 });
   return order;
@@ -22,11 +24,7 @@ async function findPayable(req) {
 
 const fail = (res, e) => res.status(e.status || 400).json({ message: e.message });
 
-r.post(
-  '/razorpay/order',
-  payLimiter,
-  optionalAuth,
-  asyncHandler(async (req, res) => {
+const createPayment = asyncHandler(async (req, res) => {
     if (!razorpayConfigured()) return res.status(503).json({ message: 'Online payment is not set up yet. Please choose another payment method.' });
     let order;
     try {
@@ -60,8 +58,9 @@ r.post(
       description: `Order ${order.orderNumber}`,
       prefill: { name: order.customer.name, email: order.customer.email, contact: order.customer.phone },
     });
-  })
-);
+});
+r.post('/razorpay/order', payLimiter, optionalAuth, createPayment);
+r.post('/create-order', payLimiter, optionalAuth, createPayment);
 
 // Marks an order paid. Idempotent.
 async function markPaid(order, paymentId, note) {
@@ -78,11 +77,7 @@ async function markPaid(order, paymentId, note) {
 }
 
 // Called by the app/website right after Razorpay Checkout succeeds.
-r.post(
-  '/razorpay/verify',
-  payLimiter,
-  optionalAuth,
-  asyncHandler(async (req, res) => {
+const verifyPayment = asyncHandler(async (req, res) => {
     if (!razorpayConfigured()) return res.status(503).json({ message: 'Online payment is not set up yet. Please choose another payment method.' });
     let order;
     try {
@@ -95,15 +90,14 @@ r.post(
       return res.status(400).json({ message: 'The payment could not be verified. If money left your account, contact us with your Order ID.' });
     }
     await markPaid(order, paymentId, 'Payment received. Thank you.');
-    res.json({ ok: true, orderNumber: order.orderNumber, paymentStatus: order.paymentStatus, status: order.status });
-  })
-);
+    res.json({ ok: true, message: 'Payment verified', orderNumber: order.orderNumber, paymentStatus: order.paymentStatus, status: order.status });
+});
+r.post('/razorpay/verify', payLimiter, optionalAuth, verifyPayment);
+r.post('/verify', payLimiter, optionalAuth, verifyPayment);
 
 // Razorpay webhook (Dashboard → Webhooks: payment.captured, order.paid), in
 // case the customer closes the page before /verify runs.
-r.post(
-  '/razorpay/webhook',
-  asyncHandler(async (req, res) => {
+const webhook = asyncHandler(async (req, res) => {
     if (!verifyWebhookSignature(req.rawBody, req.get('x-razorpay-signature'))) return res.status(400).json({ message: 'Invalid signature.' });
     const event = req.body?.event;
     const payment = req.body?.payload?.payment?.entity;
@@ -113,6 +107,32 @@ r.post(
       if (order) await markPaid(order, payment?.id, 'Payment received. Thank you.');
     }
     res.json({ ok: true });
+});
+r.post('/razorpay/webhook', webhook);
+r.post('/webhook', webhook);
+
+// The payment of one of the signed-in customer's orders, by the provider's
+// payment id (pay_…) or order id (order_…).
+r.get(
+  '/:paymentId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const id = String(req.params.paymentId).trim();
+    const order = await Order.findOne({ $or: [{ 'payment.providerPaymentId': id }, { 'payment.providerOrderId': id }] }).lean();
+    const mine = order && (req.user.role === 'admin' || String(order.user) === String(req.user._id) || order.customer.email === req.user.email);
+    if (!mine) return res.status(404).json({ message: 'Payment not found.' });
+    res.json({
+      paymentId: order.payment?.providerPaymentId || null,
+      provider: order.payment?.provider || null,
+      providerOrderId: order.payment?.providerOrderId || null,
+      orderId: String(order._id),
+      orderNumber: order.orderNumber,
+      amount: order.total,
+      amountMinor: order.payment?.amount || Math.round(order.total * 100),
+      currency: order.currency,
+      status: order.paymentStatus,
+      paidAt: order.payment?.paidAt || null,
+    });
   })
 );
 

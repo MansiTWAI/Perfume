@@ -67,6 +67,11 @@ export default function Header() {
   useEffect(() => {
     stopScroll(menu);
     document.body.style.overflow = menu ? 'hidden' : '';
+    if (!menu) return;
+    // Escape closes the menu, as it does the bag and search.
+    const onKey = (e) => e.key === 'Escape' && setMenu(false);
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
   }, [menu]);
 
   return (

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Thumb } from './Img';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
@@ -60,7 +61,7 @@ export default function CartDrawer() {
                   <AnimatePresence initial={false}>
                     {cart.map((i) => (
                       <motion.li key={i.slug} layout initial={{ opacity: 0, x: dir === 'rtl' ? -30 : 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, height: 0, marginBlock: 0 }}>
-                        <img src={i.image} alt="" width="84" height="104" />
+                        <Thumb src={i.image} width={84} height={104} />
                         <div>
                           <Link to={`/fragrances/${i.slug}`} onClick={() => setCartOpen(false)} className="di-name">{i.name}</Link>
                           <p className="di-sub">{i.subtitle === 'Eau de Parfum' ? t('Eau de Parfum') : i.subtitle} · <span dir="ltr">{i.sizeLabel}</span></p>

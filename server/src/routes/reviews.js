@@ -9,13 +9,13 @@ const r = Router();
 const submitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, message: { message: 'Too many reviews from this connection. Please try again later.' } });
 
 // Public name: first name and initial only ("Ayesha K.").
-function displayName(full) {
+export function displayName(full) {
   const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return 'Verified buyer';
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.` : parts[0];
 }
 
-const publicReview = (x) => ({
+export const publicReview = (x) => ({
   _id: x._id,
   name: x.name,
   city: x.city,

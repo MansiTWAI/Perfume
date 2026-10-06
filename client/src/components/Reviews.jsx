@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { Thumb } from './Img';
 import { Link } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { api } from '../lib/api';
@@ -125,7 +126,7 @@ export function ReviewForm({ trackingId, email, item, onDone }) {
   return (
     <form className="form review-form" onSubmit={submit}>
       <div className="review-form-head">
-        <img src={item.image} alt="" width="56" height="56" />
+        <Thumb src={item.image} width={56} height={56} />
         <div>
           <p className="eyebrow">{t('Review your fragrance')}</p>
           <h3>{item.name}</h3>

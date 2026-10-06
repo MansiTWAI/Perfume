@@ -6,10 +6,11 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/commerce.js';
 import { code } from '../utils.js';
+import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
-export async function placeOrder({ items = [], customer, regionCode = 'IN', paymentMethod, giftNote, userId, historyNote = 'We have received your order.' }) {
+export async function placeOrder({ items = [], customer, regionCode = 'IN', paymentMethod, giftNote, userId, couponCode, historyNote = 'We have received your order.' }) {
   const region = regionByCode(regionCode);
   if (!region?.ships) throw fail(400, 'We do not deliver to this country yet. Please contact us on WhatsApp.');
   const { currency } = region;
@@ -20,6 +21,18 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
   }
   const methods = paymentsFor(region);
   const method = methods.includes(paymentMethod) ? paymentMethod : methods[0];
+
+  // Check the coupon against the database prices before reserving anything.
+  const priceOf = new Map();
+  for (const it of items.slice(0, 20)) {
+    const p = await Product.findOne({ slug: it.slug, published: true }).select('slug price').lean();
+    if (p) priceOf.set(p.slug, p.price[currency]);
+  }
+  let coupon = null;
+  if (couponCode) {
+    const subtotal = items.slice(0, 20).reduce((n, it) => n + (priceOf.get(it.slug) || 0) * Math.min(Math.max(parseInt(it.qty, 10) || 1, 1), 10), 0);
+    coupon = await checkCoupon(couponCode, { subtotal, currency, user: userId ? { _id: userId } : null });
+  }
 
   const lines = [];
   for (const it of items.slice(0, 20)) {
@@ -50,27 +63,45 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
     unitPrice: p.price[currency],
   }));
   const subtotal = orderItems.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+  // Delivery is judged on the subtotal before the discount.
   const shipping = shippingFor(region, subtotal);
+  const discount = coupon ? discountFor(coupon.rule, subtotal, currency) : 0;
+  const undoStock = async () => {
+    for (const x of reserved) await Product.updateOne({ _id: x.p._id }, { $inc: { stock: x.qty } });
+  };
+  if (coupon && !(await claimCoupon(coupon.rule.code))) {
+    await undoStock();
+    throw Object.assign(fail(409, 'This coupon has been fully used.'), { code: 'COUPON_EXPIRED' });
+  }
 
-  return Order.create({
-    orderNumber: 'AB-' + new Date().getFullYear().toString().slice(2) + code(5),
-    trackingId: 'ABL' + code(9),
-    user: userId,
-    customer: { ...customer, address: { ...a, country: region.name } },
-    items: orderItems,
-    currency,
-    subtotal,
-    shipping,
-    total: subtotal + shipping,
-    paymentMethod: method,
-    giftNote: giftNote?.enabled
-      ? {
-          enabled: true,
-          name: String(giftNote.name || '').slice(0, 40),
-          occasion: String(giftNote.occasion || '').slice(0, 40),
-          message: String(giftNote.message || '').slice(0, 160),
-        }
-      : { enabled: false },
-    history: [{ status: ORDER_STAGES[0], note: historyNote }],
-  });
+  try {
+    return await Order.create({
+      orderNumber: 'AB-' + new Date().getFullYear().toString().slice(2) + code(5),
+      trackingId: 'ABL' + code(9),
+      user: userId,
+      customer: { ...customer, address: { ...a, country: region.name } },
+      items: orderItems,
+      currency,
+      subtotal,
+      discount,
+      ...(coupon && { coupon: coupon.rule }),
+      shipping,
+      total: subtotal - discount + shipping,
+      paymentMethod: method,
+      giftNote: giftNote?.enabled
+        ? {
+            enabled: true,
+            name: String(giftNote.name || '').slice(0, 40),
+            occasion: String(giftNote.occasion || '').slice(0, 40),
+            message: String(giftNote.message || '').slice(0, 160),
+          }
+        : { enabled: false },
+      history: [{ status: ORDER_STAGES[0], note: historyNote }],
+    });
+  } catch (e) {
+    // Nothing was ordered: give back the stock and the coupon use.
+    await undoStock();
+    if (coupon) await releaseCoupon(coupon.rule.code);
+    throw e;
+  }
 }

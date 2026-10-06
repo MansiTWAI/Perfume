@@ -8,7 +8,8 @@ const ICON = {
   chat: <path d="M4 5h16v11H9l-5 4zM8 9.5h8M8 12.5h5" />,
 };
 
-// The house's service promises, stated for the visitor's own market. Every
+// The house's service promises, stated for the visitor's own market, as a
+// row of four (two on tablets, one on phones). Every
 // line here is something the site actually does; nothing is decorative.
 export default function ServicePromise() {
   const { region, fmt, t } = useStore();
@@ -27,18 +28,19 @@ export default function ServicePromise() {
   ];
 
   return (
-    <section className="promise" aria-label={t('Our promise')}>
-      <div className="container">
-        <ul className="promise-list">
-          {items.map((it, i) => (
-            <Reveal as="li" key={it.icon} delay={i * 0.08}>
-              <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round">{ICON[it.icon]}</svg>
-              <h3>{it.title}</h3>
-              {it.text && <p>{it.text}</p>}
-            </Reveal>
-          ))}
-        </ul>
-      </div>
-    </section>
+    <ul className="mx-auto grid max-w-[calc(var(--max)_-_2*var(--gutter))] list-none grid-cols-1 gap-x-10 gap-y-12 p-0 text-center sm:grid-cols-2 lg:grid-cols-4" aria-label={t('Our promise')}>
+      {items.map((it, i) => (
+        <Reveal
+          as="li"
+          key={it.icon}
+          delay={i * 0.08}
+          className="grid content-start justify-items-center gap-2.5"
+        >
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" className="mb-1.5 text-gold-soft">{ICON[it.icon]}</svg>
+          <h3 className="font-display text-[clamp(19px,1.5vw,22px)] leading-tight">{it.title}</h3>
+          {it.text && <p className="text-[14.5px] leading-relaxed text-mute">{it.text}</p>}
+        </Reveal>
+      ))}
+    </ul>
   );
 }

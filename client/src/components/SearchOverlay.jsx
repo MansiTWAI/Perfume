@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Thumb } from './Img';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
@@ -101,7 +102,7 @@ export default function SearchOverlay() {
                       {matches.map(({ p, why }) => (
                         <li key={p.slug}>
                           <Link to={`/fragrances/${p.slug}`} onClick={close} className="search-product">
-                            <img src={p.images?.[0]?.src} alt="" width="64" height="84" />
+                            <Thumb src={p.images?.[0]?.src} width={64} height={84} />
                             <span><b>{p.name}</b><small>{why}</small></span>
                             <span className="search-price">{fmt(priceOf(p))}</span>
                           </Link>

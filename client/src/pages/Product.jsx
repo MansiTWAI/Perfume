@@ -7,7 +7,7 @@ import { Accordion, Loading } from '../components/Bits';
 import FragranceNotes from '../components/FragranceNotes';
 import ProductCard from '../components/ProductCard';
 import AutoVideo from '../components/AutoVideo';
-import Img from '../components/Img';
+import Img, { Thumb } from '../components/Img';
 import FloatingProduct from '../components/FloatingProduct';
 import { renderFor } from '../lib/renders';
 import { useProduct } from '../hooks/useProducts';
@@ -312,7 +312,7 @@ export default function Product() {
       <AnimatePresence>
         {showBar && (
           <motion.div className="buybar" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ duration: 0.45, ease: [0.2, 0.7, 0.2, 1] }}>
-            <img src={p.images?.[0]?.src} alt="" width="44" height="44" />
+            <Thumb src={p.images?.[0]?.src} width={44} height={44} />
             <div className="buybar-text"><b>{p.name}</b><span>{fmt(price)}</span></div>
             <button className="btn btn-primary" disabled={soldOut} onClick={(e) => add(e.currentTarget.parentElement.querySelector('img'))}>{t(soldOut ? 'Sold out' : 'Add to bag')}</button>
           </motion.div>

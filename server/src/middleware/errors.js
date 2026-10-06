@@ -74,4 +74,11 @@ export function errorCodes(_req, res, next) {
   next();
 }
 
-export const ERROR_CODES = [...new Set([...BY_MESSAGE.map(([, c]) => c), ...Object.values(BY_STATUS), 'ERROR'])].sort();
+// Codes that routes always set themselves.
+const SET_BY_ROUTES = [
+  'COUPON_INVALID', 'COUPON_EXPIRED', 'COUPON_MIN_NOT_MET', 'COUPON_ALREADY_USED',
+  'OTP_INVALID', 'OTP_EXPIRED', 'OTP_NOT_CONFIGURED', 'ACCOUNT_NOT_FOUND', 'ACCOUNT_BLOCKED',
+  'ADDRESS_NOT_FOUND', 'INVALID_STATUS',
+];
+
+export const ERROR_CODES = [...new Set([...BY_MESSAGE.map(([, c]) => c), ...Object.values(BY_STATUS), ...SET_BY_ROUTES, 'ERROR'])].sort();
