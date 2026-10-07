@@ -65,16 +65,20 @@ r.post(
     const ext = path.extname(req.file.originalname).toLowerCase();
     const base = `${slugify(path.basename(req.file.originalname, ext)) || 'image'}-${code(5).toLowerCase()}`;
     const cfg = cloudinaryConfig();
+    let warning;
     if (cfg) {
       try {
         return res.status(201).json({ src: await toCloudinary(cfg, req.file, base), storage: 'cloud' });
-      } catch (e) {
-        return res.status(e.status || 502).json({ message: e.message });
+      } catch {
+        // Cloudinary refused (e.g. a key without upload permission) or is
+        // down: keep the image in the database so the upload still works.
+        // The reason is in the server log.
+        warning = 'Cloud storage refused this image, so it was saved on our own server instead.';
       }
     }
     const name = base + ext;
     await Media.create({ name, contentType: req.file.mimetype, size: req.file.size, data: req.file.buffer });
-    res.status(201).json({ src: `/uploads/${name}`, storage: 'database' });
+    res.status(201).json({ src: `/uploads/${name}`, storage: 'database', ...(warning && { warning }) });
   })
 );
 

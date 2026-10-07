@@ -22,6 +22,10 @@ import { ORDER_STATUSES, ORDER_CANCELLED, STATUS_FROM_KEY, statusKey } from '../
 import { productQuery, createProduct, updateProduct, deleteProduct } from './products.js';
 import { listOrders, updateOrder } from './orders.js';
 import { refundOrder, reconcile } from '../services/payments.js';
+import Lead, { LEAD_STATUSES } from '../models/Lead.js';
+import ChatSession from '../models/ChatSession.js';
+import { leadFilter, leadSort, askLeads } from '../services/ai/adminAi.js';
+import { geminiConfigured } from '../services/ai/gemini.js';
 import { usersPipeline, shape, readPeriod } from './users.js';
 import { publicCoupon } from '../services/coupons.js';
 import { getHome } from './storefront.js';
@@ -233,6 +237,79 @@ r.post(
     if (!(await resolveOrder(req, res))) return;
     const o = await reconcile(await Order.findById(req.params.id));
     res.json({ ...o.toObject(), id: String(o._id), statusKey: statusKey(o) });
+  })
+);
+
+// ----- AI leads (from the website concierge) -----
+// Filters: q (name/email/phone/product), status, hot, minScore, callback,
+// product, maxBudget, currency, period, needsFollowUp; sort score|recent|oldest.
+r.get(
+  '/leads',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    const p = page(req.query);
+    const f = leadFilter(req.query);
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      f.$and = [...(f.$and || []), { $or: [{ name: rx }, { email: rx }, { phone: rx }, { interestedProducts: rx }, { summary: rx }] }];
+    }
+    const [items, total, counts] = await Promise.all([
+      Lead.find(f).sort(leadSort(req.query.sort)).skip((p.page - 1) * p.limit).limit(p.limit).lean(),
+      Lead.countDocuments(f),
+      Lead.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
+    ]);
+    res.json({ ...paged(items, total, p), counts: Object.fromEntries(counts.map((c) => [c._id, c.n])), aiEnabled: geminiConfigured() });
+  })
+);
+r.get(
+  '/leads/:id',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    if (!validId(req.params.id)) return res.status(404).json({ message: 'Lead not found.' });
+    const lead = await Lead.findById(req.params.id).lean();
+    if (!lead) return res.status(404).json({ message: 'Lead not found.' });
+    const chats = await ChatSession.find({ sessionId: { $in: lead.sessionIds || [] } }).sort({ createdAt: 1 }).select('messages createdAt lastAt').lean();
+    res.json({ ...lead, conversation: chats.flatMap((c) => c.messages.map((m) => ({ role: m.role, text: m.text, at: m.at }))) });
+  })
+);
+r.patch(
+  '/leads/:id',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    if (!validId(req.params.id)) return res.status(404).json({ message: 'Lead not found.' });
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ message: 'Lead not found.' });
+    const { status, note, followUpAt } = req.body || {};
+    if (status !== undefined) {
+      if (!LEAD_STATUSES.includes(status)) return bad(res, `Status must be one of ${LEAD_STATUSES.join(', ')}.`);
+      lead.status = status;
+    }
+    if (typeof note === 'string' && note.trim()) lead.notes.push({ text: note.trim().slice(0, 1000), by: req.user.email });
+    if (followUpAt !== undefined) {
+      const d = followUpAt ? new Date(followUpAt) : null;
+      if (d && Number.isNaN(d.getTime())) return bad(res, 'followUpAt must be a date.');
+      lead.followUpAt = d || undefined;
+    }
+    await lead.save();
+    res.json(lead);
+  })
+);
+r.post(
+  '/ai/ask',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
+    if (!question) return bad(res, 'Ask a question about your leads.');
+    if (question.length > 400) return bad(res, 'Please keep the question under 400 characters.');
+    try {
+      const { answer, leadIds } = await askLeads(question);
+      const leads = leadIds.length ? await Lead.find({ _id: { $in: leadIds } }).sort({ score: -1 }).lean() : [];
+      res.json({ answer, leads });
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ code: e.code, message: e.message });
+      throw e;
+    }
   })
 );
 

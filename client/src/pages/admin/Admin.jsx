@@ -11,6 +11,7 @@ import { ProductList, ProductEdit } from './Products';
 import { PostList, PostEdit } from './Posts';
 import { Enquiries, Subscribers } from './Inbox';
 import Reviews from './Reviews';
+import Leads from './Leads';
 
 function AdminLogin() {
   const { login } = useStore();
@@ -49,6 +50,7 @@ const NAV = [
   ['/admin/products', 'Products'],
   ['/admin/reviews', 'Reviews'],
   ['/admin/journal', 'Journal'],
+  ['/admin/leads', 'AI leads'],
   ['/admin/enquiries', 'Enquiries'],
   ['/admin/subscribers', 'Subscribers'],
 ];
@@ -83,6 +85,7 @@ export default function Admin() {
           <Route path="reviews" element={<Reviews />} />
           <Route path="journal" element={<PostList />} />
           <Route path="journal/:id" element={<PostEdit />} />
+          <Route path="leads" element={<Leads />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
         </Routes>

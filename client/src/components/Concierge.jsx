@@ -4,6 +4,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { useProducts } from '../hooks/useProducts';
 import { cx, whatsappLink } from '../lib/format';
+import { api } from '../lib/api';
+import ChatConcierge from './ChatConcierge';
+
+// Asked once per page load: is the AI concierge switched on on the server?
+let aiStatus = null;
+const aiEnabled = () => (aiStatus ||= api('/ai/status').then((d) => !!d.enabled).catch(() => false));
 
 const HIDDEN = /^\/(checkout|order)/;
 const TEASER_AFTER = 20000;
@@ -24,6 +30,10 @@ export default function Concierge() {
   const { t, cartOpen } = useStore();
   const [teaser, setTeaser] = useState(false);
   const [pastHero, setPastHero] = useState(false);
+  const [ai, setAi] = useState(false);
+  useEffect(() => {
+    aiEnabled().then(setAi);
+  }, []);
 
   const slug = pathname.match(/^\/fragrances\/([^/]+)/)?.[1];
   const product = slug && products.find((p) => p.slug === slug);
@@ -59,6 +69,10 @@ export default function Concierge() {
   const message = product
     ? t('Hello Al Barakah, I have a question about {name}.', { name: `${product.name} ${product.subtitle}` })
     : t('Hello Al Barakah, I would like help choosing a fragrance.');
+
+  // With the AI concierge on, it takes this place (WhatsApp stays one tap
+  // away inside the chat).
+  if (ai) return <ChatConcierge hidden={hidden} lift={!!product} />;
 
   return (
     <AnimatePresence>

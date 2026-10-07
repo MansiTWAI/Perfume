@@ -14,6 +14,7 @@ process.env.JWT_SECRET = crypto.randomBytes(24).toString('hex');
 process.env.RAZORPAY_KEY_ID = 'rzp_test_FAKEKEY123';
 process.env.RAZORPAY_KEY_SECRET = crypto.randomBytes(16).toString('hex');
 process.env.RAZORPAY_WEBHOOK_SECRET = crypto.randomBytes(16).toString('hex');
+process.env.GEMINI_API_KEY = `test-gemini-${crypto.randomBytes(8).toString('hex')}`;
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mem = await MongoMemoryServer.create();
@@ -26,9 +27,22 @@ export const { default: User } = await import('../src/models/User.js');
 export const { default: Product } = await import('../src/models/Product.js');
 export const { default: Order } = await import('../src/models/Order.js');
 export const { default: PaymentEvent } = await import('../src/models/PaymentEvent.js');
+export const { default: Lead } = await import('../src/models/Lead.js');
+export const { default: ChatSession } = await import('../src/models/ChatSession.js');
 const { signToken } = await import('../src/middleware/auth.js');
 const mongoose = (await import('mongoose')).default;
 await Promise.all([Order.init(), PaymentEvent.init(), Product.init(), User.init()]);
+
+// ----- fake Gemini -----
+// Queue replies with gemini.reply(...): each is a content object, a function
+// (request body) => content, or { status } for an HTTP error. Every request
+// is kept in gemini.requests (url, headers, body) for assertions.
+export const gemini = {
+  queue: [], requests: [],
+  reply(...items) { this.queue.push(...items); },
+  text: (text) => ({ role: 'model', parts: [{ text }] }),
+  call: (name, args = {}) => ({ role: 'model', parts: [{ functionCall: { name, args }, thoughtSignature: 'sig-abc' }] }),
+};
 
 // ----- fake Razorpay -----
 export const rzp = { orders: new Map(), payments: new Map(), refunds: new Map(), down: false, calls: [] };
@@ -37,6 +51,15 @@ const realFetch = globalThis.fetch;
 const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
+  if (u.startsWith('https://generativelanguage.googleapis.com/')) {
+    const body = JSON.parse(opts.body);
+    gemini.requests.push({ url: u, headers: opts.headers, body });
+    const next = gemini.queue.shift();
+    if (!next) return reply(200, { candidates: [{ content: gemini.text('(no scripted reply)') }] });
+    if (next.throw) throw new TypeError('fetch failed');
+    if (next.status) return reply(next.status, { error: { message: 'scripted error' } });
+    return reply(200, { candidates: [{ content: typeof next === 'function' ? next(body) : next }] });
+  }
   if (!u.startsWith('https://api.razorpay.com/v1')) return realFetch(url, opts);
   const auth = Buffer.from(String(opts.headers?.Authorization || '').replace('Basic ', ''), 'base64').toString();
   if (auth !== `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`) return reply(401, { error: { code: 'BAD_REQUEST_ERROR', description: 'Authentication failed' } });
@@ -125,7 +148,9 @@ export async function placeOnline(items, { email = 'buyer@example.test', token, 
 
 export async function reset() {
   await mongoose.connection.db.dropDatabase();
-  await Promise.all([Order, PaymentEvent, Product, User].map((m) => m.createIndexes()));
+  await Promise.all([Order, PaymentEvent, Product, User, Lead, ChatSession].map((m) => m.createIndexes()));
+  gemini.queue.length = 0;
+  gemini.requests.length = 0;
   rzp.orders.clear();
   rzp.payments.clear();
   rzp.refunds.clear();
