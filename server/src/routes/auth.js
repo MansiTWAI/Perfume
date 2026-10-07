@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import User, { normalizePhone } from '../models/User.js';
+import User, { normalizePhone, validPhone, phoneKeys } from '../models/User.js';
 import Order from '../models/Order.js';
 import crypto from 'crypto';
 import RefreshToken from '../models/RefreshToken.js';
@@ -37,7 +37,6 @@ async function session(user, req, family) {
 }
 const revokeAll = (userId) => RefreshToken.updateMany({ user: userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
 const blocked = (res) => res.status(403).json({ code: 'ACCOUNT_BLOCKED', message: 'This account is blocked. Please contact us for help.' });
-const validPhone = (p) => p.replace(/\D/g, '').length >= 8 && p.replace(/\D/g, '').length <= 15;
 
 r.post(
   '/register',
@@ -53,10 +52,12 @@ r.post(
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
     if (String(password).length < 8) return res.status(400).json({ message: 'Use a password of at least 8 characters.', errors: [{ field: 'password', message: 'At least 8 characters' }] });
-    if (phone && !validPhone(phone)) return res.status(400).json({ message: 'Please enter a valid phone number.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
+    // The website always asks for a mobile number; the app API keeps it optional.
+    if (!phone && !req.apiV1) return res.status(400).json({ message: 'Please enter your mobile number.', errors: [{ field: 'phone', message: 'phone is required' }] });
+    if (phone && !validPhone(phone)) return res.status(400).json({ message: 'Please enter a valid mobile number, e.g. +91 98765 43210.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
     const exists = await User.findOne({ email: String(email).toLowerCase() });
     if (exists) return res.status(409).json({ message: 'An account with this email already exists. Sign in instead.' });
-    if (phone && (await User.exists({ phoneNormalized: normalizePhone(phone) }))) {
+    if (phone && (await User.exists({ phoneNormalized: { $in: phoneKeys(phone) } }))) {
       return res.status(409).json({ message: 'An account with this phone number already exists. Sign in instead.' });
     }
     const user = await User.create({ name, email, phone: phone || undefined, passwordHash: await User.hashPassword(password) });
@@ -73,7 +74,7 @@ r.post(
     const id = String(req.body?.identifier || req.body?.email || '').trim();
     const user = id.includes('@')
       ? await User.findOne({ email: id.toLowerCase() })
-      : id && (await User.findOne({ phoneNormalized: normalizePhone(id) }).sort({ createdAt: 1 }));
+      : id && (await User.findOne({ phoneNormalized: { $in: phoneKeys(id) } }).sort({ createdAt: 1 }));
     if (!user || !(await user.checkPassword(String(password || '')))) {
       return res.status(401).json({ message: id.includes('@') || !id ? 'That email and password do not match.' : 'That phone number and password do not match.' });
     }
@@ -102,7 +103,7 @@ r.post(
       return res.status(429).json({ message: 'Too many codes requested for this number. Please wait a moment and try again.' });
     }
     // The same answer whether or not an account uses the number.
-    const account = purpose === 'login' ? await User.findOne({ phoneNormalized: phone }).select('_id status') : req.user;
+    const account = purpose === 'login' ? await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).select('_id status') : req.user;
     const reply = { ok: true, message: 'If this number can sign in, a code is on its way by WhatsApp.', expiresInSeconds: OTP_MINUTES * 60 };
     if (!account || account.status === 'blocked') return res.json(reply);
     const code = newCode();
@@ -141,7 +142,7 @@ r.post(
 
     if (purpose === 'verify_phone') {
       if (!req.user) return res.status(401).json({ message: 'Please sign in to continue.' });
-      if (req.user.phoneNormalized !== phone) {
+      if (!phoneKeys(phone).includes(req.user.phoneNormalized)) {
         req.user.phone = req.body?.phone ? String(req.body.phone).trim().slice(0, 40) : phone;
       }
       await req.user.save(); // the pre-save hook normalises the number
@@ -149,7 +150,7 @@ r.post(
       await req.user.save();
       return res.json({ ok: true, message: 'Your phone number is verified.', user: req.user.toSafe() });
     }
-    const user = await User.findOne({ phoneNormalized: phone }).sort({ createdAt: 1 });
+    const user = await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).sort({ createdAt: 1 });
     if (!user) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'No account uses this phone number yet. Please create an account first.' });
     if (user.status === 'blocked') return blocked(res);
     if (!user.phoneVerified) {
@@ -274,8 +275,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
     }
     if (phone !== undefined) {
       const p = clean(phone, 40);
-      if (p && p.replace(/\D/g, '').length < 6) return res.status(400).json({ message: 'Please enter a valid phone number.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
-      if (p && normalizePhone(p) !== u.phoneNormalized && (await User.exists({ phoneNormalized: normalizePhone(p), _id: { $ne: u._id } }))) {
+      if (p && !validPhone(p)) return res.status(400).json({ message: 'Please enter a valid mobile number, e.g. +91 98765 43210.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
+      if (p && !phoneKeys(p).includes(u.phoneNormalized) && (await User.exists({ phoneNormalized: { $in: phoneKeys(p) }, _id: { $ne: u._id } }))) {
         return res.status(409).json({ message: 'Another account already uses this phone number.' });
       }
       u.phone = p;

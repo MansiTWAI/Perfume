@@ -37,7 +37,7 @@ export default function Reviews() {
             {list.map((r) => (
               <article key={r._id} className={`a-msg a-msg-${r.status === 'pending' ? 'new' : 'closed'}`}>
                 <header>
-                  <b>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</b> · {r.slug.toUpperCase()} · {r.name}{r.city && `, ${r.city}`}
+                  <b>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</b> · {r.slug.toUpperCase()} · {r.name}{r.city && `, ${r.city}`}{r.phone && <> · <span dir="ltr">{r.phone}</span></>}
                   <small>{formatDate(r.createdAt)} · order {r.orderNumber}</small>
                 </header>
                 {r.title && <p><b>{r.title}</b></p>}

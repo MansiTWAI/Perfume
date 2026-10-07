@@ -4,14 +4,36 @@ import bcrypt from 'bcryptjs';
 export const ROLES = ['customer', 'admin', 'manager', 'support'];
 export const STAFF_ROLES = ['admin', 'manager', 'support'];
 
-// "+91 91112 79997", "0091-9111279997" → "+919111279997". Numbers without a
-// country code are kept as digits only.
+// "+91 91112 79997", "0091-9111279997", "09111279997", "9111279997" →
+// "+919111279997". A number without a country code is Indian (+91).
 export function normalizePhone(v) {
   const s = String(v || '').trim();
   if (!s) return '';
   let digits = s.replace(/\D/g, '');
-  if (s.startsWith('00')) digits = digits.slice(2);
-  return s.startsWith('+') || s.startsWith('00') ? `+${digits}` : digits;
+  if (s.startsWith('+')) return `+${digits}`;
+  if (s.startsWith('00')) return `+${digits.slice(2)}`;
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length === 10) return `+91${digits}`;
+  return digits.length > 10 ? `+${digits}` : digits;
+}
+
+// A usable mobile number: 8–15 digits with a country code; Indian numbers
+// are 10 digits starting 6–9.
+export function validPhone(v) {
+  const n = normalizePhone(v);
+  if (!/^\+\d{8,15}$/.test(n)) return false;
+  return n.startsWith('+91') ? /^\+91[6-9]\d{9}$/.test(n) : true;
+}
+
+// Every form a number may be stored in: older accounts kept numbers without
+// a country code as plain digits, so lookups match those too.
+export function phoneKeys(v) {
+  const n = normalizePhone(v);
+  if (!n) return [];
+  const keys = [n];
+  if (n.startsWith('+')) keys.push(n.slice(1));
+  if (/^\+91\d{10}$/.test(n)) keys.push(n.slice(3));
+  return [...new Set(keys)];
 }
 
 const userSchema = new mongoose.Schema(

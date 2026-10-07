@@ -195,7 +195,7 @@ export function UserDetail() {
             <dt>Address</dt>
             <dd>{a ? <>{a.line1}{a.line2 && `, ${a.line2}`}<br />{a.city} {a.state} {a.postalCode}<br />{a.country}</> : '—'}</dd>
           </dl>
-          <p className="a-muted a-hint">Accounts store name and email only; phone and address come from the most recent order.</p>
+          <p className="a-muted a-hint">Phone is the account's mobile number (or the latest order's, for older accounts); address comes from the most recent order.</p>
         </section>
       </div>
     </div>

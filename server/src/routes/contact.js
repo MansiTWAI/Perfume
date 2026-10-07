@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validPhone } from '../models/User.js';
 import rateLimit from 'express-rate-limit';
 import { Enquiry, Subscriber } from '../models/Enquiry.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
@@ -15,6 +16,9 @@ r.post(
     if (!name || !isEmail(email) || !message) {
       return res.status(400).json({ message: 'Please add your name, a valid email and a message.' });
     }
+    // The website asks for a mobile number; the app API keeps it optional.
+    if (!phone && !req.apiV1) return res.status(400).json({ message: 'Please enter your mobile number.', errors: [{ field: 'phone', message: 'phone is required' }] });
+    if (phone && !validPhone(String(phone))) return res.status(400).json({ message: 'Please enter a valid mobile number, e.g. +91 98765 43210.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
     await Enquiry.create({ name, email, phone, topic, message });
     res.status(201).json({ ok: true });
   })

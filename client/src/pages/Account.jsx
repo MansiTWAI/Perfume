@@ -10,7 +10,7 @@ export function AuthForm() {
   const { login, t } = useStore();
   const { search } = useLocation();
   const [mode, setMode] = useState(() => (new URLSearchParams(search).get('new') ? 'register' : 'login'));
-  const [f, setF] = useState({ name: '', email: '', password: '' });
+  const [f, setF] = useState({ name: '', email: '', phone: '', password: '' });
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,7 +21,8 @@ export function AuthForm() {
     setBusy(true);
     setError('');
     try {
-      const d = await api(`/auth/${mode === 'login' ? 'login' : 'register'}`, { method: 'POST', body: f });
+      const signIn = { email: f.email, password: f.password };
+      const d = await api(`/auth/${mode === 'login' ? 'login' : 'register'}`, { method: 'POST', body: mode === 'login' ? signIn : f });
       login(d.token, d.user);
     } catch (err) {
       setError(err.message);
@@ -38,6 +39,12 @@ export function AuthForm() {
       </div>
       {mode === 'register' && <label>{t('Name')}<input required value={f.name} onChange={set('name')} autoComplete="name" /></label>}
       <label>{t('Email')}<input type="email" dir="ltr" required value={f.email} onChange={set('email')} autoComplete="email" /></label>
+      {mode === 'register' && (
+        <label>{t('Mobile (WhatsApp)')}
+          <input type="tel" dir="ltr" required inputMode="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" placeholder="+91 98765 43210" pattern="[+0-9 ()-]{10,20}" />
+          <small className="field-hint">{t('For order updates on WhatsApp. One account per number.')}</small>
+        </label>
+      )}
       <label>{t('Password')}
         <span className="pw-field">
           <input type={show ? 'text' : 'password'} required minLength={mode === 'register' ? 8 : undefined} value={f.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
@@ -109,6 +116,11 @@ function Overview() {
         )}
       </section>
 
+      {!user.phone && (
+        <p className="pay-note acct-phone-note" role="status">
+          {t('Add your mobile number so we can send order updates on WhatsApp.')} <Link to="/profile/edit" className="text-link">{t('Add mobile number')}</Link>
+        </p>
+      )}
       <div className="acct-two">
         <section className="acct-card">
           <div className="acct-card-head">

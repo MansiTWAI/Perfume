@@ -113,7 +113,11 @@ r.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const filter = req.query.status ? { status: req.query.status } : {};
-    res.json(await Review.find(filter).sort({ createdAt: -1 }).limit(300));
+    const reviews = await Review.find(filter).sort({ createdAt: -1 }).limit(300).lean();
+    // The reviewer's mobile number, from the order the review belongs to.
+    const orders = await Order.find({ _id: { $in: reviews.map((x) => x.order).filter(Boolean) } }).select('customer.phone').lean();
+    const phoneOf = new Map(orders.map((o) => [String(o._id), o.customer?.phone || '']));
+    res.json(reviews.map((x) => ({ ...x, phone: phoneOf.get(String(x.order)) || '' })));
   })
 );
 

@@ -716,3 +716,4 @@ a.acct-stat:hover { border-color: var(--s-line-strong); }
 @keyframes pay-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pay-spin { animation-duration: 2.4s; } }
 .pay-secure { margin-top: 10px; }
+.acct-phone-note { max-width: none; justify-items: start; margin: 0 0 18px; }

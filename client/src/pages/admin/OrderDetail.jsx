@@ -238,7 +238,7 @@ export function OrderRow({ order, onSaved }) {
     <>
       <tr className={open ? 'is-open' : ''} onClick={() => setOpen(!open)}>
         <td><b>{order.orderNumber}</b><br /><small>{formatDate(order.createdAt)}</small></td>
-        <td>{c.name}<br /><small>{c.address.city}, {c.address.country}</small></td>
+        <td>{c.name}<br /><small dir="ltr">{c.phone}</small><br /><small>{c.address.city}, {c.address.country}</small></td>
         <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">✦ Signature Card</small></>}</td>
         <td>
           {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
