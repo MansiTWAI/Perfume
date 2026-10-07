@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { flyToCart } from '../lib/flyToCart';
 import { renderFor, renderSrcSet } from '../lib/renders';
-import Icon from './Icon';
 
 const MIN = 8;
 const MAX = 92;
@@ -154,9 +153,9 @@ export default function DayNight({ day, night, duo, head = true }) {
         }}
         onKeyDown={onKey}
       >
-        <Icon name="chevron-left" size={16} />
+        <span aria-hidden="true">‹</span>
         <span className="dn-handle-label">{t('Drag')}</span>
-        <Icon name="chevron-right" size={16} />
+        <span aria-hidden="true">›</span>
       </div>
 
       {duo && (

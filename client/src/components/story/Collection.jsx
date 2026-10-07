@@ -48,7 +48,7 @@ export default function Collection({ products }) {
             <motion.li key={p._id || p.slug} {...reveal(i)} className="group snap-start">
               <Link to={`/fragrances/${p.slug}`} className={`relative grid h-80 items-end justify-items-center overflow-hidden rounded-arch ${STAGE[p.slug] || DEFAULT_STAGE}`} aria-label={p.name}>
                 {(p.badge || soldOut) && (
-                  <span className="absolute left-1/2 top-5 -translate-x-1/2 rounded-sm bg-onyx/70 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-gold-soft">{t(soldOut ? 'Sold out' : p.badge)}</span>
+                  <span className="absolute left-1/2 top-5 -translate-x-1/2 rounded-full bg-onyx/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-gold-soft">{t(soldOut ? 'Sold out' : p.badge)}</span>
                 )}
                 <img
                   src={render ? render.sm || render.src : p.images[0].src}
@@ -63,7 +63,7 @@ export default function Collection({ products }) {
                 <div className="mt-4 flex items-center justify-center gap-4">
                   <span className="font-display text-xl">{fmt(priceOf(p))}</span>
                   <button
-                    className="rounded-sm bg-gold-soft px-5 py-2.5 text-[11px] uppercase tracking-[0.2em] text-onyx transition hover:bg-champagne disabled:opacity-50"
+                    className="rounded-full bg-gold-soft px-5 py-2.5 text-[11px] uppercase tracking-[0.2em] text-onyx transition hover:bg-champagne disabled:opacity-50"
                     disabled={soldOut}
                     aria-label={t('Add {name} to your bag', { name: p.name })}
                     onClick={(e) => {
@@ -83,6 +83,7 @@ export default function Collection({ products }) {
         {list.length < SLOTS && (
           <motion.li {...reveal(list.length)} className="snap-start">
             <button className="flex h-80 w-full flex-col items-center justify-center gap-4 rounded-arch bg-[radial-gradient(80%_70%_at_50%_30%,#5a1520,#2b080c)] p-8 text-center" onClick={() => setFinderOpen(true)}>
+              <span className="text-2xl text-gold-soft" aria-hidden="true">✦</span>
               <span className="font-display text-3xl">{t('Not sure which one?')}</span>
               <span className="text-sm text-ivory/80">{t('Answer four questions and we will match your scent.')}</span>
               <span className="text-[11px] uppercase tracking-[0.22em] text-gold-soft">{t('Take the guide')}</span>

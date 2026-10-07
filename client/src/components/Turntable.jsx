@@ -7,7 +7,6 @@ import { renderFor, renderSrcSet } from '../lib/renders';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useSectionProgress } from '../hooks/useSectionProgress';
 import { scrollToY } from './SmoothScroll';
-import Icon from './Icon';
 
 // Extra scroll, in viewport heights, that each further bottle takes.
 const STEP_VH = 80;
@@ -74,6 +73,10 @@ export default function Turntable({ products }) {
           if (Math.abs(dx) > 50) go(i + (dx < 0 ? step : -step));
         }}
       >
+        <div className="tt-ghost" aria-hidden="true" key={active.slug}>
+          {active.slug === 'signature-duo' ? 'DUO' : active.name}
+        </div>
+        <div className="tt-ring" aria-hidden="true" />
 
         {items.map((p, k) => {
           const pos = (k - i + n) % n;
@@ -124,8 +127,8 @@ export default function Turntable({ products }) {
           <>
             <div className="tt-ctrl">
               <span className="tt-count" dir="ltr">{String(i + 1).padStart(2, '0')} / {String(n).padStart(2, '0')}</span>
-              <button className="tt-arrow" onClick={() => go(i - step)} aria-label={t('Previous')}><Icon name="arrow-left" className="flip-rtl" /></button>
-              <button className="tt-arrow" onClick={() => go(i + step)} aria-label={t('Next')}><Icon name="arrow-right" className="flip-rtl" /></button>
+              <button className="tt-arrow" onClick={() => go(i - step)} aria-label={t('Previous')}>←</button>
+              <button className="tt-arrow" onClick={() => go(i + step)} aria-label={t('Next')}>→</button>
             </div>
           </>
         )}

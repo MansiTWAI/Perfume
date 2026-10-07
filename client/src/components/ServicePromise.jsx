@@ -1,8 +1,12 @@
 import { useStore } from '../context/StoreContext';
 import { Reveal } from './Motion';
-import Icon from './Icon';
 
-const ICON = { delivery: 'truck', pay: 'card', gift: 'gift', chat: 'chat' };
+const ICON = {
+  delivery: <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM6.5 18.5a1.5 1.5 0 1 0 0-.01M17.5 18.5a1.5 1.5 0 1 0 0-.01" />,
+  pay: <path d="M3 7h18v10H3zM3 10.5h18M7 14.5h4" />,
+  gift: <path d="M4 10h16v10H4zM3 7h18v3H3zM12 7v13M12 7c-1.5-3-5-3-5-1s3 1 5 1c2 0 5 1 5-1s-3.5-2-5 1" />,
+  chat: <path d="M4 5h16v11H9l-5 4zM8 9.5h8M8 12.5h5" />,
+};
 
 // The house's service promises, stated for the visitor's own market, as a
 // row of four (two on tablets, one on phones). Every
@@ -32,9 +36,9 @@ export default function ServicePromise() {
           delay={i * 0.08}
           className="grid content-start justify-items-center gap-2.5"
         >
-          <Icon name={ICON[it.icon]} size={24} className="mb-1.5 text-gold-soft" />
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" className="mb-1.5 text-gold-soft">{ICON[it.icon]}</svg>
           <h3 className="font-display text-[clamp(19px,1.5vw,22px)] leading-tight">{it.title}</h3>
-          {it.text && <p className="text-[14px] leading-relaxed text-mute">{it.text}</p>}
+          {it.text && <p className="text-[14.5px] leading-relaxed text-mute">{it.text}</p>}
         </Reveal>
       ))}
     </ul>
