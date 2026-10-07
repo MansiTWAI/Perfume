@@ -710,3 +710,9 @@ a.acct-stat:hover { border-color: var(--s-line-strong); }
 .pay-note small { color: var(--s-muted); }
 .od-paynow { border-color: #e6c28f; background: #fff7ea; }
 .auth-forgot { justify-self: center; font-size: 13px; }
+.pay-note.is-wait { border-color: #d9cdb4; background: #faf6ee; }
+.pay-note.is-wait p { display: flex; align-items: center; gap: 10px; margin: 0; }
+.pay-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: pay-spin 0.9s linear infinite; flex: none; }
+@keyframes pay-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pay-spin { animation-duration: 2.4s; } }
+.pay-secure { margin-top: 10px; }

@@ -56,7 +56,7 @@ r.post(
   placeLimiter,
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const { paymentMethod, giftNote, couponCode } = req.body || {};
+    const { paymentMethod, giftNote, couponCode, expectedTotal } = req.body || {};
     let { items = [], customer, region: regionCode = 'IN' } = req.body || {};
     const fromCart = !items.length && !!req.user;
     try {
@@ -64,7 +64,7 @@ r.post(
         items = req.user.cart.map((i) => ({ slug: i.slug, qty: i.qty }));
         ({ customer, regionCode } = await checkoutTarget(req.user, { addressId: req.body?.addressId, customer, region: req.body?.region }));
       }
-      const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, couponCode, userId: req.user?._id });
+      const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, couponCode, expectedTotal, userId: req.user?._id });
       if (fromCart) {
         req.user.cart = [];
         await req.user.save();
@@ -74,7 +74,7 @@ r.post(
         ...(req.apiV1 && { order: customerView(order.toObject()) }),
       });
     } catch (e) {
-      if (e.status) return res.status(e.status).json({ code: e.code, message: e.message });
+      if (e.status) return res.status(e.status).json({ code: e.code, message: e.message, ...(e.total !== undefined && { total: e.total }) });
       throw e;
     }
   })
@@ -121,6 +121,7 @@ export function customerView(o) {
     total: o.total,
     paymentMethod: o.paymentMethod,
     paymentStatus: o.paymentStatus,
+    refunded: (o.payment?.refundedAmount || 0) / 100,
     tracking: { carrier: o.carrier || '', trackingNumber: o.trackingNumber || '', status: statusKey(o), eta: o.eta || '' },
     customer: { name: o.customer?.name, email: o.customer?.email, phone: o.customer?.phone, address: o.customer?.address },
     giftNote: o.giftNote?.enabled ? { enabled: true, name: o.giftNote.name, occasion: o.giftNote.occasion, message: o.giftNote.message } : { enabled: false },
@@ -580,7 +581,12 @@ export const updateOrder = asyncHandler(async (req, res) => {
     if (built && !typedLink) order.carrierUrl = built;
     if (order.carrierUrl && !isUrl(order.carrierUrl)) order.carrierUrl = '';
     if (eta !== undefined) order.eta = text(eta, 60);
-    if (paymentStatus && ['pending', 'paid', 'refunded'].includes(paymentStatus)) order.paymentStatus = paymentStatus;
+    // Online payments are settled by Razorpay (and refunded with the refund
+    // action), so their status cannot be typed over by hand.
+    if (paymentStatus && ['pending', 'paid', 'refunded'].includes(paymentStatus) && paymentStatus !== order.paymentStatus) {
+      if (order.payment?.providerPaymentId) problems.push('This order was paid online. Use Refund to return money; the payment status follows Razorpay.');
+      else order.paymentStatus = paymentStatus;
+    }
     if (notes !== undefined) order.notes = String(notes).slice(0, 2000);
     if (problems.length) return res.status(400).json({ message: problems.join(' ') });
     const lines = order.items.filter((i) => i.product && i.qty > 0);
@@ -732,12 +738,16 @@ r.patch(
 
     if (!summary.length) return res.json(customerView(order.toObject()));
     order.edits.push({ by: 'customer', summary: `Changed ${summary.join(', ')}` });
+    // A payment that lands while the items change must not be applied to
+    // the new items: save only if the order is still unpaid.
+    if (stockDelta.length) order.$where = { paymentStatus: 'pending' };
     try {
       await order.save();
     } catch (e) {
       // Put stock back if the order itself could not be saved.
       await release(stockDelta.filter((d) => d.qty > 0));
       await reserve(stockDelta.filter((d) => d.qty < 0).map((d) => ({ ...d, qty: -d.qty })));
+      if (e?.name === 'DocumentNotFoundError') return res.status(409).json({ message: 'This order was just paid, so its items cannot be changed here. Message us on WhatsApp and we will help.' });
       throw e;
     }
     res.json(customerView(order.toObject()));

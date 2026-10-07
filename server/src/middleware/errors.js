@@ -67,7 +67,7 @@ export function errorCodes(_req, res, next) {
   const json = res.json.bind(res);
   res.json = (body) => {
     if (res.statusCode >= 400 && body && typeof body === 'object' && !Array.isArray(body) && body.message && !body.code) {
-      body = { code: codeFor(res.statusCode, String(body.message)), ...body };
+      body = { ...body, code: codeFor(res.statusCode, String(body.message)) };
     }
     return json(body);
   };
@@ -78,7 +78,8 @@ export function errorCodes(_req, res, next) {
 const SET_BY_ROUTES = [
   'COUPON_INVALID', 'COUPON_EXPIRED', 'COUPON_MIN_NOT_MET', 'COUPON_ALREADY_USED',
   'OTP_INVALID', 'OTP_EXPIRED', 'OTP_NOT_CONFIGURED', 'ACCOUNT_NOT_FOUND', 'ACCOUNT_BLOCKED',
-  'ADDRESS_NOT_FOUND', 'INVALID_STATUS',
+  'ADDRESS_NOT_FOUND', 'INVALID_STATUS', 'PRICE_CHANGED', 'ALREADY_PAID', 'PAYMENT_FAILED', 'PAYMENT_NEEDS_REVIEW',
+  'REFUND_NOT_ALLOWED', 'REFUND_IN_PROGRESS', 'REFUND_INVALID_AMOUNT',
 ];
 
 export const ERROR_CODES = [...new Set([...BY_MESSAGE.map(([, c]) => c), ...Object.values(BY_STATUS), ...SET_BY_ROUTES, 'ERROR'])].sort();

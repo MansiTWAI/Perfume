@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
-import { ImageField, RowList, csv, fromCsv } from './Fields';
+import { ImageField, PhotoGallery, RowList, csv, fromCsv } from './Fields';
 
 const EMPTY = {
   name: '', slug: '', subtitle: 'Eau de Parfum', tagline: '', family: '', description: '', story: '',
@@ -32,7 +32,7 @@ export function ProductList() {
             <tbody>
               {list.map((p) => (
                 <tr key={p._id}>
-                  <td><img src={p.images?.[0]?.src} alt="" className="a-thumb" /></td>
+                  <td>{p.images?.[0]?.src ? <img src={p.images[0].src} alt="" className="a-thumb" /> : <span className="a-thumb a-thumb-empty" aria-hidden="true" />}</td>
                   <td><b>{p.name}</b><br /><small>/fragrances/{p.slug}</small></td>
                   <td>{money(p.price?.INR, 'INR')}<br /><small>{money(p.price?.AED, 'AED')}</small></td>
                   <td className={p.stock <= 5 ? 'a-warn' : ''}>{p.stock}</td>
@@ -49,6 +49,14 @@ export function ProductList() {
   );
 }
 
+// Notes as one comma-separated line per tier. Existing descriptions and
+// pictures are kept for any note whose name stays the same.
+const noteLine = (list) => (list || []).map((n) => n.name).join(', ');
+const fromNoteLine = (text, old = []) =>
+  fromCsv(text).map((name) => old.find((n) => n.name.toLowerCase() === name.toLowerCase()) || { name, description: '', image: '' });
+
+// A new product needs photos, a name, a price and its notes; everything else
+// is folded under "More details".
 export function ProductEdit() {
   const { id } = useParams();
   const isNew = id === 'new';
@@ -58,8 +66,12 @@ export function ProductEdit() {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Reset whenever the address changes, so "New product" never inherits the
+  // product that was open before.
   useEffect(() => {
-    if (isNew) return;
+    setConfirmDelete(false);
+    if (isNew) return setP(EMPTY);
+    setP(null);
     api('/products?all=1').then((all) => setP({ ...EMPTY, ...all.find((x) => x._id === id) }));
   }, [id, isNew]);
 
@@ -77,15 +89,20 @@ export function ProductEdit() {
 
   async function save(e) {
     e.preventDefault();
+    if (!p.name.trim()) return toast('Give the product a name.', 'warn');
+    if (!(p.price?.INR > 0)) return toast('Enter the price in ₹.', 'warn');
+    if (p.published && !p.images?.length) return toast('Add at least one photo before making the product visible.', 'warn');
     setBusy(true);
+    // Photos describe themselves from the product name unless alt text was written.
+    const body = { ...p, images: (p.images || []).map((img, i) => ({ ...img, alt: img.alt || `${p.name}${i ? `, photo ${i + 1}` : ''}` })) };
     try {
-      const saved = await api(isNew ? '/products' : `/products/${id}`, { method: isNew ? 'POST' : 'PUT', body: p });
+      const saved = await api(isNew ? '/products' : `/products/${id}`, { method: isNew ? 'POST' : 'PUT', body });
       clearApiCache();
       toast('Product saved');
       if (isNew) navigate(`/admin/products/${saved._id}`, { replace: true });
       else setP({ ...EMPTY, ...saved });
     } catch (err) {
-      toast(err.message, 'warn');
+      toast(/duplicate|E11000|slug/i.test(err.message) ? 'A product with this name already exists. Change the name, or the web address under More details.' : err.message, 'warn');
     } finally {
       setBusy(false);
     }
@@ -98,10 +115,11 @@ export function ProductEdit() {
     navigate('/admin/products');
   }
 
-  const noteFields = [['name', 'Note'], ['image', 'Image path (optional)'], ['description', 'What it brings', 'textarea']];
+  const setNoteDescription = (tier, i, description) =>
+    setIn('notes', tier, p.notes[tier].map((x, j) => (j === i ? { ...x, description } : x)));
 
   return (
-    <form onSubmit={save}>
+    <form onSubmit={save} className="a-product">
       <header className="a-head">
         <h1>{isNew ? 'New product' : p.name}</h1>
         <div className="a-actions">
@@ -113,120 +131,122 @@ export function ProductEdit() {
       <div className="a-edit">
         <div className="a-col">
           <section className="a-panel a-form">
-            <h2>Basics</h2>
-            <div className="a-grid2">
-              <label>Name<input required value={p.name} onChange={(e) => set('name', e.target.value)} /></label>
-              <label>URL slug<input value={p.slug} onChange={(e) => set('slug', e.target.value)} placeholder="from name" /></label>
-              <label>Subtitle<input value={p.subtitle} onChange={(e) => set('subtitle', e.target.value)} /></label>
-              <label>Tagline<input value={p.tagline} onChange={(e) => set('tagline', e.target.value)} /></label>
-              <label>Olfactive family<input value={p.family} onChange={(e) => set('family', e.target.value)} /></label>
-              <label>Badge<input value={p.badge} onChange={(e) => set('badge', e.target.value)} /></label>
+            <h2>Photos</h2>
+            <PhotoGallery images={p.images} onChange={(images) => set('images', images)} />
+          </section>
+
+          <section className="a-panel a-form">
+            <h2>Details</h2>
+            <label>Name *<input required value={p.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. ZAFREON" /></label>
+            <div className="a-grid3">
+              <label>Price ₹ (incl. GST) *<input type="number" min="0" required value={p.price?.INR || ''} onChange={(e) => setIn('price', 'INR', +e.target.value)} /></label>
+              <label>Price AED (incl. VAT)<input type="number" min="0" value={p.price?.AED || ''} onChange={(e) => setIn('price', 'AED', +e.target.value)} /></label>
+              <label>Stock<input type="number" min="0" value={p.stock} onChange={(e) => set('stock', +e.target.value)} /></label>
             </div>
-            <label>Short description<textarea rows="3" value={p.description} onChange={(e) => set('description', e.target.value)} /></label>
-            <label>Story<textarea rows="5" value={p.story} onChange={(e) => set('story', e.target.value)} /></label>
+            <div className="a-grid2">
+              <label>Fragrance family<input value={p.family} onChange={(e) => set('family', e.target.value)} placeholder="e.g. Oriental Woody Oud" /></label>
+              <label>Size<input value={p.sizeLabel} onChange={(e) => set('sizeLabel', e.target.value)} /></label>
+            </div>
+            <label>Short description<textarea rows="3" value={p.description} onChange={(e) => set('description', e.target.value)} placeholder="Two or three sentences shown on the product page." /></label>
           </section>
 
           <section className="a-panel a-form">
-            <h2>Fragrance notes</h2>
-            <label className="a-check"><input type="checkbox" checked={!!p.notes?.approved} onChange={(e) => setIn('notes', 'approved', e.target.checked)} /> Notes approved against the perfumer’s final specification</label>
-            {['top', 'heart', 'base'].map((t) => (
-              <div key={t} className="a-sub">
-                <h3>{t[0].toUpperCase() + t.slice(1)} notes</h3>
-                <RowList rows={p.notes?.[t]} onChange={(rows) => setIn('notes', t, rows)} fields={noteFields} addLabel={`Add ${t} note`} />
+            <h2>Notes</h2>
+            <p className="a-muted">Separate notes with commas.</p>
+            <label>Top notes<input value={noteLine(p.notes?.top)} onChange={(e) => setIn('notes', 'top', fromNoteLine(e.target.value, p.notes?.top))} placeholder="Saffron, Cardamom, Black Pepper" /></label>
+            <label>Heart notes<input value={noteLine(p.notes?.heart)} onChange={(e) => setIn('notes', 'heart', fromNoteLine(e.target.value, p.notes?.heart))} placeholder="Frankincense, Damask Rose" /></label>
+            <label>Base notes<input value={noteLine(p.notes?.base)} onChange={(e) => setIn('notes', 'base', fromNoteLine(e.target.value, p.notes?.base))} placeholder="Oud, Amber, Smoked Woods" /></label>
+          </section>
+
+          <details className="a-panel a-more">
+            <summary>More details <span className="a-muted">optional: bottle image, story, Arabic, SEO and more</span></summary>
+            <div className="a-form">
+              <h3>Floating bottle</h3>
+              <ImageField value={p.render?.src} onChange={setRender} label="Bottle on a transparent background" hint="PNG or WebP without a background, used on the home page. Without one, the main photo is used." />
+              {p.render?.src && !p.render.width && <p className="a-error">This image could not be read. Upload it again.</p>}
+
+              <h3>Text</h3>
+              <div className="a-grid2">
+                <label>Tagline<input value={p.tagline} onChange={(e) => set('tagline', e.target.value)} /></label>
+                <label>Subtitle<input value={p.subtitle} onChange={(e) => set('subtitle', e.target.value)} /></label>
+                <label>Badge<input value={p.badge} onChange={(e) => set('badge', e.target.value)} placeholder="e.g. New" /></label>
+                <label>Web address<input value={p.slug} onChange={(e) => set('slug', e.target.value)} placeholder="made from the name" /></label>
               </div>
-            ))}
-          </section>
+              <label>Story<textarea rows="5" value={p.story} onChange={(e) => set('story', e.target.value)} /></label>
 
-          <section className="a-panel a-form">
-            <h2>How it wears</h2>
-            <RowList rows={p.wear} onChange={(rows) => set('wear', rows)} fields={[['time', 'Stage'], ['label', 'Word'], ['text', 'Description', 'textarea']]} addLabel="Add stage" />
-          </section>
+              <h3>Note descriptions</h3>
+              <label className="a-check"><input type="checkbox" checked={!!p.notes?.approved} onChange={(e) => setIn('notes', 'approved', e.target.checked)} /> Notes approved against the perfumer’s final specification</label>
+              {['top', 'heart', 'base'].map((t) => (p.notes?.[t]?.length ? (
+                <div key={t} className="a-sub">
+                  <h4>{t[0].toUpperCase() + t.slice(1)}</h4>
+                  {p.notes[t].map((n, i) => (
+                    <label key={n.name}>{n.name}<input value={n.description || ''} placeholder="What it brings (optional)" onChange={(e) => setNoteDescription(t, i, e.target.value)} /></label>
+                  ))}
+                </div>
+              ) : null))}
 
-          <section className="a-panel a-form">
-            <h2>Care &amp; questions</h2>
-            <label>How to wear<textarea rows="3" value={p.howToWear} onChange={(e) => set('howToWear', e.target.value)} /></label>
-            <label>How to store<textarea rows="3" value={p.howToStore} onChange={(e) => set('howToStore', e.target.value)} /></label>
-            <h3>FAQ</h3>
-            <RowList rows={p.faq} onChange={(rows) => set('faq', rows)} fields={[['q', 'Question'], ['a', 'Answer', 'textarea']]} addLabel="Add question" />
-          </section>
+              <h3>Page</h3>
+              <div className="a-grid3">
+                <label>Category<input value={p.category} onChange={(e) => set('category', e.target.value)} /></label>
+                <label>Page colours
+                  <select value={p.theme} onChange={(e) => set('theme', e.target.value)}>
+                    <option value="ivory">Ivory (like ELARISSE)</option><option value="onyx">Black (like ZAFREON)</option><option value="duo">Burgundy (like the Duo)</option>
+                  </select>
+                </label>
+                <label>Sort order<input type="number" value={p.sortOrder} onChange={(e) => set('sortOrder', +e.target.value)} /></label>
+              </div>
+
+              <h3>How it wears</h3>
+              <RowList rows={p.wear} onChange={(rows) => set('wear', rows)} fields={[['time', 'Stage'], ['label', 'Word'], ['text', 'Description', 'textarea']]} addLabel="Add stage" />
+
+              <h3>Care &amp; questions</h3>
+              <label>How to wear<textarea rows="3" value={p.howToWear} onChange={(e) => set('howToWear', e.target.value)} /></label>
+              <label>How to store<textarea rows="3" value={p.howToStore} onChange={(e) => set('howToStore', e.target.value)} /></label>
+              <RowList rows={p.faq} onChange={(rows) => set('faq', rows)} fields={[['q', 'Question'], ['a', 'Answer', 'textarea']]} addLabel="Add question" />
+
+              <h3>Film</h3>
+              <ImageField value={p.video?.src} onChange={(src) => setIn('video', 'src', src)} label="Video" kind="video" />
+              <ImageField value={p.video?.poster} onChange={(src) => setIn('video', 'poster', src)} label="Video cover image" />
+
+              <h3>Tags</h3>
+              <label>Mood words (comma separated)<input value={csv(p.mood)} onChange={(e) => set('mood', fromCsv(e.target.value))} /></label>
+              <label>Occasions<input value={csv(p.occasions)} onChange={(e) => set('occasions', fromCsv(e.target.value))} /></label>
+              <label>What is included<input value={csv(p.includes)} onChange={(e) => set('includes', fromCsv(e.target.value))} /></label>
+
+              <h3>Arabic</h3>
+              <p className="a-muted">Shown to visitors browsing in Arabic. Leave a field empty to use the English text.</p>
+              <div dir="rtl" lang="ar" className="a-rtl">
+                <div className="a-grid2">
+                  <label>الشعار (Tagline)<input value={p.ar?.tagline || ''} onChange={(e) => setIn('ar', 'tagline', e.target.value)} /></label>
+                  <label>العائلة العطرية (Family)<input value={p.ar?.family || ''} onChange={(e) => setIn('ar', 'family', e.target.value)} /></label>
+                </div>
+                <label>وصف قصير (Short description)<textarea rows="3" value={p.ar?.description || ''} onChange={(e) => setIn('ar', 'description', e.target.value)} /></label>
+                <label>الحكاية (Story)<textarea rows="5" value={p.ar?.story || ''} onChange={(e) => setIn('ar', 'story', e.target.value)} /></label>
+                <label>طريقة الاستخدام (How to wear)<textarea rows="3" value={p.ar?.howToWear || ''} onChange={(e) => setIn('ar', 'howToWear', e.target.value)} /></label>
+                <label>طريقة الحفظ (How to store)<textarea rows="3" value={p.ar?.howToStore || ''} onChange={(e) => setIn('ar', 'howToStore', e.target.value)} /></label>
+                <label>المناسبات، مفصولة بفواصل (Occasions)<input value={csv(p.ar?.occasions)} onChange={(e) => setIn('ar', 'occasions', fromCsv(e.target.value))} /></label>
+                <label>محتويات العلبة (What is included)<input value={csv(p.ar?.includes)} onChange={(e) => setIn('ar', 'includes', fromCsv(e.target.value))} /></label>
+              </div>
+
+              <h3>Search engines</h3>
+              <label>SEO title<input value={p.seo?.title || ''} onChange={(e) => setIn('seo', 'title', e.target.value)} /></label>
+              <label>Meta description<textarea rows="3" value={p.seo?.description || ''} onChange={(e) => setIn('seo', 'description', e.target.value)} /></label>
+            </div>
+          </details>
         </div>
 
         <div className="a-col a-col-side">
-          <section className="a-panel a-form">
-            <h2>Publishing</h2>
+          <section className="a-panel a-form a-sticky">
+            <h2>Publish</h2>
             <label className="a-check"><input type="checkbox" checked={p.published} onChange={(e) => set('published', e.target.checked)} /> Visible in the store</label>
             <label className="a-check"><input type="checkbox" checked={p.featured} onChange={(e) => set('featured', e.target.checked)} /> Featured</label>
-            <div className="a-grid2">
-              <label>Category<input value={p.category} onChange={(e) => set('category', e.target.value)} /></label>
-              <label>Page theme
-                <select value={p.theme} onChange={(e) => set('theme', e.target.value)}>
-                  <option value="ivory">Ivory (ELARISSE)</option><option value="onyx">Onyx (ZAFREON)</option><option value="duo">Burgundy (Duo)</option>
-                </select>
-              </label>
-              <label>Sort order<input type="number" value={p.sortOrder} onChange={(e) => set('sortOrder', +e.target.value)} /></label>
-            </div>
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Price &amp; stock</h2>
-            <div className="a-grid2">
-              <label>Price ₹ (incl. GST)<input type="number" min="0" value={p.price?.INR} onChange={(e) => setIn('price', 'INR', +e.target.value)} /></label>
-              <label>Price AED (incl. VAT)<input type="number" min="0" value={p.price?.AED} onChange={(e) => setIn('price', 'AED', +e.target.value)} /></label>
-              <label>Stock<input type="number" min="0" value={p.stock} onChange={(e) => set('stock', +e.target.value)} /></label>
-              <label>Size label<input value={p.sizeLabel} onChange={(e) => set('sizeLabel', e.target.value)} /></label>
-            </div>
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Images</h2>
-            {(p.images || []).map((img, i) => (
-              <div key={i} className="a-sub">
-                <ImageField value={img.src} onChange={(src) => set('images', p.images.map((x, j) => (j === i ? { ...x, src } : x)))} label={i === 0 ? 'Main image' : `Image ${i + 1}`} />
-                <label>Alt text<input value={img.alt || ''} onChange={(e) => set('images', p.images.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)))} /></label>
-                <button type="button" className="a-link" onClick={() => set('images', p.images.filter((_, j) => j !== i))}>Remove image</button>
-              </div>
-            ))}
-            <button type="button" className="a-btn" onClick={() => set('images', [...(p.images || []), { src: '', alt: '' }])}>+ Add image</button>
-            <h3>Film (optional)</h3>
-            <ImageField value={p.video?.src} onChange={(src) => setIn('video', 'src', src)} label="Video" kind="video" />
-            <ImageField value={p.video?.poster} onChange={(src) => setIn('video', 'poster', src)} label="Poster" />
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Floating bottle</h2>
-            <p className="a-muted">The bottle alone on a transparent background (PNG or WebP). It floats on the home page, the product cards and the product page. Without one, the main image is used instead.</p>
-            <ImageField value={p.render?.src} onChange={setRender} label="Transparent bottle" />
-            {p.render?.src && (p.render.width ? <p className="a-muted">{p.render.width} × {p.render.height}px</p> : <p className="a-error">This image could not be read. Check the path or upload it again.</p>)}
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Arabic</h2>
-            <p className="a-muted">Shown to visitors browsing in Arabic. Leave a field empty to use the English text.</p>
-            <div dir="rtl" lang="ar" className="a-rtl">
-              <div className="a-grid2">
-                <label>الشعار (Tagline)<input value={p.ar?.tagline || ''} onChange={(e) => setIn('ar', 'tagline', e.target.value)} /></label>
-                <label>العائلة العطرية (Family)<input value={p.ar?.family || ''} onChange={(e) => setIn('ar', 'family', e.target.value)} /></label>
-              </div>
-              <label>وصف قصير (Short description)<textarea rows="3" value={p.ar?.description || ''} onChange={(e) => setIn('ar', 'description', e.target.value)} /></label>
-              <label>الحكاية (Story)<textarea rows="5" value={p.ar?.story || ''} onChange={(e) => setIn('ar', 'story', e.target.value)} /></label>
-              <label>طريقة الاستخدام (How to wear)<textarea rows="3" value={p.ar?.howToWear || ''} onChange={(e) => setIn('ar', 'howToWear', e.target.value)} /></label>
-              <label>طريقة الحفظ (How to store)<textarea rows="3" value={p.ar?.howToStore || ''} onChange={(e) => setIn('ar', 'howToStore', e.target.value)} /></label>
-              <label>المناسبات، مفصولة بفواصل (Occasions)<input value={csv(p.ar?.occasions)} onChange={(e) => setIn('ar', 'occasions', fromCsv(e.target.value))} /></label>
-              <label>محتويات العلبة (What is included)<input value={csv(p.ar?.includes)} onChange={(e) => setIn('ar', 'includes', fromCsv(e.target.value))} /></label>
-            </div>
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Tags</h2>
-            <label>Mood words (comma separated)<input value={csv(p.mood)} onChange={(e) => set('mood', fromCsv(e.target.value))} /></label>
-            <label>Occasions<input value={csv(p.occasions)} onChange={(e) => set('occasions', fromCsv(e.target.value))} /></label>
-            <label>What is included<input value={csv(p.includes)} onChange={(e) => set('includes', fromCsv(e.target.value))} /></label>
-          </section>
-
-          <section className="a-panel a-form">
-            <h2>Search</h2>
-            <label>SEO title<input value={p.seo?.title || ''} onChange={(e) => setIn('seo', 'title', e.target.value)} /></label>
-            <label>Meta description<textarea rows="3" value={p.seo?.description || ''} onChange={(e) => setIn('seo', 'description', e.target.value)} /></label>
+            <button className="a-btn a-primary a-block" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Save product' : 'Save changes'}</button>
+            <ul className="a-checklist" aria-label="Ready to publish">
+              <li className={p.images?.length ? 'ok' : ''}>Photos</li>
+              <li className={p.name.trim() ? 'ok' : ''}>Name</li>
+              <li className={p.price?.INR > 0 ? 'ok' : ''}>Price</li>
+              <li className={p.notes?.top?.length ? 'ok' : ''}>Notes</li>
+            </ul>
           </section>
 
           {!isNew && (

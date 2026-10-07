@@ -5,10 +5,16 @@ import { useStore } from '../../context/StoreContext';
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 const MAX_MB = 4;
 
-// Upload from this device (to cloud storage, via the server) or type a path
-// or URL. Existing /media/… and /uploads/… paths keep working.
-// `kind="video"` is path-only: films are too large for uploads here.
-export function ImageField({ value, onChange, label = 'Image', kind = 'image' }) {
+function checkFile(file) {
+  if (!IMAGE_TYPES.includes(file.type)) return `${file.name}: choose a JPG, PNG or WebP image.`;
+  if (file.size > MAX_MB * 1024 * 1024) return `${file.name} is ${(file.size / 1048576).toFixed(1)} MB. The limit is ${MAX_MB} MB.`;
+  return '';
+}
+
+// One image, uploaded from this device (to cloud storage, via the server).
+// There is no path or URL box: picking a file is the only way in.
+// `kind="video"` keeps a path field: films are too large to upload here.
+export function ImageField({ value, onChange, label = 'Image', kind = 'image', hint }) {
   const { toast } = useStore();
   const [progress, setProgress] = useState(null); // null = idle, 0–100 = uploading
   const [preview, setPreview] = useState('');
@@ -19,9 +25,9 @@ export function ImageField({ value, onChange, label = 'Image', kind = 'image' })
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setError('');
-    if (!IMAGE_TYPES.includes(file.type)) return setError('Choose a JPG, PNG or WebP image.');
-    if (file.size > MAX_MB * 1024 * 1024) return setError(`That image is ${(file.size / 1048576).toFixed(1)} MB. The limit is ${MAX_MB} MB.`);
+    const problem = checkFile(file);
+    setError(problem);
+    if (problem) return;
     const local = URL.createObjectURL(file);
     setPreview(local);
     setProgress(0);
@@ -37,25 +43,108 @@ export function ImageField({ value, onChange, label = 'Image', kind = 'image' })
     }
   }
 
+  if (kind === 'video') {
+    return (
+      <label>{label} file path<input value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="/media/film.mp4" /></label>
+    );
+  }
+
   const busy = progress !== null;
   const shown = preview || value;
   return (
     <div className="a-image">
-      {shown && kind === 'image' ? <img src={shown} alt="" className={busy ? 'is-busy' : ''} /> : <div className="a-image-empty">{value ? 'Video' : 'No image'}</div>}
+      {shown ? <img src={shown} alt="" className={busy ? 'is-busy' : ''} /> : <div className="a-image-empty">No image</div>}
       <div className="a-image-ctl">
-        <label>{label} {kind === 'image' ? 'path or URL' : 'path'}<input value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={kind === 'image' ? '/media/…, /uploads/… or https://…' : '/media/film.mp4'} /></label>
-        {kind === 'image' && (
-          <div className="a-upload-row">
-            <label className={`a-btn a-upload ${busy ? 'is-disabled' : ''}`}>
-              {busy ? `Uploading… ${progress}%` : 'Upload from device'}
-              <input type="file" accept={IMAGE_TYPES.join(',')} onChange={pick} hidden disabled={busy} />
-            </label>
-            {busy && <span className="a-progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100"><span style={{ width: `${progress}%` }} /></span>}
-            {!busy && <small className="a-muted">JPG, PNG, WebP · up to {MAX_MB} MB</small>}
-          </div>
-        )}
+        <b className="a-image-label">{label}</b>
+        {hint && <small className="a-muted">{hint}</small>}
+        <div className="a-upload-row">
+          <label className={`a-btn a-upload ${busy ? 'is-disabled' : ''}`}>
+            {busy ? `Uploading… ${progress}%` : value ? 'Replace' : 'Upload image'}
+            <input type="file" accept={IMAGE_TYPES.join(',')} onChange={pick} hidden disabled={busy} />
+          </label>
+          {value && !busy && <button type="button" className="a-link" onClick={() => onChange('')}>Remove</button>}
+          {busy && <span className="a-progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100"><span style={{ width: `${progress}%` }} /></span>}
+        </div>
+        {!busy && !value && <small className="a-muted">JPG, PNG, WebP · up to {MAX_MB} MB</small>}
         {error && <p className="a-error" role="alert">{error}</p>}
       </div>
+    </div>
+  );
+}
+
+// All of a product's photos: choose (or drop) several at once, reorder with
+// the arrows, remove with ✕. The first photo is the main one.
+export function PhotoGallery({ images = [], onChange }) {
+  const { toast } = useStore();
+  const [queue, setQueue] = useState([]); // [{ name, progress }]
+  const [errors, setErrors] = useState([]);
+  const [over, setOver] = useState(false);
+
+  async function add(fileList) {
+    const files = [...fileList];
+    const problems = files.map(checkFile).filter(Boolean);
+    const ok = files.filter((f) => !checkFile(f));
+    setErrors(problems);
+    if (!ok.length) return;
+    setQueue(ok.map((f) => ({ name: f.name, progress: 0 })));
+    let list = [...images];
+    for (const [i, file] of ok.entries()) {
+      try {
+        const { src } = await uploadFile(file, (pct) => setQueue((q) => q.map((x, j) => (j === i ? { ...x, progress: pct } : x))));
+        list = [...list, { src, alt: '' }];
+        onChange(list);
+      } catch (err) {
+        setErrors((e) => [...e, `${file.name}: ${err.message}`]);
+      }
+    }
+    setQueue([]);
+    toast(ok.length === 1 ? 'Photo uploaded' : `${ok.length} photos uploaded`);
+  }
+
+  const move = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= images.length) return;
+    const n = [...images];
+    [n[i], n[j]] = [n[j], n[i]];
+    onChange(n);
+  };
+
+  return (
+    <div className="a-gallery">
+      <ul className="a-gallery-grid">
+        {images.map((img, i) => (
+          <li key={img.src + i} className="a-gallery-item">
+            <img src={img.src} alt="" />
+            {i === 0 && <span className="a-gallery-main">Main</span>}
+            <div className="a-gallery-ctl">
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move earlier">←</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === images.length - 1} aria-label="Move later">→</button>
+              <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label="Remove photo">✕</button>
+            </div>
+          </li>
+        ))}
+        {queue.map((q) => (
+          <li key={q.name} className="a-gallery-item is-uploading">
+            <span className="a-progress"><span style={{ width: `${q.progress}%` }} /></span>
+            <small>{q.progress}%</small>
+          </li>
+        ))}
+        <li>
+          <label
+            className={`a-gallery-drop ${over ? 'is-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}
+          >
+            <span aria-hidden="true">+</span>
+            {images.length ? 'Add photos' : 'Add photos'}
+            <small>or drop them here</small>
+            <input type="file" accept={IMAGE_TYPES.join(',')} multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ''; }} disabled={queue.length > 0} />
+          </label>
+        </li>
+      </ul>
+      <small className="a-muted">JPG, PNG or WebP, up to {MAX_MB} MB each. The first photo is the main one.</small>
+      {errors.map((e) => <p key={e} className="a-error" role="alert">{e}</p>)}
     </div>
   );
 }

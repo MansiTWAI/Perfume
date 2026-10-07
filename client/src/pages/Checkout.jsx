@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Thumb } from '../components/Img';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -46,7 +46,7 @@ function OrderSummary({ cart, subtotal, shipping, region }) {
 }
 
 export default function Checkout() {
-  const { cart, subtotal, shipping, fmt, region, regions, setRegion, clearCart, user, t } = useStore();
+  const { cart, subtotal, shipping, fmt, region, regions, setRegion, clearCart, refreshCart, user, t } = useStore();
   const navigate = useNavigate();
   useSolidHeader();
   const methods = region.payments || ['pay-on-confirmation'];
@@ -67,7 +67,11 @@ export default function Checkout() {
     occasion: seasonFor(region.code)?.card || 'eid',
     message: t('For every room you walk into.'),
   }));
-  const [busy, setBusy] = useState(false);
+  // '' | 'placing' | 'paying': the button stays disabled throughout, and a
+  // second press (or Enter) while busy does nothing.
+  const [busy, setBusy] = useState('');
+  const busyRef = useRef(false);
+  const [placed, setPlaced] = useState(null); // the bag as ordered, shown while paying
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -80,7 +84,9 @@ export default function Checkout() {
 
   async function submit(e) {
     e.preventDefault();
-    setBusy(true);
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy('placing');
     setError('');
     try {
       const res = await api('/orders', {
@@ -88,6 +94,9 @@ export default function Checkout() {
         body: {
           region: region.code,
           paymentMethod: pay,
+          // The server recalculates everything; this only lets it stop if the
+          // prices changed since the customer saw this total.
+          expectedTotal: subtotal + shipping,
           items: cart.map((i) => ({ slug: i.slug, qty: i.qty })),
           customer: {
             name: f.name, email: f.email, phone: f.phone,
@@ -96,27 +105,33 @@ export default function Checkout() {
           giftNote: gift,
         },
       });
+      setPlaced({ cart, subtotal, shipping });
       clearCart();
       // Online payment opens straight away; the order is already saved, so a
       // closed or failed payment can be finished later from the order page.
       let payment = null;
       if (pay === 'online') {
+        setBusy('paying');
         try {
-          await payOnline({ orderNumber: res.orderNumber, email: f.email });
-          payment = 'paid';
+          payment = await payOnline({ orderNumber: res.orderNumber, email: f.email });
         } catch (e) {
-          payment = e.dismissed ? 'pending' : e.message;
+          payment = { kind: e.kind || 'error', message: e.message };
         }
       }
+      // Leaving the page: keep it as it is while the next one comes in.
       navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email, payment } });
     } catch (err) {
+      if (err.code === 'PRICE_CHANGED') refreshCart().catch(() => {});
       setError(err.message);
-    } finally {
-      setBusy(false);
+      busyRef.current = false;
+      setBusy('');
+      setPlaced(null);
     }
   }
 
-  if (!cart.length) {
+  // The bag empties as soon as the order is saved; while the payment window
+  // is open the page behind it stays as it was.
+  if (!cart.length && !busy) {
     return (
       <section className="section page-pad center checkout checkout-empty">
         <Seo title="Checkout" />
@@ -236,7 +251,10 @@ export default function Checkout() {
           </fieldset>
 
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="btn btn-primary btn-block btn-lg" disabled={busy}>{busy ? t('Placing your order…') : t('Place order · {amount}', { amount: fmt(subtotal + shipping) })}</button>
+          <button className="btn btn-primary btn-block btn-lg" disabled={!!busy} aria-busy={!!busy}>
+            {busy === 'paying' ? t('Waiting for payment…') : busy ? t('Placing your order…') : t(pay === 'online' ? 'Pay securely · {amount}' : 'Place order · {amount}', { amount: fmt(placed ? placed.subtotal + placed.shipping : subtotal + shipping) })}
+          </button>
+          {pay === 'online' && <p className="fine pay-secure">{t('You pay on Razorpay’s secure page. We never see your card or UPI details.')}</p>}
           <p className="fine">
             {t('By placing your order you agree to our {terms} and {privacy}.', {
               terms: <Link to="/terms">{t('Terms')}</Link>,
@@ -244,7 +262,7 @@ export default function Checkout() {
             })}
           </p>
         </form>
-        <OrderSummary cart={cart} subtotal={subtotal} shipping={shipping} region={region} />
+        <OrderSummary cart={placed?.cart || cart} subtotal={placed?.subtotal ?? subtotal} shipping={placed?.shipping ?? shipping} region={region} />
       </div>
     </section>
   );

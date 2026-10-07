@@ -21,6 +21,7 @@ import { requireRole, asyncHandler } from '../middleware/auth.js';
 import { ORDER_STATUSES, ORDER_CANCELLED, STATUS_FROM_KEY, statusKey } from '../config/commerce.js';
 import { productQuery, createProduct, updateProduct, deleteProduct } from './products.js';
 import { listOrders, updateOrder } from './orders.js';
+import { refundOrder, reconcile } from '../services/payments.js';
 import { usersPipeline, shape, readPeriod } from './users.js';
 import { publicCoupon } from '../services/coupons.js';
 import { getHome } from './storefront.js';
@@ -201,6 +202,37 @@ r.post(
     if (o.status === ORDER_CANCELLED) return res.status(409).json({ message: 'This order is already cancelled.' });
     req.body = { status: ORDER_CANCELLED, note: String(req.body?.reason || req.body?.note || 'Cancelled by the house.').slice(0, 300) };
     updateOrder(req, res, next);
+  })
+);
+
+// Online payments: refund (admins only; amount in rupees, empty = the rest)
+// and "check with Razorpay" when a payment seems stuck.
+r.post(
+  '/orders/:id/refund',
+  requireRole(),
+  asyncHandler(async (req, res) => {
+    if (!(await resolveOrder(req, res))) return;
+    const { amount, paymentId, reason } = req.body || {};
+    if (amount !== undefined && amount !== null && amount !== '' && !(typeof amount === 'number' || /^\d+(\.\d{1,2})?$/.test(String(amount)))) {
+      return res.status(400).json({ code: 'REFUND_INVALID_AMOUNT', message: 'Enter the refund amount as a number, e.g. 1499.' });
+    }
+    if (paymentId !== undefined && typeof paymentId !== 'string') return res.status(400).json({ message: 'paymentId must be a Razorpay payment id.' });
+    try {
+      const o = await refundOrder(req.params.id, { amount: amount === '' ? undefined : amount, paymentId, reason: typeof reason === 'string' ? reason : '', by: req.user.email });
+      res.json({ ...o.toObject(), id: String(o._id), statusKey: statusKey(o) });
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ ...(e.code && { code: e.code }), message: e.message });
+      throw e;
+    }
+  })
+);
+r.post(
+  '/orders/:id/payment-check',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    if (!(await resolveOrder(req, res))) return;
+    const o = await reconcile(await Order.findById(req.params.id));
+    res.json({ ...o.toObject(), id: String(o._id), statusKey: statusKey(o) });
   })
 );
 

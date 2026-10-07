@@ -193,7 +193,9 @@ export default function OrderDetails() {
       setSaved(null);
       reload();
     } catch (e) {
-      if (!e.dismissed) toast(e.message, 'warn');
+      if (e.kind === 'confirming') toast(t('We are confirming your payment. Please do not pay again.'), 'warn');
+      else if (!e.dismissed) toast(e.message, 'warn');
+      reload();
     } finally {
       setPaying(false);
     }

@@ -11,7 +11,8 @@
     "dev": "concurrently -n api,web -c yellow,magenta \"node --watch server/src/index.js\" \"npm run dev --prefix client\"",
     "build": "npm install --prefix client --include=dev && npm run build --prefix client",
     "start": "node server/src/index.js",
-    "seed": "node server/src/seed/seed.js"
+    "seed": "node server/src/seed/seed.js",
+    "test": "node --test --test-concurrency=1 \"server/test/**/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -29,6 +30,7 @@
     "nodemailer": "^6.10.1"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "mongodb-memory-server-core": "^10.4.3"
   }
 }

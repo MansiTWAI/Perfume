@@ -51,6 +51,112 @@ function formFrom(order) {
   };
 }
 
+const PAY_LABEL = { pending: 'Pending', paid: 'Paid', partially_refunded: 'Partly refunded', refunded: 'Refunded' };
+const ISSUE_LABEL = { amount_mismatch: 'Wrong amount paid', duplicate_payment: 'Paid twice', paid_after_cancel: 'Paid after cancelling' };
+const rupees = (paise, currency) => money((paise || 0) / 100, currency);
+
+// Online payment: what Razorpay reported, money to give back, refunds sent.
+// Refunds are admin-only and need a second click to confirm.
+function PaymentPanel({ order, onSaved }) {
+  const { user, toast } = useStore();
+  const p = order.payment || {};
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [target, setTarget] = useState(null); // payment id being refunded, after the first click
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const isAdmin = user?.role === 'admin';
+  const openIssues = (p.issues || []).filter((i) => !i.resolved);
+  const left = Math.max(0, (p.amount || 0) - (p.refundedAmount || 0));
+  const canRefundMain = p.providerPaymentId && ['paid', 'partially_refunded'].includes(order.paymentStatus) && left > 0;
+  const stuck = order.paymentStatus === 'pending' && (p.attempts?.length || p.providerOrderId);
+  if (!p.providerPaymentId && !stuck && !openIssues.length) return null;
+
+  async function run(kind, body) {
+    setBusy(kind);
+    setError('');
+    try {
+      const o = await api(`/admin/orders/${order._id}/${kind === 'check' ? 'payment-check' : 'refund'}`, { method: 'POST', body });
+      onSaved(o);
+      toast(kind === 'check' ? (o.paymentStatus === 'pending' ? 'Razorpay has no completed payment for this order yet' : 'Payment found and recorded') : 'Refund sent to Razorpay');
+      setTarget(null);
+      setAmount('');
+      setReason('');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  }
+  const refund = (paymentId) => {
+    if (target !== paymentId) return setTarget(paymentId);
+    return run('refund', paymentId === p.providerPaymentId ? { amount: amount.trim(), reason } : { paymentId, reason: reason || 'Extra payment returned' });
+  };
+
+  return (
+    <div className="a-pay">
+      <h3>Online payment</h3>
+      {p.providerPaymentId ? (
+        <p className="a-hint">
+          <b>{PAY_LABEL[order.paymentStatus] || order.paymentStatus}</b> · {rupees(p.amount, order.currency)}{p.method && ` by ${p.method}`}
+          {p.paidAt && <><br /><small className="a-muted">{new Date(p.paidAt).toLocaleString('en-GB')} · confirmed by {p.verifiedBy || 'checkout'}</small></>}
+          <br /><small className="a-muted">Payment {p.providerPaymentId} · {p.providerOrderId}</small>
+        </p>
+      ) : (
+        <p className="a-hint">Waiting for payment of {money(order.total, order.currency)}.{p.attempts?.at(-1)?.lastError && <><br /><small className="a-muted">Last try: {p.attempts.at(-1).lastError}</small></>}</p>
+      )}
+      {stuck && (
+        <button type="button" className="a-btn" disabled={!!busy} onClick={() => run('check')} title="Asks Razorpay whether the customer paid; use it if a payment seems missing">
+          {busy === 'check' ? 'Checking…' : 'Check with Razorpay'}
+        </button>
+      )}
+
+      {openIssues.map((i) => (
+        <div key={i.providerPaymentId} className="a-pay-issue" role="alert">
+          <b>⚠ {ISSUE_LABEL[i.kind] || i.kind}: {rupees(i.amount, order.currency)} to refund</b>
+          <small>{i.note}<br />{i.providerPaymentId}</small>
+          {isAdmin && (
+            <button type="button" className={`a-btn ${target === i.providerPaymentId ? 'a-danger' : ''}`} disabled={!!busy} onClick={() => refund(i.providerPaymentId)}>
+              {busy === 'refund' && target === i.providerPaymentId ? 'Refunding…' : target === i.providerPaymentId ? `Confirm refund of ${rupees(i.amount, order.currency)}` : 'Refund this payment'}
+            </button>
+          )}
+        </div>
+      ))}
+
+      {p.refunds?.length > 0 && (
+        <ol className="a-history">
+          {p.refunds.map((r) => (
+            <li key={r.providerRefundId}>
+              <b>Refund {rupees(r.amount, order.currency)}</b> · {r.status === 'processed' ? 'sent' : r.status === 'failed' ? 'failed' : 'processing'}
+              <br /><small>{new Date(r.createdAt).toLocaleString('en-GB')}{r.by && ` · ${r.by}`}{r.reason && ` · ${r.reason}`}</small>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {canRefundMain && isAdmin && (
+        <div className="a-form a-refund">
+          <div className="a-grid2">
+            <label>Refund amount
+              <input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setTarget(null); }} placeholder={`All ${rupees(left, order.currency)}`} />
+            </label>
+            <label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Damaged in transit" maxLength={200} /></label>
+          </div>
+          <div className="a-actions">
+            <button type="button" className={`a-btn ${target === p.providerPaymentId ? 'a-danger' : ''}`} disabled={!!busy} onClick={() => refund(p.providerPaymentId)}>
+              {busy === 'refund' ? 'Refunding…' : target === p.providerPaymentId ? `Confirm: refund ${amount.trim() ? money(Number(amount), order.currency) : rupees(left, order.currency)}` : 'Refund…'}
+            </button>
+            {target === p.providerPaymentId && <button type="button" className="a-btn" onClick={() => setTarget(null)}>Cancel</button>}
+          </div>
+          <small className="a-muted">Money goes back to the customer's original payment method in 5–7 working days.</small>
+        </div>
+      )}
+      {canRefundMain && !isAdmin && <p className="a-muted a-hint">Refunds can be sent by an admin.</p>}
+      {error && <p className="a-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 // WhatsApp needs the number in international form without "+" or spaces.
 function waNumber(phone, country) {
   let d = String(phone || '').replace(/\D/g, '');
@@ -104,7 +210,7 @@ export function OrderRow({ order, onSaved }) {
           trackingNumber: f.trackingNumber,
           carrierUrl: link,
           eta,
-          paymentStatus: f.paymentStatus,
+          ...(f.paymentStatus !== order.paymentStatus && { paymentStatus: f.paymentStatus }),
           notes: f.notes,
         },
       });
@@ -134,7 +240,10 @@ export function OrderRow({ order, onSaved }) {
         <td><b>{order.orderNumber}</b><br /><small>{formatDate(order.createdAt)}</small></td>
         <td>{c.name}<br /><small>{c.address.city}, {c.address.country}</small></td>
         <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">✦ Signature Card</small></>}</td>
-        <td>{money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {order.paymentStatus}</small></td>
+        <td>
+          {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
+          {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn">⚠ refund due</small></>}
+        </td>
         <td><span className="a-pill">{order.status}</span></td>
       </tr>
       {open && (
@@ -215,11 +324,15 @@ export function OrderRow({ order, onSaved }) {
                   {(f.etaIso || f.etaText) && <button type="button" onClick={() => setF((x) => ({ ...x, etaIso: '', etaText: '' }))}>Clear</button>}
                 </div>
                 {!f.etaIso && f.etaText && <p className="a-muted a-hint">Currently: “{f.etaText}”. Pick a date to replace it.</p>}
-                <label>Payment
-                  <select value={f.paymentStatus} onChange={set('paymentStatus')}>
-                    <option value="pending">Pending</option><option value="paid">Paid</option><option value="refunded">Refunded</option>
-                  </select>
-                </label>
+                {order.payment?.providerPaymentId ? (
+                  <p className="a-hint">Payment: <b>{PAY_LABEL[order.paymentStatus]}</b> online. <small className="a-muted">Set by Razorpay; refunds are in the payment panel.</small></p>
+                ) : (
+                  <label>Payment
+                    <select value={f.paymentStatus} onChange={set('paymentStatus')}>
+                      <option value="pending">Pending</option><option value="paid">Paid</option><option value="refunded">Refunded</option>
+                    </select>
+                  </label>
+                )}
                 <label>Internal notes<textarea rows="2" value={f.notes} onChange={set('notes')} placeholder="Only the team sees these" /></label>
                 {error && <p className="a-error" role="alert">{error}</p>}
                 <div className="a-actions">
@@ -237,12 +350,7 @@ export function OrderRow({ order, onSaved }) {
                 <ol className="a-history">
                   {order.history.map((h, i) => <li key={i}><b>{h.status}</b> · {new Date(h.at).toLocaleString('en-GB')}{h.note && <><br /><small>{h.note}</small></>}</li>)}
                 </ol>
-                {order.payment?.providerPaymentId && (
-                  <p className="a-muted a-hint" style={{ marginTop: 14 }}>
-                    Paid online (Razorpay) {order.payment.paidAt && `on ${new Date(order.payment.paidAt).toLocaleString('en-GB')}`}<br />
-                    Payment <b>{order.payment.providerPaymentId}</b> · Razorpay order {order.payment.providerOrderId}
-                  </p>
-                )}
+                <PaymentPanel order={order} onSaved={onSaved} />
                 {order.edits?.length > 0 && (
                   <>
                     <h3 style={{ marginTop: 16 }}>Changed by the customer</h3>

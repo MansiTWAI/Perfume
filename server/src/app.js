@@ -44,6 +44,21 @@ app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || true }));
 // The raw body is kept for verifying payment webhook signatures.
 app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
+// NoSQL injection guard: no request may smuggle MongoDB operators ($ne, $gt,
+// $where…) into a query through the body or the query string.
+const stripOperators = (v, depth = 0) => {
+  if (!v || typeof v !== 'object' || depth > 20) return v;
+  for (const k of Object.keys(v)) {
+    if (k.startsWith('$')) delete v[k];
+    else stripOperators(v[k], depth + 1);
+  }
+  return v;
+};
+app.use((req, _res, next) => {
+  stripOperators(req.body);
+  stripOperators(req.query);
+  next();
+});
 // Versioned API: /api/v1/... is the app contract (every response wrapped as
 // { success, message, data }); /api/... is the same API with plain responses,
 // used by the website and the admin studio.
@@ -149,6 +164,9 @@ if (fs.existsSync(CLIENT_DIST)) {
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
+  // Bad JSON or a body over the 1 MB limit: the client's mistake, not ours.
+  if (err?.type === 'entity.too.large') return res.status(413).json({ message: 'The request is too large.' });
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ message: 'The request body is not valid JSON.' });
   if (err?.code === 11000) return res.status(409).json({ message: 'That slug or email is already in use.' });
   if (err?.name === 'ValidationError') return res.status(400).json({ message: err.message });
   // A malformed id in the URL (e.g. /api/orders/abc) is simply not found.

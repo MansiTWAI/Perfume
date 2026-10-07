@@ -151,6 +151,17 @@ export function StoreProvider({ children }) {
   }, []);
 
   const clearCart = useCallback(() => setCart([]), []);
+  // Re-reads today's prices for the bag (after the checkout reports a price
+  // change). Fragrances no longer on sale leave the bag.
+  const refreshCart = useCallback(async () => {
+    const products = new Map((await api('/products')).map((p) => [p.slug, p]));
+    setCart((c) =>
+      c.filter((i) => products.has(i.slug)).map((i) => {
+        const p = products.get(i.slug);
+        return { ...i, name: p.name, subtitle: p.subtitle, image: p.images?.[0]?.src, price: p.price, sizeLabel: p.sizeLabel };
+      })
+    );
+  }, []);
   const login = useCallback((token, u) => {
     setToken(token);
     setUser(u);
@@ -211,13 +222,13 @@ export function StoreProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      cart, addToCart, setQty, clearCart, subtotal, count, shipping,
+      cart, addToCart, setQty, clearCart, refreshCart, subtotal, count, shipping,
       regions, region, setRegion, currency, gulf, priceOf, fmt,
       lang, setLang, langChosen, t, dir: LANGS[lang].dir,
       cartOpen, setCartOpen, finderOpen, setFinderOpen, searchOpen, setSearchOpen,
       user, login, logout, toasts, toast,
     }),
-    [cart, addToCart, setQty, clearCart, subtotal, count, shipping, regions, region, setRegion, currency, gulf, priceOf, fmt, lang, setLang, langChosen, t, cartOpen, finderOpen, searchOpen, user, login, logout, toasts, toast]
+    [cart, addToCart, setQty, clearCart, refreshCart, subtotal, count, shipping, regions, region, setRegion, currency, gulf, priceOf, fmt, lang, setLang, langChosen, t, cartOpen, finderOpen, searchOpen, user, login, logout, toasts, toast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

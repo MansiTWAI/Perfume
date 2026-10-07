@@ -10,11 +10,14 @@ import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
-export async function placeOrder({ items = [], customer, regionCode = 'IN', paymentMethod, giftNote, userId, couponCode, historyNote = 'We have received your order.' }) {
+export async function placeOrder({ items = [], customer, regionCode = 'IN', paymentMethod, giftNote, userId, couponCode, expectedTotal, historyNote = 'We have received your order.' }) {
   const region = regionByCode(regionCode);
   if (!region?.ships) throw fail(400, 'We do not deliver to this country yet. Please contact us on WhatsApp.');
   const { currency } = region;
   if (!Array.isArray(items) || !items.length) throw fail(400, 'Your bag is empty.');
+  // Slugs are plain strings: anything else (e.g. { $ne: null }) is dropped.
+  items = items.filter((it) => it && typeof it.slug === 'string' && it.slug.length <= 120);
+  if (!items.length) throw fail(400, 'Your bag is empty.');
   const a = customer?.address || {};
   if (!customer?.name || !customer?.email || !customer?.phone || !a.line1 || !a.city || !a.postalCode) {
     throw fail(400, 'Please complete your name, contact details and delivery address.');
@@ -41,6 +44,16 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
     if (!p) throw fail(400, `${it.slug} is no longer available.`);
     if (p.stock < qty) throw fail(409, `Only ${p.stock} of ${p.name} left in stock.`);
     lines.push({ p, qty });
+  }
+
+  // The customer saw a total; if prices changed since, stop before anything
+  // is reserved and let them review the new one.
+  if (expectedTotal !== undefined && expectedTotal !== null && expectedTotal !== '') {
+    const sub = lines.reduce((n, { p, qty }) => n + p.price[currency] * qty, 0);
+    const now = sub - (coupon ? discountFor(coupon.rule, sub, currency) : 0) + shippingFor(region, sub);
+    if (Math.round(Number(expectedTotal) * 100) !== Math.round(now * 100)) {
+      throw Object.assign(fail(409, 'Prices have changed since you opened your bag. Please review the new total before you pay.'), { code: 'PRICE_CHANGED', total: now });
+    }
   }
 
   // Reserve stock atomically; roll back if any line fails.
