@@ -35,25 +35,56 @@ function LeadDetail({ id, onChanged, onClose }) {
   }
   if (lead === false) return <aside className="a-panel a-lead-detail"><p>Could not load this lead.</p></aside>;
   if (!lead) return <aside className="a-panel a-lead-detail"><p>Loading…</p></aside>;
+  const c = lead.customer || {};
+  const wa = (c.phone || '').replace(/\D/g, '');
+  const initials = (c.name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const spent = Object.entries(c.orders?.spent || {}).map(([cur, n]) => money(n, cur)).join(' + ');
+  const interest = [
+    lead.interestedProducts?.join(', '),
+    lead.budget?.amount && `budget ${money(lead.budget.amount, lead.budget.currency)}`,
+    lead.quantity > 1 && `${lead.quantity} pieces`,
+    lead.useCase,
+    { browsing: 'browsing', considering: 'considering', ready: 'ready to buy' }[lead.intent],
+    (lead.wantsCallback || lead.handoff?.at) && `wants a callback${lead.handoff?.reason ? ` (${lead.handoff.reason})` : ''}`,
+  ].filter(Boolean).join(' · ');
   return (
     <aside className="a-panel a-lead-detail">
       <header>
-        <h2>{lead.name || 'Anonymous shopper'}</h2>
+        <div className="a-lead-who">
+          <span className="a-avatar" aria-hidden="true">{initials}</span>
+          <div>
+            <h2>{c.name || 'Anonymous shopper'}</h2>
+            <small>{c.account ? `Registered customer since ${formatDate(c.account.joined)}` : c.email || c.phone ? 'Guest (not registered)' : 'Has not shared contact details yet'}{lead.region ? ` · ${lead.region}` : ''}</small>
+          </div>
+        </div>
         <button type="button" className="a-btn" onClick={onClose}>Close</button>
       </header>
-      <p className="a-hint">
-        {lead.email && <a href={`mailto:${lead.email}`} className="a-link">{lead.email}</a>}
-        {lead.phone && <> · <a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="a-link">{lead.phone} (WhatsApp)</a></>}
-        {!lead.email && !lead.phone && <span className="a-muted">No contact details shared.</span>}
-      </p>
-      <dl className="a-lead-facts">
-        <div><dt>Score</dt><dd><span className={`a-pill ${scoreTone(lead.score)}`}>{lead.score}</span> · {lead.intent}</dd></div>
-        <div><dt>Interested in</dt><dd>{lead.interestedProducts?.join(', ') || '—'}</dd></div>
-        <div><dt>Budget</dt><dd>{lead.budget?.amount ? money(lead.budget.amount, lead.budget.currency) : '—'}</dd></div>
-        <div><dt>For</dt><dd>{lead.useCase || '—'}{lead.quantity > 1 && ` · ${lead.quantity} pieces`}</dd></div>
-        <div><dt>Callback</dt><dd>{lead.wantsCallback || lead.handoff?.at ? `Yes${lead.handoff?.reason ? ` · ${lead.handoff.reason}` : ''}` : 'No'}</dd></div>
-        <div><dt>Last seen</dt><dd>{when(lead.lastInteractionAt)}</dd></div>
+      {(wa || c.email) && (
+        <div className="a-actions">
+          {wa && <a className="a-btn" href={`https://wa.me/${wa.length === 10 ? `91${wa}` : wa}`} target="_blank" rel="noreferrer">WhatsApp</a>}
+          {c.email && <a className="a-btn" href={`mailto:${c.email}`}>Email</a>}
+        </div>
+      )}
+
+      <h3>Customer details</h3>
+      <dl className="a-lead-table">
+        <dt>Email</dt><dd>{c.email || '—'}</dd>
+        <dt>Phone</dt><dd>{c.phone || '—'}</dd>
+        <dt>Address</dt><dd>{c.address || '—'}</dd>
+        <dt>Past orders</dt>
+        <dd>{c.orders?.count ? <>{c.orders.count} order{c.orders.count === 1 ? '' : 's'}{spent && ` · ${spent} spent`}{c.orders.last && <> · last <b>{c.orders.last.orderNumber}</b> ({c.orders.last.status}, {formatDate(c.orders.last.at)})</>}</> : 'None yet'}</dd>
+        <dt>Chats</dt><dd>{c.chats?.count || 1} · first {when(c.chats?.first)} · last {when(c.chats?.last)}</dd>
+        <dt>Score</dt><dd><span className={`a-pill ${scoreTone(lead.score)}`}>{lead.score}</span></dd>
       </dl>
+      {!c.email && !c.phone && <p className="a-muted a-hint">No contact shared in the chat yet. The concierge asks once for a name and WhatsApp number when someone shows interest.</p>}
+
+      <h3>What they asked</h3>
+      {lead.asked?.length ? (
+        <ol className="a-asked">{lead.asked.map((m, i) => <li key={i}>{m.text} <small>{when(m.at)}</small></li>)}</ol>
+      ) : <p className="a-muted">No messages kept.</p>}
+
+      <h3>Interest</h3>
+      <p className="a-hint">{interest || '—'}</p>
       {lead.summary && <p className="a-hint">“{lead.summary}”</p>}
       <label>Status
         <select value={lead.status} disabled={busy} onChange={(e) => save({ status: e.target.value })}>
@@ -67,7 +98,7 @@ function LeadDetail({ id, onChanged, onClose }) {
       {lead.notes?.length > 0 && (
         <ol className="a-history">{[...lead.notes].reverse().map((n, i) => <li key={i}>{n.text}<br /><small>{when(n.at)} · {n.by}</small></li>)}</ol>
       )}
-      <h3>Conversation</h3>
+      <h3>Full conversation</h3>
       <div className="a-convo">
         {lead.conversation?.length ? lead.conversation.map((m, i) => (
           <p key={i} className={`a-convo-${m.role}`}><b>{m.role === 'user' ? 'Shopper' : 'Concierge'}</b> {m.text.replace(/\*\*/g, '')}</p>
@@ -114,13 +145,13 @@ export default function Leads() {
   const rows = (list) => (
     <div className="a-table-wrap">
       <table className="a-table a-leads">
-        <thead><tr><th>Lead</th><th>Interested in</th><th>Budget</th><th>Intent · score</th><th>Status</th><th>Last</th></tr></thead>
+        <thead><tr><th>Lead</th><th>What they asked</th><th>Interested in</th><th>Intent · score</th><th>Status</th><th>Last</th></tr></thead>
         <tbody>
           {list.map((l) => (
             <tr key={l._id} onClick={() => setOpen(l._id)} className={open === l._id ? 'is-open' : ''}>
               <td><b>{l.name || 'Anonymous'}</b>{(l.wantsCallback || l.handoff?.at) && <span className="a-pill warn a-cb">callback</span>}<br /><small>{l.email || l.phone || 'no contact yet'}</small></td>
-              <td>{l.interestedProducts?.join(', ') || '—'}<br /><small>{l.useCase}</small></td>
-              <td>{l.budget?.amount ? money(l.budget.amount, l.budget.currency) : '—'}</td>
+              <td className="a-asked-cell">{l.asked?.length ? l.asked.map((q) => `“${q.length > 60 ? `${q.slice(0, 60)}…` : q}”`).join(' · ') : <small>—</small>}</td>
+              <td>{l.interestedProducts?.join(', ') || '—'}{l.budget?.amount ? <><br /><small>budget {money(l.budget.amount, l.budget.currency)}</small></> : null}</td>
               <td>{l.intent} · <span className={`a-pill ${scoreTone(l.score)}`}>{l.score}</span></td>
               <td><span className="a-pill">{l.status}</span></td>
               <td><small>{when(l.lastInteractionAt)}</small></td>

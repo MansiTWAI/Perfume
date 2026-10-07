@@ -253,6 +253,52 @@ describe('automatic lead capture (no createLead call from the model)', () => {
   });
 });
 
+describe('lead details', () => {
+  test('signed-in shopper: the lead gets name, email and phone from the account (not sent to Gemini)', async () => {
+    await catalogue();
+    const me = await makeUser('customer', 'sana@example.test');
+    await me.user.updateOne({ name: 'Sana Ali', phone: '+91 90000 11111' });
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('ZAFREON it is.'));
+    await say('I want a perfume for my wedding', { token: me.token });
+    const lead = await Lead.findOne().lean();
+    assert.equal(lead.name, 'Sana Ali');
+    assert.equal(lead.email, 'sana@example.test');
+    assert.equal(lead.phone, '+91 90000 11111');
+    assert.ok(!sent().includes('sana@example.test') && !sent().includes('90000'));
+  });
+  test('anonymous shopper with interest is asked once for a name and WhatsApp number', async () => {
+    await catalogue();
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('ZAFREON.'));
+    const a = await say('i want perfume for night');
+    const sid = { body: { sessionId: a.body.sessionId } };
+    gemini.reply(gemini.text('Yes.'));
+    await say('low price?', sid);
+    gemini.reply(gemini.text('Sure.'));
+    await say('ok thanks', sid);
+    const asks = gemini.requests.map((r) => /ask for their name and WhatsApp number/.test(r.body.systemInstruction.parts[0].text));
+    assert.deepEqual(asks, [false, false, true, false]); // turn 1 (2 calls): no lead yet; turn 2: ask; turn 3: not again
+  });
+  test('admin sees what they asked and the full customer picture (account, address, orders)', async () => {
+    const p = await makeProduct({ slug: 'zafreon' });
+    const buyer = await makeUser('customer', 'repeat@example.test');
+    await buyer.user.updateOne({ name: 'Repeat Buyer', phone: '9876543210', address: { line1: '12 Banjara Hills', city: 'Hyderabad', postalCode: '500034' } });
+    await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'repeat@example.test', token: buyer.token });
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('Here.'));
+    await say('I want ZAFREON again as a gift', { token: buyer.token });
+    const { token } = await makeUser('admin');
+    const list = await http('GET', '/api/admin/leads', { token });
+    assert.deepEqual(list.body.items[0].asked, ['I want ZAFREON again as a gift']);
+    const d = await http('GET', `/api/admin/leads/${list.body.items[0]._id}`, { token });
+    assert.equal(d.body.customer.name, 'Repeat Buyer');
+    assert.equal(d.body.customer.email, 'repeat@example.test');
+    assert.match(d.body.customer.address, /12 Banjara Hills, Hyderabad, 500034/);
+    assert.ok(d.body.customer.account);
+    assert.equal(d.body.customer.orders.count, 1);
+    assert.equal(d.body.customer.orders.spent.INR, 2898);
+    assert.equal(d.body.asked[0].text, 'I want ZAFREON again as a gift');
+  });
+});
+
 describe('admin lead intelligence', () => {
   async function seedLeads() {
     await Lead.create([

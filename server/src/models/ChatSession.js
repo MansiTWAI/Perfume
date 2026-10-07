@@ -15,6 +15,7 @@ const chatSessionSchema = new mongoose.Schema(
     lead: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
     turns: { type: Number, default: 0 },
     orderLookups: { type: Number, default: 0 },
+    contactAsked: { type: Boolean, default: false }, // asked once for a name/number
     lastAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },
   },
   { timestamps: true }

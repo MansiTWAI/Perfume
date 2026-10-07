@@ -155,6 +155,13 @@ export async function upsertLead(ctx, fields = {}) {
   lead ||= new Lead({ region: ctx.region });
   if (!lead.sessionIds.includes(session.sessionId)) lead.sessionIds.push(session.sessionId);
   if (ctx.user && !lead.user) lead.user = ctx.user._id;
+  // A signed-in shopper is known: take the contact from their account
+  // (server-side only; never sent to the model).
+  if (ctx.user) {
+    if (!lead.name && ctx.user.name) lead.name = String(ctx.user.name).slice(0, 80);
+    if (!lead.email && ctx.user.email) lead.email = ctx.user.email;
+    if (!lead.phone && ctx.user.phone) lead.phone = String(ctx.user.phone).slice(0, 20);
+  }
   if (email) lead.email = email;
   if (phone) lead.phone = phone;
   if (fields.name) lead.name = fields.name;

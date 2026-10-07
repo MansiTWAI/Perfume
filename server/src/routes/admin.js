@@ -241,6 +241,35 @@ r.post(
 );
 
 // ----- AI leads (from the website concierge) -----
+// Everything the shop knows about a lead's person: their account (by user,
+// email or phone), their orders and their chats.
+async function customerFor(lead, chats) {
+  const digits = String(lead.phone || '').replace(/\D/g, '').slice(-10);
+  const phoneRx = digits.length === 10 ? new RegExp(`${digits.split('').join('\\D*')}$`) : null;
+  const who = [...(lead.user ? [{ _id: lead.user }] : []), ...(lead.email ? [{ email: lead.email }] : []), ...(phoneRx ? [{ phone: phoneRx }] : [])];
+  const account = who.length ? await User.findOne({ $or: who }).select('name email phone address createdAt role').lean() : null;
+  const orderWho = [
+    ...(account ? [{ user: account._id }, { 'customer.email': account.email }] : []),
+    ...(lead.email ? [{ 'customer.email': lead.email }] : []),
+    ...(phoneRx ? [{ 'customer.phone': phoneRx }] : []),
+  ];
+  const orders = orderWho.length ? await Order.find({ $or: orderWho }).sort({ createdAt: -1 }).select('orderNumber status total currency createdAt customer.name customer.email customer.phone customer.address').lean() : [];
+  const last = orders[0];
+  const a = account?.address || {};
+  const addr = (x) => [x?.line1, x?.line2, x?.city, x?.state, x?.postalCode, x?.country].filter(Boolean).join(', ');
+  const spent = {};
+  for (const o of orders) if (o.status !== 'Cancelled') spent[o.currency] = (spent[o.currency] || 0) + (o.total || 0);
+  return {
+    name: lead.name || account?.name || last?.customer?.name || '',
+    email: lead.email || account?.email || last?.customer?.email || '',
+    phone: lead.phone || account?.phone || last?.customer?.phone || '',
+    account: account ? { id: String(account._id), joined: account.createdAt, role: account.role } : null,
+    address: addr(a) || addr(last?.customer?.address) || '',
+    orders: { count: orders.length, spent, last: last ? { orderNumber: last.orderNumber, status: last.status, total: last.total, currency: last.currency, at: last.createdAt } : null },
+    chats: { count: chats.length, first: chats[0]?.createdAt || lead.createdAt, last: chats.at(-1)?.lastAt || lead.lastInteractionAt },
+  };
+}
+
 // Filters: q (name/email/phone/product), status, hot, minScore, callback,
 // product, maxBudget, currency, period, needsFollowUp; sort score|recent|oldest.
 r.get(
@@ -259,7 +288,11 @@ r.get(
       Lead.countDocuments(f),
       Lead.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
     ]);
-    res.json({ ...paged(items, total, p), counts: Object.fromEntries(counts.map((c) => [c._id, c.n])), aiEnabled: geminiConfigured() });
+    // The shopper's own words, for the list (first few questions per lead).
+    const sessions = await ChatSession.find({ sessionId: { $in: items.flatMap((l) => l.sessionIds || []) } }).select('sessionId messages.role messages.text').lean();
+    const asked = new Map(sessions.map((s) => [s.sessionId, s.messages.filter((m) => m.role === 'user').map((m) => m.text)]));
+    const withAsked = items.map((l) => ({ ...l, asked: (l.sessionIds || []).flatMap((id) => asked.get(id) || []).slice(0, 3) }));
+    res.json({ ...paged(withAsked, total, p), counts: Object.fromEntries(counts.map((c) => [c._id, c.n])), aiEnabled: geminiConfigured() });
   })
 );
 r.get(
@@ -270,7 +303,8 @@ r.get(
     const lead = await Lead.findById(req.params.id).lean();
     if (!lead) return res.status(404).json({ message: 'Lead not found.' });
     const chats = await ChatSession.find({ sessionId: { $in: lead.sessionIds || [] } }).sort({ createdAt: 1 }).select('messages createdAt lastAt').lean();
-    res.json({ ...lead, conversation: chats.flatMap((c) => c.messages.map((m) => ({ role: m.role, text: m.text, at: m.at }))) });
+    const conversation = chats.flatMap((c) => c.messages.map((m) => ({ role: m.role, text: m.text, at: m.at })));
+    res.json({ ...lead, conversation, asked: conversation.filter((m) => m.role === 'user'), customer: await customerFor(lead, chats) });
   })
 );
 r.patch(
