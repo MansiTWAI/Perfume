@@ -219,6 +219,7 @@ export default function Orders() {
           <option value="">All payments</option>
           <option value="pending">Payment pending</option>
           <option value="paid">Paid</option>
+          <option value="partially_refunded">Partly refunded</option>
           <option value="refunded">Refunded</option>
         </select>
         <select value={filters.currency} onChange={(e) => update({ currency: e.target.value })} aria-label="Filter by market">

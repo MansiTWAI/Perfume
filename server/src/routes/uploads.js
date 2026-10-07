@@ -19,6 +19,17 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, TYPES.includes(file.mimetype)),
 });
 
+// The real type, from the file's first bytes: the browser's word for it
+// (and the file name) can be anything, e.g. an HTML page named photo.jpg.
+export function sniffImage(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { type: 'image/jpeg', ext: '.jpg' };
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { type: 'image/png', ext: '.png' };
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return { type: 'image/webp', ext: '.webp' };
+  if (buf.toString('ascii', 4, 8) === 'ftyp' && /^avi[fs]$/.test(buf.toString('ascii', 8, 12))) return { type: 'image/avif', ext: '.avif' };
+  return null;
+}
+
 // CLOUDINARY_URL=cloudinary://<key>:<secret>@<cloud> or the three separate variables.
 function cloudinaryConfig() {
   const fromUrl = /^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/.exec(process.env.CLOUDINARY_URL || '');
@@ -62,8 +73,11 @@ r.post(
   receive,
   asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Upload a JPG, PNG, WebP or AVIF image under 4 MB.' });
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    const base = `${slugify(path.basename(req.file.originalname, ext)) || 'image'}-${code(5).toLowerCase()}`;
+    const real = sniffImage(req.file.buffer);
+    if (!real) return res.status(400).json({ message: 'That file is not a JPG, PNG, WebP or AVIF image. Please choose a photo.' });
+    req.file.mimetype = real.type;
+    const ext = real.ext;
+    const base = `${slugify(path.parse(req.file.originalname).name) || 'image'}-${code(5).toLowerCase()}`;
     const cfg = cloudinaryConfig();
     let warning;
     if (cfg) {
@@ -86,7 +100,10 @@ export const serveUpload = asyncHandler(async (req, res) => {
   const file = await Media.findOne({ name: req.params.name });
   if (!file) return res.status(404).end();
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
-  res.type(file.contentType).send(file.data);
+  // Images only, never rendered as a page even if something odd was stored.
+  res.set('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type(file.contentType && file.contentType.startsWith('image/') ? file.contentType : 'application/octet-stream').send(file.data);
 });
 
 export default r;

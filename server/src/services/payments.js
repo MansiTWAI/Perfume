@@ -11,6 +11,7 @@ import { ORDER_CANCELLED } from '../config/commerce.js';
 import {
   razorpayConfigured, toMinor, fetchPayment, fetchOrderPayments, capturePayment, createRefund, payLog,
 } from './razorpay.js';
+import { orderReady } from './shipping.js';
 
 const fail = (status, message, code) => Object.assign(new Error(message), { status, ...(code && { code }) });
 
@@ -115,6 +116,8 @@ export async function applyPayment(p, source, round = 0) {
     await recordIssue(claimed, 'paid_after_cancel', p, 'Paid after the order was cancelled. Refund it, or reopen the order.');
   }
   payLog('payment_captured', { ...log, status: 'captured', outcome: 'paid' });
+  // Paid: confirmation email, and the Delhivery shipment when automatic.
+  if (claimed.status !== ORDER_CANCELLED) orderReady(order._id);
   return { outcome: 'paid', order: await Order.findById(order._id) };
 }
 

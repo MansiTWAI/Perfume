@@ -46,3 +46,36 @@ export function resetEmail({ name, link }) {
 </div>`,
   };
 }
+
+// Order and shipping updates, one per milestone (services/shipping.js makes
+// sure each is sent once). Only the order number, the AWB and a link to the
+// customer's own order page: no address or payment details.
+const SHIP_COPY = {
+  confirmed: ['Your order {n} is confirmed', 'Order confirmed', 'Thank you. Your order is confirmed and we are preparing it with care. We will email you again as soon as it is with the courier.'],
+  shipment_created: ['Your order {n} is being prepared for dispatch', 'Shipment created', 'Your parcel has been booked with Delhivery and will be picked up shortly.'],
+  shipped: ['Your order {n} is on its way', 'On its way', 'Delhivery has picked up your parcel. You can follow every step from your order page.'],
+  out_for_delivery: ['Your order {n} arrives today', 'Out for delivery', 'Your parcel is out for delivery today. Please keep your phone nearby for the courier.'],
+  delivered: ['Your order {n} has been delivered', 'Delivered', 'Your parcel has been delivered. Thank you for choosing AL BARAKAH LIFESTYLE. We would love to hear what you think.'],
+  exception: ['An update on your order {n}', 'A short delay', 'Delhivery could not complete the delivery as planned. They will try again; if anything is needed from you, we will be in touch on WhatsApp.'],
+  rto: ['An update on your order {n}', 'Returning to us', 'Your parcel could not be delivered and is on its way back to us. We will contact you to arrange a new delivery or a refund.'],
+};
+export function shippingEmail(key, order) {
+  const [subject, heading, body] = SHIP_COPY[key];
+  const n = order.orderNumber;
+  const first = String(order.customer?.name || '').split(' ')[0] || 'there';
+  const site = String(process.env.SITE_URL || 'https://albarakah.me').replace(/\/$/, '');
+  const link = `${site}/profile/orders/${encodeURIComponent(n)}`;
+  const awb = order.shipment?.awb ? `Delhivery AWB: ${order.shipment.awb}` : '';
+  return {
+    subject: subject.replace('{n}', n),
+    text: `Hello ${first},\n\n${body}\n\nOrder: ${n}${awb ? `\n${awb}` : ''}\nTrack it: ${link}\n\nAL BARAKAH LIFESTYLE`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#2a1a17">
+<p style="letter-spacing:.2em;color:#8a6424;font-size:12px">AL BARAKAH LIFESTYLE</p>
+<h1 style="font-family:Georgia,serif;font-weight:400;color:#4b0e14">${esc(heading)}</h1>
+<p>Hello ${esc(first)},</p>
+<p>${esc(body)}</p>
+<p style="color:#6b5f57;font-size:13px">Order ${esc(n)}${awb ? `<br>${esc(awb)}` : ''}</p>
+<p style="margin:28px 0"><a href="${esc(link)}" style="background:#4b0e14;color:#f6efe3;padding:14px 26px;text-decoration:none;letter-spacing:.12em;font-size:13px">TRACK YOUR ORDER</a></p>
+</div>`,
+  };
+}

@@ -115,7 +115,7 @@ export default function Header() {
             <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}>{Icon.search}</button>
             <div className="nav-desktop-only"><RegionSelect /></div>
             <div className="nav-desktop-only"><AccountMenu /></div>
-            <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t('Bag, {n} items', { n: count })}>
+            <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t(count === 1 ? 'Bag, 1 item' : 'Bag, {n} items', { n: count })}>
               {Icon.bag}
               <AnimatePresence>
                 {count > 0 && (

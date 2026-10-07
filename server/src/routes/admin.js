@@ -22,6 +22,9 @@ import { ORDER_STATUSES, ORDER_CANCELLED, STATUS_FROM_KEY, statusKey } from '../
 import { productQuery, createProduct, updateProduct, deleteProduct } from './products.js';
 import { listOrders, updateOrder } from './orders.js';
 import { refundOrder, reconcile } from '../services/payments.js';
+import { ensureShipment, refreshTracking, cancelShipmentFor, notReady, autoCreateOn } from '../services/shipping.js';
+import { delhiveryConfigured, delhiveryMode } from '../services/delhivery.js';
+import { SHIPMENT_STATUSES, SHIPMENT_LABELS } from '../config/commerce.js';
 import Lead, { LEAD_STATUSES } from '../models/Lead.js';
 import ChatSession from '../models/ChatSession.js';
 import { leadFilter, leadSort, askLeads } from '../services/ai/adminAi.js';
@@ -237,6 +240,127 @@ r.post(
     if (!(await resolveOrder(req, res))) return;
     const o = await reconcile(await Order.findById(req.params.id));
     res.json({ ...o.toObject(), id: String(o._id), statusKey: statusKey(o) });
+  })
+);
+
+// ----- shipments (Delhivery) -----
+// Whether Delhivery is set up (never the token itself).
+r.get(
+  '/shipments/status',
+  requireRole(...SERVE),
+  asyncHandler(async (_req, res) => {
+    res.json({
+      configured: delhiveryConfigured(), mode: delhiveryMode(), autoCreate: autoCreateOn(),
+      webhook: !!process.env.DELHIVERY_WEBHOOK_TOKEN, statuses: SHIPMENT_STATUSES, labels: SHIPMENT_LABELS,
+    });
+  })
+);
+
+// Orders and their shipments. status: a shipment status, 'awaiting' (ready
+// to ship, no shipment yet) or 'errors'; q: order ID, AWB, customer name,
+// email or phone; from / to: order date (YYYY-MM-DD).
+const AWAITING = {
+  currency: 'INR',
+  status: { $in: ['Order Placed', 'Confirmed', 'Packed'] },
+  $and: [
+    { $or: [{ paymentStatus: 'paid' }, { paymentMethod: 'cod', paymentStatus: 'pending' }] },
+    { $or: [{ 'shipment.awb': { $in: [null, ''] } }, { 'shipment.status': { $in: ['failed', 'cancelled'] } }] },
+  ],
+};
+const shipmentRow = (o) => ({
+  id: String(o._id), orderNumber: o.orderNumber, createdAt: o.createdAt, status: o.status,
+  paymentStatus: o.paymentStatus, paymentMethod: o.paymentMethod, total: o.total, currency: o.currency,
+  customer: { name: o.customer?.name, email: o.customer?.email, phone: o.customer?.phone, city: o.customer?.address?.city, postalCode: o.customer?.address?.postalCode },
+  carrier: o.carrier || '', trackingNumber: o.trackingNumber || '',
+  shipment: o.shipment?.provider ? {
+    status: o.shipment.status || 'pending', label: SHIPMENT_LABELS[o.shipment.status] || 'Awaiting shipment',
+    awb: o.shipment.awb || '', courierStatus: o.shipment.courierStatus || '', location: o.shipment.location || '',
+    error: o.shipment.error || '', errorAt: o.shipment.errorAt, attempts: o.shipment.attempts || 0, nextAttemptAt: o.shipment.nextAttemptAt,
+    lastTrackingUpdate: o.shipment.lastTrackingUpdate, lastCheckedAt: o.shipment.lastCheckedAt, lastEventAt: o.shipment.lastEventAt,
+    expectedDelivery: o.shipment.expectedDelivery, deliveredAt: o.shipment.deliveredAt, events: (o.shipment.events || []).length,
+  } : null,
+  blocker: notReady(o, { manual: true }),
+});
+r.get(
+  '/shipments',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    const p = page(req.query, 25);
+    const and = [];
+    const st = String(req.query.status || '');
+    if (st === 'awaiting') and.push(AWAITING);
+    else if (st === 'errors') and.push({ $or: [{ 'shipment.status': 'failed' }, { 'shipment.status': 'exception' }, { 'shipment.error': { $nin: [null, ''] } }] });
+    else if (SHIPMENT_STATUSES.includes(st)) and.push({ 'shipment.status': st });
+    else and.push({ $or: [{ 'shipment.provider': 'delhivery' }, AWAITING] });
+    const q = String(req.query.q || '').trim().slice(0, 80);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      const digits = q.replace(/\D/g, '');
+      and.push({ $or: [
+        { orderNumber: q.toUpperCase() }, { 'shipment.awb': q }, { trackingNumber: q },
+        { 'customer.name': rx }, { 'customer.email': rx },
+        ...(digits.length >= 6 ? [{ 'customer.phone': new RegExp(digits.split('').join('\\D*')) }] : []),
+      ] });
+    }
+    const day = (v, end) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? new Date(`${v}T${end ? '23:59:59.999' : '00:00:00'}+05:30`) : null);
+    const from = day(req.query.from), to = day(req.query.to, true);
+    if (from || to) and.push({ createdAt: { ...(from && { $gte: from }), ...(to && { $lte: to }) } });
+    const filter = { $and: and };
+    const [items, total, counts, awaiting] = await Promise.all([
+      Order.find(filter).sort({ createdAt: -1 }).skip((p.page - 1) * p.limit).limit(p.limit).select('-shipment.events -history -edits -payment').lean(),
+      Order.countDocuments(filter),
+      Order.aggregate([{ $match: { 'shipment.provider': 'delhivery' } }, { $group: { _id: '$shipment.status', n: { $sum: 1 } } }]),
+      Order.countDocuments(AWAITING),
+    ]);
+    res.json({ ...paged(items.map(shipmentRow), total, p), counts: { ...Object.fromEntries(counts.map((c) => [c._id || 'pending', c.n])), awaiting } });
+  })
+);
+
+// Create the shipment, or retry a failed one.
+r.post(
+  '/orders/:id/shipment',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    if (!(await resolveOrder(req, res))) return;
+    const out = await ensureShipment(req.params.id, { manual: true, by: req.user.email });
+    if (!out.ok) {
+      const status = out.busy ? 409 : out.order?.shipment?.status === 'failed' ? 502 : 409;
+      return res.status(status).json({ code: out.busy ? 'SHIPMENT_IN_PROGRESS' : 'SHIPMENT_NOT_CREATED', message: out.reason, order: out.order && { ...(out.order.toObject?.() || out.order), id: String(out.order._id) } });
+    }
+    const o = out.order.toObject();
+    res.status(201).json({ ...o, id: String(o._id), statusKey: statusKey(o) });
+  })
+);
+
+// Ask Delhivery for the latest scans now.
+r.post(
+  '/orders/:id/shipment/refresh',
+  requireRole(...SERVE),
+  asyncHandler(async (req, res) => {
+    if (!(await resolveOrder(req, res))) return;
+    const o = await Order.findById(req.params.id).lean();
+    if (!o.shipment?.awb) return res.status(409).json({ message: 'This order has no Delhivery AWB yet.' });
+    if (!delhiveryConfigured()) return res.status(503).json({ message: 'Delhivery is not set up on the server yet.' });
+    try {
+      await refreshTracking([o], 'admin');
+    } catch (e) {
+      return res.status(502).json({ code: 'TRACKING_UNAVAILABLE', message: e.message || 'Delhivery tracking is not responding. Try again shortly.' });
+    }
+    const fresh = await Order.findById(o._id).lean();
+    res.json({ ...fresh, id: String(fresh._id), statusKey: statusKey(fresh) });
+  })
+);
+
+// Cancel the Delhivery shipment (the order itself stays as it is).
+r.post(
+  '/orders/:id/shipment/cancel',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    if (!(await resolveOrder(req, res))) return;
+    const out = await cancelShipmentFor(req.params.id, { by: req.user.email });
+    if (!out.ok) return res.status(409).json({ code: 'SHIPMENT_NOT_CANCELLED', message: out.reason });
+    const o = out.order.toObject();
+    res.json({ ...o, id: String(o._id), statusKey: statusKey(o) });
   })
 );
 

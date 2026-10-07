@@ -15,6 +15,7 @@ import { placeOrder } from '../services/placeOrder.js';
 import { reserve, release } from '../services/orderStock.js';
 import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
 import { orderFilter, describeFilters } from '../services/filters.js';
+import { shipmentView, freshen, orderReady, cancelShipmentFor } from '../services/shipping.js';
 import { newWorkbook, addTableSheet, sendWorkbook, fileName, tzLabel } from '../services/excel.js';
 import { buildOrdersWorkbook, buildTemplate, readOrderSheet, planOrderImport, applyOrderChanges, MAX_IMPORT_ROWS } from '../services/orderSheet.js';
 
@@ -89,10 +90,13 @@ const STATUS_KEY_OF_LABEL = { 'Order Placed': 'placed', Confirmed: 'confirmed', 
 // packed, and only while it is unpaid (a paid order would need a refund).
 const DETAILS_EDITABLE = ['Order Placed', 'Confirmed', 'Packed'];
 const ITEMS_EDITABLE = ['Order Placed', 'Confirmed'];
+// Once Delhivery has the parcel booked, its address and contents are fixed
+// there, so they can no longer change here (cancelling is still possible).
+const booked = (o) => !!(o.shipment?.awb && !['cancelled', 'failed'].includes(o.shipment.status));
 const canEdit = (o) => ({
-  details: DETAILS_EDITABLE.includes(o.status),
-  items: ITEMS_EDITABLE.includes(o.status) && o.paymentStatus !== 'paid',
-  cancel: DETAILS_EDITABLE.includes(o.status),
+  details: DETAILS_EDITABLE.includes(o.status) && !booked(o),
+  items: ITEMS_EDITABLE.includes(o.status) && o.paymentStatus !== 'paid' && !booked(o),
+  cancel: DETAILS_EDITABLE.includes(o.status) && !['picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'rto', 'returned'].includes(o.shipment?.status),
 });
 
 // What a customer may see of their own order. Internal notes, the linked
@@ -123,6 +127,8 @@ export function customerView(o) {
     paymentStatus: o.paymentStatus,
     refunded: (o.payment?.refundedAmount || 0) / 100,
     tracking: { carrier: o.carrier || '', trackingNumber: o.trackingNumber || '', status: statusKey(o), eta: o.eta || '' },
+    // Courier shipment (Delhivery): status, AWB, timeline. null until one exists.
+    shipment: shipmentView(o),
     customer: { name: o.customer?.name, email: o.customer?.email, phone: o.customer?.phone, address: o.customer?.address },
     giftNote: o.giftNote?.enabled ? { enabled: true, name: o.giftNote.name, occasion: o.giftNote.occasion, message: o.giftNote.message } : { enabled: false },
     carrier: o.carrier || '',
@@ -157,6 +163,7 @@ r.get(
       city: order.customer.address.city,
       country: order.customer.address.country,
       createdAt: order.createdAt,
+      shipment: shipmentView(order),
     });
   })
 );
@@ -543,9 +550,14 @@ export const updateOrder = asyncHandler(async (req, res) => {
         ['address.state', a.state, 80, false, 'State'],
         ['address.postalCode', a.postalCode, 20, true, 'Postal code'],
       ];
+      const bookedWithDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
       for (const [path, value, max, required, label] of fields) {
         if (value === undefined) continue;
         const v = text(value, max);
+        if (bookedWithDelhivery && (path === 'phone' || path.startsWith('address.')) && v !== String(order.get(`customer.${path}`) ?? '')) {
+          problems.push('The parcel is already booked with Delhivery for the current address. Cancel the shipment before changing the delivery details.');
+          break;
+        }
         if (required && !v) problems.push(`${label} cannot be empty.`);
         else if (path === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) problems.push('Enter a valid email address.');
         else if (path === 'phone' && v.replace(/\D/g, '').length < 6) problems.push('Enter a valid phone number.');
@@ -562,8 +574,13 @@ export const updateOrder = asyncHandler(async (req, res) => {
       order.status = status;
       order.history.push({ status, note: text(note, 300) });
     }
-    if (carrier !== undefined) order.carrier = text(carrier, 80);
-    if (trackingNumber !== undefined) order.trackingNumber = text(trackingNumber, 80);
+    // A live Delhivery shipment owns the courier fields.
+    const viaDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
+    if (viaDelhivery && ((carrier !== undefined && text(carrier, 80) !== order.carrier) || (trackingNumber !== undefined && text(trackingNumber, 80) !== order.trackingNumber))) {
+      problems.push('This order ships with Delhivery, so the courier and AWB are set automatically. Cancel the Delhivery shipment first to use another courier.');
+    }
+    if (carrier !== undefined && !viaDelhivery) order.carrier = text(carrier, 80);
+    if (trackingNumber !== undefined && !viaDelhivery) order.trackingNumber = text(trackingNumber, 80);
     let typedLink = false;
     if (carrierUrl !== undefined) {
       const link = text(carrierUrl, 500);
@@ -604,9 +621,15 @@ export const updateOrder = asyncHandler(async (req, res) => {
         done.push(i);
       }
     }
+    const wasReady = order.isModified('status') || order.isModified('paymentStatus');
     await order.save();
     if (stockMove === 'release' && order.coupon?.code) await releaseCoupon(order.coupon.code);
-    res.json(req.apiV1 ? { ...order.toObject(), id: String(order._id), statusKey: statusKey(order) } : order);
+    // Confirmed or paid: confirmation email and, when automatic, the
+    // Delhivery shipment. Cancelled: cancel the booked shipment too.
+    if (wasReady && (['Confirmed', 'Packed'].includes(order.status) || (order.status === 'Order Placed' && order.paymentStatus === 'paid'))) orderReady(order._id);
+    let out = order;
+    if (stockMove === 'release' && order.shipment?.awb && order.shipment.status !== 'cancelled') out = (await cancelShipmentFor(order._id, { by: 'admin' })).order || order;
+    res.json(req.apiV1 ? { ...out.toObject(), id: String(out._id), statusKey: statusKey(out) } : out);
 });
 r.patch('/:id', requireAdmin, updateOrder);
 
@@ -618,10 +641,15 @@ r.get(
   asyncHandler(async (req, res) => {
     const key = String(req.params.orderId).trim();
     const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
-    const o = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
+    let o = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
     if (!o) return res.status(404).json({ message: 'We could not find this order in your account.' });
+    // Fresh from Delhivery when stale (the server asks, never the browser).
+    o = await freshen(o);
     res.json({
       orderId: String(o._id),
+      paymentStatus: o.paymentStatus,
+      shipment: shipmentView(o),
+      trackingUnavailable: !!o.trackingUnavailable,
       orderNumber: o.orderNumber,
       trackingId: o.trackingId,
       status: statusKey(o),
@@ -647,7 +675,8 @@ r.get(
     const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
     const order = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
     if (!order) return res.status(404).json({ message: 'We could not find this order in your account.' });
-    res.json(customerView(order));
+    const fresh = await freshen(order);
+    res.json({ ...customerView(fresh), trackingUnavailable: !!fresh.trackingUnavailable });
   })
 );
 
@@ -771,6 +800,10 @@ r.post(
     await order.save();
     await release(order.items.map((i) => ({ product: i.product, qty: i.qty })));
     if (order.coupon?.code) await releaseCoupon(order.coupon.code);
+    if (order.shipment?.awb) {
+      const c = await cancelShipmentFor(order._id, { by: 'customer' });
+      return res.json(customerView((c.order || order).toObject()));
+    }
     res.json(customerView(order.toObject()));
   })
 );

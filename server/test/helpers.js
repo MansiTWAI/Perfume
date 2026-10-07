@@ -15,6 +15,12 @@ process.env.RAZORPAY_KEY_ID = 'rzp_test_FAKEKEY123';
 process.env.RAZORPAY_KEY_SECRET = crypto.randomBytes(16).toString('hex');
 process.env.RAZORPAY_WEBHOOK_SECRET = crypto.randomBytes(16).toString('hex');
 process.env.GEMINI_API_KEY = `test-gemini-${crypto.randomBytes(8).toString('hex')}`;
+process.env.DELHIVERY_API_TOKEN = `dlv-${crypto.randomBytes(12).toString('hex')}`;
+process.env.DELHIVERY_ENV = 'staging';
+process.env.DELHIVERY_PICKUP_LOCATION = 'Test Warehouse';
+process.env.DELHIVERY_WEBHOOK_TOKEN = crypto.randomBytes(20).toString('hex');
+process.env.DELHIVERY_AUTO_CREATE = 'true';
+process.env.MAIL_TRANSPORT = 'memory';
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mem = await MongoMemoryServer.create();
@@ -30,6 +36,8 @@ export const { default: PaymentEvent } = await import('../src/models/PaymentEven
 export const { default: Lead } = await import('../src/models/Lead.js');
 export const { default: ChatSession } = await import('../src/models/ChatSession.js');
 const { signToken } = await import('../src/middleware/auth.js');
+export const { outbox } = await import('../src/services/mail.js');
+export const shipping = await import('../src/services/shipping.js');
 const mongoose = (await import('mongoose')).default;
 await Promise.all([Order.init(), PaymentEvent.init(), Product.init(), User.init()]);
 
@@ -43,6 +51,65 @@ export const gemini = {
   text: (text) => ({ role: 'model', parts: [{ text }] }),
   call: (name, args = {}) => ({ role: 'model', parts: [{ functionCall: { name, args }, thoughtSignature: 'sig-abc' }] }),
 };
+
+// ----- fake Delhivery -----
+// Shipments by waybill. Switches: down (network error), timeoutAfterCreate
+// (creates the shipment, then the reply is lost), rejectNext (a remark),
+// trackDown. Every call is kept in dlv.calls ("POST /api/cmu/create.json").
+export const dlv = { shipments: new Map(), calls: [], bodies: [], trackQueries: [], down: false, trackDown: false, timeoutAfterCreate: false, rejectNext: null, cancelled: [] };
+const dlvBase = /^https:\/\/(staging-express|track)\.delhivery\.com/;
+const awbNo = () => String(1000000000000 + crypto.randomInt(1e9) * 1000 + crypto.randomInt(1000));
+// Adds a scan to a fake shipment (what Delhivery's tracking API returns).
+dlv.scan = (awb, Status, StatusType = 'UD', { at = new Date(), location = 'Hyderabad_Kukatpally_D (Telangana)', note = '' } = {}) => {
+  const ist = new Date(at.getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 23); // India time, no zone
+  dlv.shipments.get(awb).scans.push({ ScanDetail: { Scan: Status, ScanType: StatusType, ScanDateTime: ist, StatusDateTime: ist, ScannedLocation: location, Instructions: note } });
+  return { Status, StatusType, StatusDateTime: ist, StatusLocation: location, Instructions: note };
+};
+async function fakeDelhivery(u, opts) {
+  const url = new URL(u);
+  const method = opts.method || 'GET';
+  dlv.calls.push(`${method} ${url.pathname}`);
+  if (dlv.down) throw new TypeError('fetch failed');
+  const token = String(opts.headers?.Authorization || '').replace('Token ', '') || url.searchParams.get('token');
+  if (token !== process.env.DELHIVERY_API_TOKEN) return new Response('You could not be authenticated', { status: 401 });
+  if (method === 'POST' && url.pathname === '/api/cmu/create.json') {
+    const form = new URLSearchParams(opts.body);
+    const data = JSON.parse(form.get('data'));
+    dlv.bodies.push(data);
+    const sh = data.shipments[0];
+    const fail = (remarks) => reply(200, { success: false, package_count: 1, packages: [{ status: 'Fail', waybill: '', refnum: sh.order, remarks: [remarks] }], rmk: '' });
+    if (form.get('format') !== 'json' || data.pickup_location?.name !== process.env.DELHIVERY_PICKUP_LOCATION) return fail('ClientWarehouse matching query does not exist.');
+    if (dlv.rejectNext) { const r = dlv.rejectNext; dlv.rejectNext = null; return fail(r); }
+    if ([...dlv.shipments.values()].some((x) => x.ref === sh.order)) return fail('Duplicate order id');
+    if (!/^\d{6}$/.test(sh.pin)) return fail('Crashing while saving package due to exception pin');
+    const awb = awbNo();
+    dlv.shipments.set(awb, { ref: sh.order, payload: sh, scans: [], status: null });
+    dlv.scan(awb, 'Manifested', 'UD', { note: 'Manifest uploaded' });
+    if (dlv.timeoutAfterCreate) { dlv.timeoutAfterCreate = false; throw new DOMException('The operation timed out.', 'TimeoutError'); }
+    return reply(200, { success: true, package_count: 1, upload_wbn: `UPL${crypto.randomInt(1e9)}`, packages: [{ status: 'Success', waybill: awb, refnum: sh.order, remarks: [] }] });
+  }
+  if (method === 'GET' && url.pathname === '/api/v1/packages/json/') {
+    if (dlv.trackDown) return reply(503, { Error: 'down' });
+    dlv.trackQueries.push(Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'token')));
+    const refs = (url.searchParams.get('ref_ids') || '').split(',').filter(Boolean);
+    const want = [...new Set([...(url.searchParams.get('waybill') || '').split(',').filter(Boolean), ...[...dlv.shipments.entries()].filter(([, x]) => refs.includes(x.ref)).map(([w]) => w)])];
+    const found = want.filter((w) => dlv.shipments.has(w));
+    if (!found.length) return reply(200, { Error: 'No such waybill or Order Id found' });
+    return reply(200, { ShipmentData: found.map((w) => {
+      const x = dlv.shipments.get(w);
+      const last = x.scans.at(-1).ScanDetail;
+      return { Shipment: { AWB: w, ReferenceNo: x.ref, Status: { Status: last.Scan, StatusType: last.ScanType, StatusDateTime: last.StatusDateTime, StatusLocation: last.ScannedLocation, Instructions: last.Instructions }, Scans: x.scans, ExpectedDeliveryDate: x.edd || null, Consignee: { Name: 'should-not-be-stored' } } };
+    }) });
+  }
+  if (method === 'POST' && url.pathname === '/api/p/edit') {
+    const b = JSON.parse(opts.body);
+    if (b.cancellation !== 'true' || !dlv.shipments.has(b.waybill)) return reply(200, { status: false, remark: 'Invalid waybill' });
+    dlv.cancelled.push(b.waybill);
+    dlv.scan(b.waybill, 'Cancelled', 'UD', { note: 'Shipment cancelled' });
+    return reply(200, { status: true, waybill: b.waybill, remark: 'Shipment has been cancelled', order_id: dlv.shipments.get(b.waybill).ref });
+  }
+  return reply(404, { error: 'not found' });
+}
 
 // ----- fake Razorpay -----
 export const rzp = { orders: new Map(), payments: new Map(), refunds: new Map(), down: false, calls: [] };
@@ -60,6 +127,7 @@ globalThis.fetch = async (url, opts = {}) => {
     if (next.status) return reply(next.status, { error: { message: 'scripted error' } });
     return reply(200, { candidates: [{ content: typeof next === 'function' ? next(body) : next }] });
   }
+  if (dlvBase.test(u)) return fakeDelhivery(u, opts);
   if (!u.startsWith('https://api.razorpay.com/v1')) return realFetch(url, opts);
   const auth = Buffer.from(String(opts.headers?.Authorization || '').replace('Basic ', ''), 'base64').toString();
   if (auth !== `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`) return reply(401, { error: { code: 'BAD_REQUEST_ERROR', description: 'Authentication failed' } });
@@ -108,7 +176,7 @@ export const sign = (s, secret = process.env.RAZORPAY_KEY_SECRET) => crypto.crea
 
 // ----- HTTP -----
 const server = app.listen(0);
-const base = `http://127.0.0.1:${server.address().port}`;
+export const base = `http://127.0.0.1:${server.address().port}`;
 // Each request comes from its own client address unless `ip` is given, so
 // the per-IP rate limits only bite in the test that is about them.
 const anyIp = () => `10.${crypto.randomInt(256)}.${crypto.randomInt(256)}.${crypto.randomInt(1, 255)}`;
@@ -148,7 +216,7 @@ export async function placeOnline(items, { email = 'buyer@example.test', token, 
 
 export async function reset() {
   await mongoose.connection.db.dropDatabase();
-  await Promise.all([Order, PaymentEvent, Product, User, Lead, ChatSession].map((m) => m.createIndexes()));
+  await Promise.all(Object.values(mongoose.models).map((m) => m.createIndexes())); // unique indexes are part of the rules
   gemini.queue.length = 0;
   gemini.requests.length = 0;
   rzp.orders.clear();
@@ -156,6 +224,13 @@ export async function reset() {
   rzp.refunds.clear();
   rzp.down = false;
   rzp.calls.length = 0;
+  dlv.shipments.clear();
+  dlv.calls.length = 0;
+  dlv.bodies.length = 0;
+  dlv.trackQueries.length = 0;
+  dlv.cancelled.length = 0;
+  Object.assign(dlv, { down: false, trackDown: false, timeoutAfterCreate: false, rejectNext: null });
+  outbox.length = 0;
 }
 
 export async function close() {

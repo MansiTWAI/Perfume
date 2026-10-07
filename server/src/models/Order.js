@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ORDER_STAGES, ORDER_STATUSES } from '../config/commerce.js';
+import { ORDER_STAGES, ORDER_STATUSES, SHIPMENT_STATUSES } from '../config/commerce.js';
 
 const orderSchema = new mongoose.Schema(
   {
@@ -68,6 +68,42 @@ const orderSchema = new mongoose.Schema(
     carrierUrl: String,
     trackingNumber: String, // courier AWB / consignment number
     eta: String,
+    // Courier shipment (Delhivery), separate from the order and payment
+    // status. carrier / trackingNumber / carrierUrl above are kept in step so
+    // existing screens and apps keep working. No courier credentials or
+    // courier copies of the customer's address are stored.
+    shipment: {
+      provider: String, // delhivery
+      status: { type: String, enum: SHIPMENT_STATUSES },
+      awb: String,
+      reference: String, // Delhivery upload reference
+      orderRef: String, // order id sent to Delhivery (order number, -R2… after a cancelled shipment)
+      rev: { type: Number, default: 0 }, // bumped on every change to events, for safe recomputes
+      courierStatus: String, // Delhivery's own words for the latest scan
+      location: String,
+      events: [{
+        key: String, // dedupe: the same scan from webhook and polling is stored once
+        status: String, courierStatus: String, statusType: String, location: String, note: String,
+        at: Date, source: String, receivedAt: { type: Date, default: Date.now }, _id: false,
+      }],
+      lastEventAt: Date, // time of the latest scan (Delhivery's clock)
+      lastTrackingUpdate: Date, // when we last learned something new
+      lastCheckedAt: Date, // when we last asked Delhivery
+      createdAt: Date,
+      pickedUpAt: Date,
+      outForDeliveryAt: Date,
+      deliveredAt: Date,
+      returnedAt: Date,
+      cancelledAt: Date,
+      expectedDelivery: Date,
+      error: String,
+      errorAt: Date,
+      attempts: { type: Number, default: 0 },
+      nextAttemptAt: Date,
+      lockAt: Date, // a creation in progress; stale after two minutes
+      unknownSince: Date, // a creation whose result was lost (timeout): look it up before retrying
+      notified: [String], // customer emails already sent, one per milestone
+    },
     notes: String,
     // Changes the customer made to the order before it shipped.
     edits: [{ at: { type: Date, default: Date.now }, by: { type: String, default: 'customer' }, summary: String, _id: false }],
@@ -85,5 +121,10 @@ orderSchema.index({ 'coupon.code': 1, user: 1 });
 orderSchema.index({ 'payment.attempts.providerOrderId': 1 });
 orderSchema.index({ 'payment.providerOrderId': 1 });
 orderSchema.index({ 'payment.providerPaymentId': 1 }, { unique: true, partialFilterExpression: { 'payment.providerPaymentId': { $type: 'string' } } });
+
+// Shipping: webhook / tracking lookups by waybill (one order per waybill),
+// the tracking poller and the admin shipments list.
+orderSchema.index({ 'shipment.awb': 1 }, { unique: true, partialFilterExpression: { 'shipment.awb': { $type: 'string' } } });
+orderSchema.index({ 'shipment.status': 1, 'shipment.lastCheckedAt': 1 });
 
 export default mongoose.model('Order', orderSchema);

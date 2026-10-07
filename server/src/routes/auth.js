@@ -42,8 +42,12 @@ r.post(
   '/register',
   signInLimiter,
   asyncHandler(async (req, res) => {
-    const { name, email, password } = req.body || {};
-    const phone = String(req.body?.phone || '').trim().slice(0, 40);
+    // Plain strings only, within sane lengths.
+    const str = (v) => (typeof v === 'string' ? v : '');
+    const name = str(req.body?.name).replace(/\s+/g, ' ').trim();
+    const email = str(req.body?.email).trim();
+    const password = str(req.body?.password);
+    const phone = str(req.body?.phone).trim().slice(0, 40);
     if (!name || !email || !password) {
       return res.status(400).json({
         message: 'Name, email and password are required.',
@@ -51,6 +55,9 @@ r.post(
       });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
+    if (name.length > 80) return res.status(400).json({ message: 'Please keep your name under 80 characters.', errors: [{ field: 'name', message: 'At most 80 characters' }] });
+    if (email.length > 160) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
+    if (password.length > 200) return res.status(400).json({ message: 'Please use a password under 200 characters.', errors: [{ field: 'password', message: 'At most 200 characters' }] });
     if (String(password).length < 8) return res.status(400).json({ message: 'Use a password of at least 8 characters.', errors: [{ field: 'password', message: 'At least 8 characters' }] });
     // The website always asks for a mobile number; the app API keeps it optional.
     if (!phone && !req.apiV1) return res.status(400).json({ message: 'Please enter your mobile number.', errors: [{ field: 'phone', message: 'phone is required' }] });
@@ -211,7 +218,14 @@ r.post(
 
 // ----- password reset by email -----
 const RESET_MINUTES = 60;
-const siteUrl = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+// Links in emails never come from the request's Host header: a forged Host
+// would send the reset token to someone else's site. SITE_URL, else the first
+// CLIENT_ORIGIN, else the shop's own domain (localhost only in development).
+const siteUrl = () => {
+  const configured = process.env.SITE_URL || String(process.env.CLIENT_ORIGIN || '').split(',')[0].trim();
+  const fallback = process.env.NODE_ENV === 'production' ? 'https://albarakah.me' : `http://localhost:${process.env.PORT || 5000}`;
+  return (/^https?:\/\/[^\s/]+/.test(configured) ? configured : fallback).replace(/\/$/, '');
+};
 
 // Always answers the same way, so it cannot be used to find out who has an account.
 r.post(
@@ -226,7 +240,7 @@ r.post(
       const token = crypto.randomBytes(32).toString('base64url');
       user.passwordReset = { hash: sha256(token), expiresAt: new Date(Date.now() + RESET_MINUTES * 60000) };
       await user.save();
-      const link = `${siteUrl(req)}/reset-password?token=${token}`;
+      const link = `${siteUrl()}/reset-password?token=${token}`;
       try {
         await sendMail({ to: user.email, ...resetEmail({ name: user.name, link }) });
       } catch (e) {

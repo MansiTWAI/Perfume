@@ -59,6 +59,19 @@ export const STATUS_FROM_KEY = {
   delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Cancelled',
 };
 
+// Shipment status, kept apart from the order status and the payment status.
+// pending → created → awb_assigned → picked_up → in_transit →
+// out_for_delivery → delivered; or failed, cancelled, rto (on its way back),
+// returned (back with us) and exception (delayed, delivery attempt failed, lost).
+export const SHIPMENT_STATUSES = ['pending', 'created', 'awb_assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'failed', 'cancelled', 'rto', 'returned', 'exception'];
+export const SHIPMENT_LABELS = {
+  pending: 'Awaiting shipment', created: 'Shipment created', awb_assigned: 'AWB assigned', picked_up: 'Picked up',
+  in_transit: 'In transit', out_for_delivery: 'Out for delivery', delivered: 'Delivered', failed: 'Shipment failed',
+  cancelled: 'Shipment cancelled', rto: 'Returning to us', returned: 'Returned', exception: 'Delayed',
+};
+// Shipment states that end the journey: tracking stops checking them.
+export const SHIPMENT_FINAL = ['delivered', 'cancelled', 'returned'];
+
 export const CURRENCY_SYMBOLS = { INR: '₹', AED: 'د.إ', SAR: 'ر.س', QAR: 'ر.ق', KWD: 'د.ك', OMR: 'ر.ع.', BHD: '.د.ب' };
 
 export const regionByCode = (code) => REGIONS.find((r) => r.code === code);

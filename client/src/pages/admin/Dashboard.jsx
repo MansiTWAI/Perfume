@@ -46,7 +46,7 @@ export default function Dashboard() {
         <section className="a-panel">
           <h2>Recent orders</h2>
           {recent.length === 0 ? <p className="a-muted">No orders yet.</p> : (
-            <table className="a-table">
+            <div className="a-table-wrap"><table className="a-table">
               <tbody>
                 {recent.map((o) => (
                   <tr key={o._id}>
@@ -57,13 +57,13 @@ export default function Dashboard() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <Link to="/admin/orders" className="a-link">All orders →</Link>
         </section>
         <section className="a-panel">
           <h2>Stock</h2>
-          <table className="a-table">
+          <div className="a-table-wrap"><table className="a-table">
             <tbody>
               {products.map((p) => (
                 <tr key={p._id}>
@@ -74,7 +74,7 @@ export default function Dashboard() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       </div>
     </div>

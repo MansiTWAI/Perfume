@@ -77,10 +77,35 @@ describe('placing an order', () => {
     const oos = await placeOnline([{ slug: p.slug, qty: 3 }]);
     assert.equal(oos.status, 409);
     assert.equal(oos.body.code, 'OUT_OF_STOCK');
-    const weird = await placeOnline([{ slug: p.slug, qty: -4 }]);
-    assert.equal(weird.status, 201); // clamped to 1
-    assert.equal((await load(weird.body.orderNumber)).items[0].qty, 1);
+    // Quantities outside 1–10 are refused, never silently changed.
+    for (const qty of [-4, 0, 11, 1.5, 1e9, 'abc']) assert.equal((await placeOnline([{ slug: p.slug, qty }])).status, 400, String(qty));
+    const two = await placeOnline([{ slug: p.slug, qty: 1 }, { slug: p.slug, qty: 1 }]); // the same fragrance twice counts once
+    assert.equal(two.status, 201);
+    assert.deepEqual((await load(two.body.orderNumber)).items.map((i) => i.qty), [2]);
     assert.equal((await placeOnline([{ slug: { $ne: null }, qty: 1 }])).status, 400); // no NoSQL operator injection
+  });
+});
+
+describe('delivery details are checked on the server', () => {
+  test('invalid email, phone, PIN, payment method and over-long fields are refused', async () => {
+    const p = await makeProduct();
+    const place = (c = {}, extra = {}) => http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: { ...customer(), ...c }, ...extra } });
+    assert.equal((await place({ email: 'not-an-email' })).status, 400);
+    assert.equal((await place({ phone: '12' })).status, 400);
+    assert.equal((await place({ phone: '5876543210' })).status, 400); // Indian mobiles start 6–9
+    assert.equal((await place({ address: { line1: '1 Road', city: 'Pune', postalCode: '4110' } })).status, 400);
+    assert.equal((await place({ name: 'x'.repeat(500) })).status, 400);
+    assert.equal((await place({ address: { line1: 'x'.repeat(5000), city: 'Pune', postalCode: '411001' } })).status, 400);
+    assert.equal((await place({ name: { $gt: '' } })).status, 400);
+    assert.equal((await place({}, { paymentMethod: 'free' })).status, 400);
+    const ok = await place({ email: 'Mixed@Example.TEST', phone: '+91 98765 43210' });
+    assert.equal(ok.status, 201);
+    assert.equal((await load(ok.body.orderNumber)).customer.email, 'mixed@example.test');
+  });
+  test('the UAE takes local numbers and no Indian PIN rule', async () => {
+    const p = await makeProduct();
+    const r = await http('POST', '/api/orders', { body: { region: 'AE', items: [{ slug: p.slug, qty: 1 }], customer: { ...customer(), phone: '050 123 4567', address: { line1: 'Villa 2', city: 'Dubai', postalCode: '00000' } } } });
+    assert.equal(r.status, 201);
   });
 });
 

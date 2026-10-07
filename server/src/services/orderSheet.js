@@ -371,6 +371,18 @@ export async function planOrderImport(sheet) {
         diffs.push({ field: col.header, from: String(current), to: v });
       }
     }
+    // The same rules as Admin → Orders: Razorpay owns the payment status of
+    // online payments, reopening a cancelled order must reserve stock again,
+    // and a booked Delhivery shipment owns the courier, AWB and address.
+    if (rowOk) {
+      const fail = (field, message) => { err(field, message); rowOk = false; };
+      const keys = Object.keys(set);
+      const booked = order.shipment?.awb && order.shipment.status !== 'cancelled';
+      if ('paymentStatus' in set && order.payment?.providerPaymentId) fail('paymentStatus', 'This order was paid online, so its payment status follows Razorpay. To return money, use Refund in Admin → Orders.');
+      if ('status' in set && order.status === 'Cancelled') fail('status', 'This order is cancelled. Reopen it in Admin → Orders, so its items are reserved from stock again.');
+      if (booked && keys.some((k) => ['carrier', 'trackingNumber', 'carrierUrl'].includes(k))) fail('trackingNumber', 'This order ships with Delhivery, so its courier and AWB are set automatically. Cancel the Delhivery shipment first to use another courier.');
+      if (booked && keys.some((k) => k === 'customer.phone' || k.startsWith('customer.address'))) fail('line1', 'The parcel is already booked with Delhivery for the current address. Cancel the shipment in Admin → Shipping before changing it.');
+    }
     if (!rowOk) continue;
 
     // Couriers from the list are saved with their usual spelling, and their

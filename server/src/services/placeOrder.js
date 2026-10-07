@@ -6,9 +6,38 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/commerce.js';
 import { code } from '../utils.js';
+import { validPhone } from '../models/User.js';
 import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
+const MAX_QTY = 10;
+const MAX_LINES = 20;
+
+// The delivery details, checked on the server (the checkout form is only a
+// convenience): plain strings within sane lengths, a real email, a mobile
+// number and, in India, a 6-digit PIN code.
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function cleanCustomer(customer, region) {
+  const c = customer && typeof customer === 'object' ? customer : {};
+  const ad = c.address && typeof c.address === 'object' ? c.address : {};
+  const s = (v, max) => (typeof v === 'string' || typeof v === 'number' ? String(v).replace(/\s+/g, ' ').trim() : '').slice(0, max + 1);
+  const out = {
+    name: s(c.name, 120), email: s(c.email, 160).toLowerCase(), phone: s(c.phone, 40),
+    address: { line1: s(ad.line1, 200), line2: s(ad.line2, 200), city: s(ad.city, 80), state: s(ad.state, 80), postalCode: s(ad.postalCode, 20) },
+  };
+  if (!out.name || !out.email || !out.phone || !out.address.line1 || !out.address.city || !out.address.postalCode) {
+    throw fail(400, 'Please complete your name, contact details and delivery address.');
+  }
+  const long = [['name', 120], ['email', 160], ['phone', 40]].find(([k, m]) => out[k].length > m)
+    || [['line1', 200], ['line2', 200], ['city', 80], ['state', 80], ['postalCode', 20]].find(([k, m]) => out.address[k].length > m);
+  if (long) throw fail(400, 'Some delivery details are too long. Please shorten them.');
+  if (!EMAIL_RX.test(out.email)) throw fail(400, 'Please enter a valid email address.');
+  const digits = out.phone.replace(/\D/g, '');
+  const phoneOk = region.code === 'IN' ? validPhone(out.phone) : digits.length >= 8 && digits.length <= 15;
+  if (!phoneOk) throw fail(400, 'Please enter a valid phone number.');
+  if (region.code === 'IN' && !/^[1-9][0-9]{5}$/.test(out.address.postalCode.replace(/\s/g, ''))) throw fail(400, 'Please enter a valid 6-digit PIN code.');
+  return out;
+}
 
 export async function placeOrder({ items = [], customer, regionCode = 'IN', paymentMethod, giftNote, userId, couponCode, expectedTotal, historyNote = 'We have received your order.' }) {
   const region = regionByCode(regionCode);
@@ -18,28 +47,41 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
   // Slugs are plain strings: anything else (e.g. { $ne: null }) is dropped.
   items = items.filter((it) => it && typeof it.slug === 'string' && it.slug.length <= 120);
   if (!items.length) throw fail(400, 'Your bag is empty.');
-  const a = customer?.address || {};
-  if (!customer?.name || !customer?.email || !customer?.phone || !a.line1 || !a.city || !a.postalCode) {
-    throw fail(400, 'Please complete your name, contact details and delivery address.');
+  // Whole quantities from 1 to 10 per fragrance; the same fragrance listed
+  // twice counts once. Anything else is refused, never silently changed.
+  const merged = new Map();
+  for (const it of items) {
+    const q = Number(it.qty ?? 1);
+    if (!Number.isInteger(q) || q < 1 || q > MAX_QTY) throw fail(400, `Choose between 1 and ${MAX_QTY} of each fragrance.`);
+    merged.set(it.slug, (merged.get(it.slug) || 0) + q);
   }
+  if (merged.size > MAX_LINES) throw fail(400, `An order can hold up to ${MAX_LINES} different fragrances.`);
+  if ([...merged.values()].some((q) => q > MAX_QTY)) throw fail(400, `Choose between 1 and ${MAX_QTY} of each fragrance.`);
+  items = [...merged].map(([slug, qty]) => ({ slug, qty }));
+
+  customer = cleanCustomer(customer, region);
+  const a = customer.address;
   const methods = paymentsFor(region);
+  if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== '' && !methods.includes(paymentMethod)) {
+    throw fail(400, 'That payment method is not available for this order.');
+  }
   const method = methods.includes(paymentMethod) ? paymentMethod : methods[0];
 
   // Check the coupon against the database prices before reserving anything.
   const priceOf = new Map();
-  for (const it of items.slice(0, 20)) {
+  for (const it of items) {
     const p = await Product.findOne({ slug: it.slug, published: true }).select('slug price').lean();
     if (p) priceOf.set(p.slug, p.price[currency]);
   }
   let coupon = null;
   if (couponCode) {
-    const subtotal = items.slice(0, 20).reduce((n, it) => n + (priceOf.get(it.slug) || 0) * Math.min(Math.max(parseInt(it.qty, 10) || 1, 1), 10), 0);
+    const subtotal = items.reduce((n, it) => n + (priceOf.get(it.slug) || 0) * it.qty, 0);
     coupon = await checkCoupon(couponCode, { subtotal, currency, user: userId ? { _id: userId } : null });
   }
 
   const lines = [];
-  for (const it of items.slice(0, 20)) {
-    const qty = Math.min(Math.max(parseInt(it.qty, 10) || 1, 1), 10);
+  for (const it of items) {
+    const { qty } = it;
     const p = await Product.findOne({ slug: it.slug, published: true });
     if (!p) throw fail(400, `${it.slug} is no longer available.`);
     if (p.stock < qty) throw fail(409, `Only ${p.stock} of ${p.name} left in stock.`);

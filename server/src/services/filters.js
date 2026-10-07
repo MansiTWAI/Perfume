@@ -74,7 +74,7 @@ export const dateMatch = ({ from, to }) => {
 export async function orderFilter(q = {}, { withPeriod = true } = {}) {
   const and = [];
   if (q.status && ORDER_STATUSES.includes(q.status)) and.push({ status: q.status });
-  if (['pending', 'paid', 'refunded'].includes(q.paymentStatus)) and.push({ paymentStatus: q.paymentStatus });
+  if (['pending', 'paid', 'partially_refunded', 'refunded'].includes(q.paymentStatus)) and.push({ paymentStatus: q.paymentStatus });
   if (['INR', 'AED'].includes(q.currency)) and.push({ currency: q.currency });
   if (q.product) {
     and.push(mongoose.isValidObjectId(q.product) ? { 'items.product': new mongoose.Types.ObjectId(q.product) } : { 'items.slug': String(q.product) });

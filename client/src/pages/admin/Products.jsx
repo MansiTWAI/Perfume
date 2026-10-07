@@ -27,7 +27,7 @@ export function ProductList() {
       <header className="a-head"><h1>Products</h1><Link to="/admin/products/new" className="a-btn a-primary">+ New product</Link></header>
       <section className="a-panel">
         {!list ? <p>Loading…</p> : (
-          <table className="a-table">
+          <div className="a-table-wrap"><table className="a-table">
             <thead><tr><th /><th>Name</th><th>Price</th><th>Stock</th><th>Notes</th><th>Status</th><th /></tr></thead>
             <tbody>
               {list.map((p) => (
@@ -42,7 +42,7 @@ export function ProductList() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>

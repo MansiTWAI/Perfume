@@ -24,6 +24,7 @@ const AR = {
   'Open menu': 'فتح القائمة',
   'Close menu': 'إغلاق القائمة',
   'Bag, {n} items': 'الحقيبة، {n}',
+  'Bag, 1 item': 'الحقيبة، 1',
   'Find your signature': 'اكتشف توقيعك',
   'Track an order': 'تتبّع طلبك',
   'AL BARAKAH LIFESTYLE, home': 'البركة لايف ستايل، الصفحة الرئيسية',
