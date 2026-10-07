@@ -193,6 +193,7 @@ describe('customer chat', () => {
     assert.equal(r.body.code, 'AI_UNAVAILABLE');
     assert.ok(!JSON.stringify(r.body).includes('scripted'));
     assert.equal(gemini.requests.length, 2);
+    assert.match(gemini.requests[1].url, /gemini-3\.5-flash-lite/); // the retry goes to the lighter model
     gemini.requests.length = 0;
     gemini.reply({ status: 429 }, gemini.text('Back again.'));
     assert.equal((await say('hello again')).body.reply, 'Back again.');
@@ -206,7 +207,7 @@ describe('customer chat', () => {
     const req = gemini.requests[0];
     assert.ok(!req.url.includes(process.env.GEMINI_API_KEY));
     assert.equal(req.headers['x-goog-api-key'], process.env.GEMINI_API_KEY);
-    assert.match(req.url, /models\/gemini-3\.5-flash:generateContent$/);
+    assert.match(req.url, /models\/gemini-3\.6-flash:generateContent$/);
   });
 
   test('input limits and rate limit', async () => {
