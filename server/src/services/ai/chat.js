@@ -40,6 +40,18 @@ function unverified(reply, ctx, userText) {
   return amounts(reply).filter((n) => !allowed.has(n));
 }
 
+// What a message says about buying, read by the server (no AI involved).
+const READY = /\b(buy|order|purchase|book|i'?ll take|add to (?:cart|bag)|checkout|pay)\b/i;
+const CONSIDERING = /\b(want|need|looking for|gift|price|cost|how much|budget|under|below|cheap|low ?price|offer|deliver|available|in stock|recommend|suggest)\b/i;
+function buyingSignals(text, history, shownNow) {
+  const t = String(text);
+  const products = [...new Set([...shownNow, ...history.flatMap((m) => m.products || [])])].slice(-6);
+  const budget = Number((/(?:under|below|budget|around|up ?to|max(?:imum)?|within)\s*(?:of\s*)?(?:₹|rs\.?|inr|aed)?\s*([\d,]{3,7})/i.exec(t) || /(?:₹|rs\.?|inr)\s*([\d,]{3,7})/i.exec(t) || [])[1]?.replace(/,/g, '')) || undefined;
+  const quantity = Number(/\b(\d{1,3})\s*(?:bottles?|pieces?|pcs|boxes?|units?|sets?)\b/i.exec(t)?.[1]) || undefined;
+  const intent = READY.test(t) ? 'ready' : (CONSIDERING.test(t) || quantity) && (products.length || /perfume|fragrance|scent|attar|oud/i.test(t)) ? 'considering' : undefined;
+  return { intent, interestedProducts: shownNow.length ? shownNow : products, ...(budget && { budget }), ...(quantity && quantity <= 100 && { quantity }), ...(intent && { summary: t.slice(0, 160) }) };
+}
+
 async function loadSession(sessionId, user, regionCode) {
   let s = SESSION_RX.test(String(sessionId || '')) ? await ChatSession.findOne({ sessionId }) : null;
   // A chat started by one account is not continued by another.
@@ -102,9 +114,11 @@ export async function chatTurn({ sessionId, message, user, regionCode, page }) {
   if (!reply) reply = 'I could not find the right words just now. Could you ask that another way, or shall I connect you with our team on WhatsApp?';
   reply = reply.slice(0, 1800);
 
-  // A shopper who shares an email or phone wants to hear back: keep it on
-  // this chat's lead (created if needed), never in the model's context.
-  if (seen.email || seen.phone) await upsertLead(ctx, {});
+  // Leads are recorded by the server, not left to the model: buying words
+  // while fragrances are being discussed, or an email/phone shared (kept on
+  // the lead, never in the model's context). An existing lead keeps growing.
+  const signals = buyingSignals(seen.safe, session.messages, [...ctx.cards.keys()]);
+  if (seen.email || seen.phone || session.lead || signals.intent) await upsertLead(ctx, signals);
 
   // Cards: products the reply names first, then others looked up, max 4.
   const lower = reply.toLowerCase();

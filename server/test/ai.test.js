@@ -223,6 +223,36 @@ describe('customer chat', () => {
   });
 });
 
+describe('automatic lead capture (no createLead call from the model)', () => {
+  test('small talk makes no lead; buying words with products shown do', async () => {
+    await catalogue();
+    gemini.reply(gemini.text('Hello! How can I help?'));
+    const hi = await say('hello');
+    assert.equal(await Lead.countDocuments(), 0);
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('For the night, ZAFREON.'));
+    await say('i want perfume for night', { body: { sessionId: hi.body.sessionId } });
+    let lead = await Lead.findOne().lean();
+    assert.ok(lead, 'lead created by the server');
+    assert.equal(lead.intent, 'considering');
+    assert.deepEqual(lead.interestedProducts, ['zafreon']);
+    assert.equal(lead.summary, 'i want perfume for night');
+    gemini.reply(gemini.text('Lovely.'));
+    await say("I'll buy 2 bottles, budget under ₹3,000", { body: { sessionId: hi.body.sessionId } });
+    lead = await Lead.findOne().lean();
+    assert.equal(await Lead.countDocuments(), 1, 'same chat, same lead');
+    assert.equal(lead.intent, 'ready');
+    assert.equal(lead.quantity, 2);
+    assert.deepEqual(lead.budget, { amount: 3000, currency: 'INR' });
+    assert.ok(lead.score >= 40 + 8 + 5 + 7);
+  });
+  test('words inside other words do not count (display, border)', async () => {
+    await catalogue();
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('Here it is.'));
+    await say('show me the display bottle border design');
+    assert.equal(await Lead.countDocuments(), 0);
+  });
+});
+
 describe('admin lead intelligence', () => {
   async function seedLeads() {
     await Lead.create([
