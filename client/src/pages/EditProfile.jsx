@@ -4,6 +4,7 @@ import AccountLayout from '../components/AccountLayout';
 import { useStore } from '../context/StoreContext';
 import { api, getToken } from '../lib/api';
 import { AuthForm } from './Account';
+import Icon from '../components/Icon';
 
 // One save button per section, each with its own message.
 function useSection() {
@@ -22,7 +23,7 @@ function useSection() {
 
 function Status({ state }) {
   if (state.error) return <p className="form-error" role="alert">{state.error}</p>;
-  if (state.ok) return <p className="form-ok" role="status">✓ {state.ok}</p>;
+  if (state.ok) return <p className="form-ok" role="status"><Icon name="check" size={16} /> {state.ok}</p>;
   return null;
 }
 

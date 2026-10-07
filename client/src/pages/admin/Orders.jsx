@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, downloadFile, toQuery } from '../../lib/api';
-import { money, formatDate } from '../../lib/format';
+import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { PeriodPicker, periodParams, Pager, Modal } from './Fields';
 import { ImportModal } from './OrderExcel';
 import { OrderRow, STAGES } from './OrderDetail';
+import Icon from '../../components/Icon';
 
 const PAYMENT_LABEL = { cod: 'Cash on delivery', 'pay-on-confirmation': 'Pay on confirmation' };
 
@@ -77,7 +78,7 @@ function AddOrderModal({ products, onClose, onCreated }) {
                 </select>
               </label>
               <label>Qty<input type="number" min="1" max="10" value={it.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} /></label>
-              <div className="a-row-ctl"><button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} disabled={items.length === 1} aria-label="Remove">✕</button></div>
+              <div className="a-row-ctl"><button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} disabled={items.length === 1} aria-label="Remove"><Icon name="close" size={16} /></button></div>
             </div>
           ))}
           <button type="button" className="a-btn" onClick={() => setItems([...items, { slug: live[0]?.slug || '', qty: 1 }])}>+ Add item</button>
@@ -129,6 +130,15 @@ export default function Orders() {
   const [modal, setModal] = useState(null); // 'add' | 'import'
   const [exporting, setExporting] = useState(false);
   const [reload, setReload] = useState(0);
+  const extraSet = ['paymentStatus', 'currency', 'product'].filter((k) => filters[k]).length;
+  const [moreOpen, setMoreOpen] = useState(extraSet > 0);
+  const excelMenu = useRef(null);
+  const closeExcel = () => excelMenu.current?.removeAttribute('open');
+  useEffect(() => {
+    const away = (e) => !excelMenu.current?.contains(e.target) && closeExcel();
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, []);
 
   // Everything the list shows is also what Export Excel downloads.
   const query = useMemo(() => {
@@ -190,22 +200,30 @@ export default function Orders() {
       <header className="a-head">
         <h1>Orders</h1>
         <div className="a-actions">
-          <button className="a-btn a-primary" onClick={() => setModal('add')}>+ Add Order</button>
-          <button className="a-btn" onClick={exportExcel} disabled={exporting || customRangeIncomplete}>{exporting ? 'Preparing…' : 'Export Excel'}</button>
+          {/* Every Excel action in one place: export, template, upload, history. */}
+          <details className="a-menu" ref={excelMenu}>
+            <summary className="a-btn">{exporting ? 'Preparing…' : 'Excel'} <Icon name="chevron-down" size={16} /></summary>
+            <div className="a-menu-list" role="menu">
+          <button role="menuitem" className="a-menu-item" onClick={() => { closeExcel(); exportExcel(); }} disabled={exporting || customRangeIncomplete}>Export orders</button>
           <button
-            className="a-btn"
+            role="menuitem"
+            className="a-menu-item"
             disabled={customRangeIncomplete}
             title={data?.total ? `Pre-filled with the ${data.total.toLocaleString()} order${data.total === 1 ? '' : 's'} shown; fill in only what changes` : 'Blank template'}
             onClick={() =>
+              closeExcel() ||
               downloadFile(`/orders/template${toQuery({ ...query, prefill: data?.total ? 1 : '' })}`, 'orders_update_template.xlsx')
                 .then((name) => toast(`Downloaded ${name}${data?.total ? ` with ${data.total.toLocaleString()} order${data.total === 1 ? '' : 's'}` : ''}`))
                 .catch((e) => toast(e.message, 'warn'))
             }
           >
-            Download Template
+            Download update template
           </button>
-          <button className="a-btn" onClick={() => setModal('import')}>Upload Excel</button>
-          <Link to="/admin/orders/imports" className="a-btn">Import History</Link>
+          <button role="menuitem" className="a-menu-item" onClick={() => { closeExcel(); setModal('import'); }}>Upload changes</button>
+          <Link role="menuitem" to="/admin/orders/imports" className="a-menu-item">Import history</Link>
+            </div>
+          </details>
+          <button className="a-btn a-primary" onClick={() => setModal('add')}><Icon name="plus" size={16} /> Add order</button>
         </div>
       </header>
 
@@ -215,6 +233,11 @@ export default function Orders() {
           <option value="">All statuses</option>
           {STAGES.map((s) => <option key={s}>{s}</option>)}
         </select>
+        <PeriodPicker value={filters} onChange={(v) => update(v)} />
+        <button type="button" className="a-btn" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+          More filters{extraSet ? ` · ${extraSet}` : ''} <Icon name="chevron-down" size={16} className={moreOpen ? 'a-rot' : ''} />
+        </button>
+        {moreOpen && <>
         <select value={filters.paymentStatus} onChange={(e) => update({ paymentStatus: e.target.value })} aria-label="Filter by payment">
           <option value="">All payments</option>
           <option value="pending">Payment pending</option>
@@ -231,8 +254,8 @@ export default function Orders() {
           <option value="">All products</option>
           {products.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
         </select>
-        <PeriodPicker value={filters} onChange={(v) => update(v)} />
-        {filters.customer && <span className="a-chip">Customer: {customerName || '…'} <button onClick={() => update({ customer: '' })} aria-label="Remove customer filter">✕</button></span>}
+        </>}
+        {filters.customer && <span className="a-chip">Customer: {customerName || '…'} <button onClick={() => update({ customer: '' })} aria-label="Remove customer filter"><Icon name="close" size={14} /></button></span>}
         {active && <button className="a-link" onClick={() => { setSearch(''); setParams({}); }}>Clear filters</button>}
       </section>
       {customRangeIncomplete && <p className="a-muted">Choose a start or end date for the custom range.</p>}

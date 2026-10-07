@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
+import Icon from '../../components/Icon';
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -21,7 +22,7 @@ export default function Dashboard() {
   return (
     <div>
       <header className="a-head"><h1>Dashboard</h1></header>
-      <div className="a-tiles">
+      <div className="a-tiles a-strip">
         <div className="a-tile"><span>Orders</span><b>{stats?.count ?? '—'}</b></div>
         <div className="a-tile"><span>Open orders</span><b>{stats ? open : '—'}</b></div>
         {(stats?.revenue || []).map((r) => (
@@ -59,7 +60,7 @@ export default function Dashboard() {
               </tbody>
             </table></div>
           )}
-          <Link to="/admin/orders" className="a-link">All orders →</Link>
+          <Link to="/admin/orders" className="a-link">All orders <Icon name="arrow-right" size={16} className="flip-rtl" /></Link>
         </section>
         <section className="a-panel">
           <h2>Stock</h2>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useStore } from '../../context/StoreContext';
 import { api } from '../../lib/api';
@@ -12,6 +12,8 @@ import { PostList, PostEdit } from './Posts';
 import { Enquiries, Subscribers } from './Inbox';
 import Reviews from './Reviews';
 import Leads from './Leads';
+import Shipping from './Shipping';
+import Icon from '../../components/Icon';
 
 function AdminLogin() {
   const { login } = useStore();
@@ -37,7 +39,7 @@ function AdminLogin() {
         <label>Password<input type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="current-password" /></label>
         {error && <p className="a-error">{error}</p>}
         <button className="a-btn a-primary">Sign in</button>
-        <Link to="/" className="a-link">← Back to the store</Link>
+        <Link to="/" className="a-link"><Icon name="arrow-left" size={16} className="flip-rtl" /> Back to the store</Link>
       </form>
     </div>
   );
@@ -46,6 +48,7 @@ function AdminLogin() {
 const NAV = [
   ['/admin', 'Dashboard', true],
   ['/admin/orders', 'Orders'],
+  ['/admin/shipping', 'Shipping'],
   ['/admin/users', 'Users'],
   ['/admin/products', 'Products'],
   ['/admin/reviews', 'Reviews'],
@@ -57,19 +60,25 @@ const NAV = [
 
 export default function Admin() {
   const { user, logout } = useStore();
+  const nav = useRef(null);
+  const { pathname } = useLocation();
+  // On narrow screens the menu scrolls sideways: keep the current page in view.
+  useEffect(() => {
+    nav.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [pathname]);
   if (!user || user.role !== 'admin') return <AdminLogin />;
   return (
     <div className="admin">
       <Helmet><title>Admin studio | AL BARAKAH LIFESTYLE</title><meta name="robots" content="noindex" /></Helmet>
       <aside className="a-side">
         <Link to="/admin" className="a-brand"><img src="/media/calligraphy.webp" alt="" width="56" /> <span>Studio</span></Link>
-        <nav>
+        <nav ref={nav} aria-label="Studio">
           {NAV.map(([to, label, end]) => (
             <NavLink key={to} to={to} end={end}>{label}</NavLink>
           ))}
         </nav>
         <div className="a-side-foot">
-          <Link to="/" target="_blank">View store ↗</Link>
+          <Link to="/" target="_blank">View store <Icon name="external" size={14} /></Link>
           <button onClick={logout}>Sign out</button>
         </div>
       </aside>
@@ -78,6 +87,7 @@ export default function Admin() {
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/imports" element={<ImportHistory />} />
+          <Route path="shipping" element={<Shipping />} />
           <Route path="users" element={<UserList />} />
           <Route path="users/:id" element={<UserDetail />} />
           <Route path="products" element={<ProductList />} />

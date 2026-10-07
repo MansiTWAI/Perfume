@@ -3,6 +3,8 @@ import { api } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { COURIERS, courierByName, trackingUrl, isUrl, STATUS_NOTES } from '../../../../shared/couriers.js';
+import { ADMIN_STATUS, shipTone } from '../../lib/shipment';
+import Icon from '../../components/Icon';
 
 // The six steps of the customer's timeline, plus Cancelled (from any step;
 // the server returns the items to stock).
@@ -54,6 +56,77 @@ function formFrom(order) {
 const PAY_LABEL = { pending: 'Pending', paid: 'Paid', partially_refunded: 'Partly refunded', refunded: 'Refunded' };
 const ISSUE_LABEL = { amount_mismatch: 'Wrong amount paid', duplicate_payment: 'Paid twice', paid_after_cancel: 'Paid after cancelling' };
 const rupees = (paise, currency) => money((paise || 0) / 100, currency);
+
+const at = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
+// Delhivery: the shipment's status, AWB and scans, with create / retry /
+// refresh / cancel. Cancelling a shipment needs a second click.
+function ShipmentPanel({ order, onSaved }) {
+  const { toast } = useStore();
+  const s = order.shipment;
+  const [busy, setBusy] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [error, setError] = useState('');
+  const india = order.currency === 'INR';
+  if (!s?.provider && !india) return null;
+  const st = s?.status || 'pending';
+  const booked = s?.awb && st !== 'cancelled';
+  const done = ['delivered', 'returned', 'cancelled'].includes(st);
+
+  async function run(kind) {
+    if (kind === 'cancel' && !confirmCancel) return setConfirmCancel(true);
+    setBusy(kind);
+    setError('');
+    try {
+      const o = await api(`/admin/orders/${order._id}/shipment${kind === 'create' ? '' : `/${kind}`}`, { method: 'POST' });
+      onSaved(o);
+      toast({ create: 'Shipment created with Delhivery', refresh: 'Tracking refreshed', cancel: 'Delhivery shipment cancelled' }[kind]);
+      setConfirmCancel(false);
+    } catch (e) {
+      setError(e.message);
+      if (e.data?.order) onSaved(e.data.order);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="a-pay a-ship">
+      <h3>Delhivery shipment</h3>
+      {s?.provider ? (
+        <dl className="a-ship-dl">
+          <dt>Status</dt><dd><span className={`a-pill a-ship-${shipTone(st)}`}>{ADMIN_STATUS[st] || st}</span>{s.courierStatus && st !== 'pending' && <small className="a-muted"> “{s.courierStatus}”</small>}</dd>
+          {s.awb && <><dt>AWB</dt><dd dir="ltr">{s.awb} · <a className="a-link" href={trackingUrl('Delhivery', s.awb)} target="_blank" rel="noreferrer">open in Delhivery <Icon name="external" size={14} /></a></dd></>}
+          {s.orderRef && <><dt>Reference</dt><dd>{s.orderRef}</dd></>}
+          {s.location && <><dt>Last seen</dt><dd>{s.location}</dd></>}
+          {s.pickedUpAt && <><dt>Picked up</dt><dd>{at(s.pickedUpAt)}</dd></>}
+          {s.expectedDelivery && <><dt>Expected</dt><dd>{at(s.expectedDelivery)}</dd></>}
+          {s.deliveredAt && <><dt>Delivered</dt><dd>{at(s.deliveredAt)}</dd></>}
+          {(s.lastEventAt || s.lastCheckedAt) && <><dt>Last scan</dt><dd>{at(s.lastEventAt)}{s.lastCheckedAt && <small className="a-muted"> · checked {at(s.lastCheckedAt)}</small>}</dd></>}
+          {s.notified?.length > 0 && <><dt>Emails sent</dt><dd>{s.notified.join(', ').replace(/_/g, ' ')}</dd></>}
+        </dl>
+      ) : (
+        <p className="a-hint">No shipment yet. It is created automatically once the order is paid (or a cash-on-delivery order is confirmed), or create it now.</p>
+      )}
+      {s?.error && <p className="a-warn a-ico-line"><Icon name="alert" size={16} /> {s.error}{s.nextAttemptAt && <small className="a-muted"> · next try {at(s.nextAttemptAt)}</small>}</p>}
+      {error && <p className="a-error" role="alert">{error}</p>}
+      <div className="a-actions">
+        {!booked && <button type="button" className="a-btn a-primary" disabled={!!busy} onClick={() => run('create')}>{busy === 'create' ? 'Creating…' : st === 'failed' ? 'Retry shipment' : 'Create shipment'}</button>}
+        {booked && !done && <button type="button" className="a-btn" disabled={!!busy} onClick={() => run('refresh')}><Icon name="refresh" size={16} /> {busy === 'refresh' ? 'Checking…' : 'Refresh tracking'}</button>}
+        {booked && !done && !['out_for_delivery', 'rto'].includes(st) && (
+          <button type="button" className="a-btn" disabled={!!busy} onClick={() => run('cancel')}>{busy === 'cancel' ? 'Cancelling…' : confirmCancel ? 'Confirm: cancel shipment' : 'Cancel shipment'}</button>
+        )}
+      </div>
+      {s?.events?.length > 0 && (
+        <ol className="a-history a-ship-scans">
+          {[...s.events].sort((a, b) => new Date(b.at) - new Date(a.at)).map((e, i) => (
+            <li key={i}><b>{ADMIN_STATUS[e.status] || e.courierStatus || e.status}</b> · {at(e.at)}{(e.note || e.location) && <><br /><small>{[e.note, e.location].filter(Boolean).join(' · ')}</small></>}<small className="a-muted"> · {e.source}</small></li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
 
 // Online payment: what Razorpay reported, money to give back, refunds sent.
 // Refunds are admin-only and need a second click to confirm.
@@ -113,7 +186,7 @@ function PaymentPanel({ order, onSaved }) {
 
       {openIssues.map((i) => (
         <div key={i.providerPaymentId} className="a-pay-issue" role="alert">
-          <b>⚠ {ISSUE_LABEL[i.kind] || i.kind}: {rupees(i.amount, order.currency)} to refund</b>
+          <b className="a-ico-line"><Icon name="alert" size={16} /> {ISSUE_LABEL[i.kind] || i.kind}: {rupees(i.amount, order.currency)} to refund</b>
           <small>{i.note}<br />{i.providerPaymentId}</small>
           {isAdmin && (
             <button type="button" className={`a-btn ${target === i.providerPaymentId ? 'a-danger' : ''}`} disabled={!!busy} onClick={() => refund(i.providerPaymentId)}>
@@ -185,6 +258,7 @@ export function OrderRow({ order, onSaved }) {
   const presets = STATUS_NOTES[f.status] || [];
   const note = f.noteChoice === CUSTOM ? f.note : f.noteChoice;
   const eta = f.etaIso ? longDate(f.etaIso) : f.etaText;
+  const viaDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
 
   const suggestedCouriers = useMemo(() => {
     const home = /Emirates/.test(country) ? 'AE' : 'IN';
@@ -239,10 +313,10 @@ export function OrderRow({ order, onSaved }) {
       <tr className={open ? 'is-open' : ''} onClick={() => setOpen(!open)}>
         <td><b>{order.orderNumber}</b><br /><small>{formatDate(order.createdAt)}</small></td>
         <td>{c.name}<br /><small dir="ltr">{c.phone}</small><br /><small>{c.address.city}, {c.address.country}</small></td>
-        <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">✦ Signature Card</small></>}</td>
+        <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">Signature Card</small></>}</td>
         <td>
           {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
-          {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn">⚠ refund due</small></>}
+          {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn a-ico-line"><Icon name="alert" size={14} /> refund due</small></>}
         </td>
         <td><span className="a-pill">{order.status}</span></td>
       </tr>
@@ -291,6 +365,9 @@ export function OrderRow({ order, onSaved }) {
                     {f.noteChoice === CUSTOM && <input value={f.note} onChange={set('note')} placeholder="Your message" autoFocus />}
                   </label>
                 )}
+                {viaDelhivery ? (
+                  <p className="a-hint">Ships with <b>Delhivery</b> · AWB <span dir="ltr">{order.shipment.awb}</span>. Courier and tracking are set automatically; see the shipment panel.</p>
+                ) : <>
                 <label>Courier
                   <select value={f.courier} onChange={set('courier')}>
                     <option value="">Not shipped yet</option>
@@ -308,12 +385,13 @@ export function OrderRow({ order, onSaved }) {
                   <label>Tracking link<input value={f.otherUrl} onChange={set('otherUrl')} placeholder="https://…" /></label>
                 ) : link ? (
                   <p className="a-link-preview">
-                    Customer tracking link: <a href={link} target="_blank" rel="noreferrer" className="a-link">open ↗</a>
+                    Customer tracking link: <a href={link} target="_blank" rel="noreferrer" className="a-link">open <Icon name="external" size={14} /></a>
                     {needsNumberInPage && <><br /><small className="a-muted">{f.courier} opens its tracking page; the customer enters the number there.</small></>}
                   </p>
                 ) : f.courier && f.courier !== 'Hand delivery' ? (
                   <p className="a-muted a-hint">Add the tracking number and the customer's tracking link is created automatically.</p>
                 ) : null}
+                </>}
                 <label>Expected delivery
                   <input type="date" value={f.etaIso} min={plusDays(-30)} onChange={(e) => setF((x) => ({ ...x, etaIso: e.target.value, etaText: '' }))} />
                 </label>
@@ -350,6 +428,7 @@ export function OrderRow({ order, onSaved }) {
                 <ol className="a-history">
                   {order.history.map((h, i) => <li key={i}><b>{h.status}</b> · {new Date(h.at).toLocaleString('en-GB')}{h.note && <><br /><small>{h.note}</small></>}</li>)}
                 </ol>
+                <ShipmentPanel order={order} onSaved={onSaved} />
                 <PaymentPanel order={order} onSaved={onSaved} />
                 {order.edits?.length > 0 && (
                   <>

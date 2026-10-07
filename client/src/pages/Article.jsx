@@ -11,6 +11,7 @@ import { useStore } from '../context/StoreContext';
 import { formatDate, whatsappLink, absUrl } from '../lib/format';
 import { renderMarkdown } from '../lib/markdown';
 import { NotFound } from './InfoPages';
+import Icon from '../components/Icon';
 
 export default function Article() {
   const { slug } = useParams();
@@ -142,7 +143,7 @@ export default function Article() {
           <div className="container">
             <div className="section-head split">
               <SplitHeading text="Keep reading" />
-              <Link to="/journal" className="text-link">All stories →</Link>
+              <Link to="/journal" className="text-link">All stories <Icon name="arrow-right" size={16} className="flip-rtl" /></Link>
             </div>
             <div className="post-grid">
               {related.map((p, i) => <PostCard key={p._id} post={p} index={i} />)}

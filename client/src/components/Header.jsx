@@ -6,6 +6,7 @@ import { cx } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 import RegionSelect from './RegionSelect';
 import AccountMenu from './AccountMenu';
+import Icon from './Icon';
 
 const PRIMARY = [
   ['/fragrances', 'Fragrances'],
@@ -20,11 +21,6 @@ const MENU = [
   ['/gallery', 'Gallery'],
   ['/contact', 'Contact'],
 ];
-
-const Icon = {
-  search: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M15 15l5 5" stroke="currentColor" strokeWidth="1.3" /></svg>,
-  bag: <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8z" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>,
-};
 
 // English ⇄ Arabic. Each option is labelled in its own language.
 function LangToggle({ className = 'lang-btn' }) {
@@ -112,11 +108,11 @@ export default function Header() {
           <div className="header-right">
             <NavLink to="/contact" className="nav-link nav-desktop-only">{t('Contact')}</NavLink>
             <LangToggle />
-            <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}>{Icon.search}</button>
+            <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}><Icon name="search" /></button>
             <div className="nav-desktop-only"><RegionSelect /></div>
             <div className="nav-desktop-only"><AccountMenu /></div>
             <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t(count === 1 ? 'Bag, 1 item' : 'Bag, {n} items', { n: count })}>
-              {Icon.bag}
+              <Icon name="bag" />
               <AnimatePresence>
                 {count > 0 && (
                   <motion.span className="bag-count" key={count} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} aria-hidden="true">

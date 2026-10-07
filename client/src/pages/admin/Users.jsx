@@ -4,6 +4,7 @@ import { api, downloadFile, toQuery } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { PeriodPicker, periodParams, Pager } from './Fields';
+import Icon from '../../components/Icon';
 
 // Order value is kept per currency: ₹ for India, AED for the UAE.
 function Value({ value }) {
@@ -142,7 +143,7 @@ export function UserDetail() {
   useEffect(() => {
     api(`/users/${id}`).then(setD).catch((e) => setError(e.message));
   }, [id]);
-  if (error) return <div><header className="a-head"><h1>User</h1><Link to="/admin/users" className="a-btn">← Users</Link></header><p className="a-error">{error}</p></div>;
+  if (error) return <div><header className="a-head"><h1>User</h1><Link to="/admin/users" className="a-btn"><Icon name="arrow-left" size={16} /> Users</Link></header><p className="a-error">{error}</p></div>;
   if (!d) return <p>Loading…</p>;
   const { user: u, orders } = d;
   const a = u.address;
@@ -152,7 +153,7 @@ export function UserDetail() {
         <h1>{u.name}</h1>
         <div className="a-actions">
           <Link to={`/admin/orders?customer=${u.id}`} className="a-btn">Open in Orders</Link>
-          <Link to="/admin/users" className="a-btn">← Users</Link>
+          <Link to="/admin/users" className="a-btn"><Icon name="arrow-left" size={16} /> Users</Link>
         </div>
       </header>
       <div className="a-tiles">

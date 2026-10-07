@@ -23,7 +23,7 @@ export default function House() {
             <dl className="m-0 mt-12 grid grid-cols-3">
               {facts.map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-[10px] uppercase tracking-[0.28em] text-mute">{t(k)}</dt>
+                  <dt className="text-[11px] uppercase tracking-[0.28em] text-mute">{t(k)}</dt>
                   <dd className="m-0 mt-2 font-display text-[clamp(20px,2.2vw,30px)] leading-tight">{t(v)}</dd>
                 </div>
               ))}

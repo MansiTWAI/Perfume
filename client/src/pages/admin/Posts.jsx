@@ -6,6 +6,7 @@ import { renderMarkdown } from '../../lib/markdown';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
 import { ImageField, csv, fromCsv } from './Fields';
+import Icon from '../../components/Icon';
 
 const EMPTY = {
   title: '', slug: '', excerpt: '', content: '## First heading\n\nStart writing…', cover: { src: '', alt: '' },
@@ -24,13 +25,13 @@ export function PostList() {
       <header className="a-head"><h1>Journal</h1><Link to="/admin/journal/new" className="a-btn a-primary">+ New article</Link></header>
       <section className="a-panel">
         {!list ? <p>Loading…</p> : (
-          <table className="a-table">
+          <div className="a-table-wrap"><table className="a-table">
             <thead><tr><th /><th>Title</th><th>Category</th><th>Status</th><th>Published</th><th /></tr></thead>
             <tbody>
               {list.map((p) => (
                 <tr key={p._id}>
                   <td><img src={p.cover?.src} alt="" className="a-thumb" /></td>
-                  <td><b>{p.title}</b>{p.featured && <small className="a-gold"> ✦ Featured</small>}<br /><small>/journal/{p.slug} · {p.readingMinutes} min</small></td>
+                  <td><b>{p.title}</b>{p.featured && <small className="a-gold"> · Featured</small>}<br /><small>/journal/{p.slug} · {p.readingMinutes} min</small></td>
                   <td>{p.category}</td>
                   <td><span className={`a-pill ${p.status === 'published' ? 'ok' : ''}`}>{p.status}</span></td>
                   <td>{formatDate(p.publishedAt)}</td>
@@ -38,7 +39,7 @@ export function PostList() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>
@@ -97,7 +98,7 @@ export function PostEdit() {
       <header className="a-head">
         <h1>{isNew ? 'New article' : 'Edit article'}</h1>
         <div className="a-actions">
-          {!isNew && p.status === 'published' && <a href={`/journal/${p.slug}`} target="_blank" rel="noreferrer" className="a-btn">View ↗</a>}
+          {!isNew && p.status === 'published' && <a href={`/journal/${p.slug}`} target="_blank" rel="noreferrer" className="a-btn">View <Icon name="external" size={14} /></a>}
           <button type="button" className="a-btn" disabled={busy} onClick={() => save('draft')}>Save draft</button>
           <button type="button" className="a-btn a-primary" disabled={busy} onClick={() => save('published')}>{p.status === 'published' ? 'Update' : 'Publish'}</button>
         </div>

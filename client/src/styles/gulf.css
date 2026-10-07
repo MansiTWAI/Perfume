@@ -20,15 +20,15 @@ h3:lang(ar),
 .display-xl:lang(ar) { line-height: 1.35; }
 .split-mask:lang(ar) { padding-block: 0.12em 0.3em; margin-block: -0.12em -0.3em; }
 .eyebrow:lang(ar),
-.footer-h:lang(ar) { font-size: 13.5px; }
+.footer-h:lang(ar) { font-size: var(--fs-md); }
 .nav-link:lang(ar),
 .btn:lang(ar),
 .text-link:lang(ar),
 .text-btn:lang(ar),
 .newsletter button:lang(ar),
-.seg button:lang(ar) { font-size: 14.5px; }
-.region-btn:lang(ar) { font-size: 13px; }
-.pcard-add:lang(ar) { font-size: 14px; }
+.seg button:lang(ar) { font-size: var(--fs-md); }
+.region-btn:lang(ar) { font-size: var(--fs-sm); }
+.pcard-add:lang(ar) { font-size: var(--fs-md); }
 .footer-tagline[lang='en'] { font-family: var(--display); }
 
 /* ---------- Right-to-left details logical properties can't express ---------- */
@@ -42,10 +42,10 @@ h3:lang(ar),
 /* ---------- Language switch ---------- */
 .lang-btn {
   min-width: 44px; min-height: 44px; padding: 0 10px;
-  font: 500 13px/1 var(--body); color: #e6dccf;
+  font: 500 var(--fs-sm)/1 var(--body); color: #e6dccf;
   border-radius: 22px; transition: color 0.3s, background 0.3s;
 }
-.lang-btn[lang='ar'] { font: 400 17px/1 var(--display); }
+.lang-btn[lang='ar'] { font: 400 var(--fs-lg)/1 var(--display); }
 .lang-btn:hover { color: var(--ivory); background: rgba(215, 195, 160, 0.12); }
 /* Small phones: the header is full; the switch lives in the menu instead. */
 .lang-btn-menu { display: none; }
@@ -87,8 +87,8 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
   -webkit-mask-image: radial-gradient(closest-side, #000 35%, transparent);
   mask-image: radial-gradient(closest-side, #000 35%, transparent);
 }
-.preloader-tag { font: italic 400 20px/1 var(--display); color: var(--champagne); }
-.preloader-tag[lang='ar'] { font-style: normal; font-size: 24px; }
+.preloader-tag { font: italic 400 var(--fs-xl)/1 var(--display); color: var(--champagne); }
+.preloader-tag[lang='ar'] { font-style: normal; font-size: var(--fs-2xl); }
 
 /* ---------- Seasonal band: Ramadan, Eid, national days ---------- */
 .season {
@@ -132,14 +132,22 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
   background: var(--ivory); color: var(--ink);
   --s-fg: var(--ink); --s-accent: var(--gold-ink);
   border: 1px solid #dcd1bf; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.3);
-  font-size: 14.5px; line-height: 1.5;
+  font-size: var(--fs-md); line-height: 1.5;
 }
-.concierge-teaser b { display: block; font: 400 19px/1.25 var(--display); margin-bottom: 2px; }
-.concierge-x { position: absolute; top: 6px; inset-inline-end: 6px; width: 32px; height: 32px; font-size: 12px; color: #6b5f57; }
+.concierge-teaser b { display: block; font: 400 var(--fs-xl)/1.25 var(--display); margin-bottom: 2px; }
+.concierge-x { position: absolute; top: 6px; inset-inline-end: 6px; width: 32px; height: 32px; font-size: var(--fs-sm); color: #6b5f57; }
 /* On phones the teaser card would cover content; the button alone is enough there. */
 @media (max-width: 767px) { .concierge-teaser { display: none; } }
-/* On phones the product page's buy bar sits at the bottom. */
-@media (max-width: 960px) { .concierge-lift { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); } }
+/* The AI concierge: a small labelled pill, not a mystery circle. */
+.concierge-btn.cc-launch { width: auto; height: 46px; padding: 0 18px 0 15px; border-radius: 999px; display: inline-flex; gap: 8px; font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; }
+/* Product pages on phones and tablets: out of the way of the buy buttons,
+   and above the buy bar when it shows. */
+@media (max-width: 960px) {
+  .buy-in-view .concierge { opacity: 0; visibility: hidden; transition: opacity 0.25s, visibility 0s 0.25s; }
+  .has-buybar .concierge { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+  /* Room below the footer so the buy bar never hides its last links. */
+  .has-buybar .site-footer { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* ---------- Arabic language prompt ---------- */
 .lang-prompt {
@@ -156,9 +164,9 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
   content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0.12;
   background: var(--mashrabiya) center / 40px;
 }
-.lang-prompt p { font: 400 22px/1.5 var(--display); text-align: right; }
+.lang-prompt p { font: 400 var(--fs-2xl)/1.5 var(--display); text-align: right; }
 .lang-prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.lang-prompt .btn { min-height: 46px; padding: 0 26px; font: 400 18px/1 var(--display); letter-spacing: 0; }
+.lang-prompt .btn { min-height: 46px; padding: 0 26px; font: 400 var(--fs-lg)/1 var(--display); letter-spacing: 0; }
 @media (max-width: 560px) { .lang-prompt { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); } }
 
 /* ---------- AI concierge chat ---------- */
@@ -178,13 +186,13 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
   background: var(--oxblood); color: var(--ivory); border-bottom: 1px solid rgba(210, 182, 132, 0.4);
 }
 .cc-head img { border-radius: 50%; flex: none; }
-.cc-head h2 { margin: 0; font: 400 21px/1.1 var(--display); letter-spacing: 0.01em; color: var(--ivory); }
-.cc-head p { margin: 2px 0 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-soft); }
-.cc-close { margin-inline-start: auto; width: 40px; height: 40px; color: var(--champagne); font-size: 14px; }
+.cc-head h2 { margin: 0; font: 400 var(--fs-xl)/1.1 var(--display); letter-spacing: 0.01em; color: var(--ivory); }
+.cc-head p { margin: 2px 0 0; font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-soft); }
+.cc-close { margin-inline-start: auto; width: 40px; height: 40px; color: var(--champagne); font-size: var(--fs-md); }
 .cc-close:hover { color: var(--ivory); }
 
 .cc-list { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 8px; display: grid; align-content: start; gap: 12px; scroll-behavior: smooth; }
-.cc-msg { max-width: 88%; font-size: 14.5px; line-height: 1.55; }
+.cc-msg { max-width: 88%; font-size: var(--fs-md); line-height: 1.55; }
 .cc-list > * { min-width: 0; }
 .cc-msg.has-cards { max-width: 100%; width: 100%; }
 .cc-msg p { margin: 0 0 6px; }
@@ -198,7 +206,7 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 
 .cc-prompts { display: flex; flex-wrap: wrap; gap: 8px; }
 .cc-prompts button {
-  padding: 9px 13px; min-height: 40px; font-size: 13px; text-align: start;
+  padding: 9px 13px; min-height: 40px; font-size: var(--fs-sm); text-align: start;
   border: 1px solid #cdbb98; background: transparent; color: var(--ink);
   transition: background 0.3s, border-color 0.3s;
 }
@@ -208,11 +216,11 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 .cc-card { scroll-snap-align: start; display: flex; gap: 10px; padding: 10px; background: var(--ivory); border: 1px solid #e0d5c2; }
 .cc-card-img { width: 64px; height: 80px; object-fit: cover; background: #eadfcd; flex: none; }
 .cc-card-body { display: grid; gap: 1px; align-content: start; min-width: 0; }
-.cc-card-body b { font: 400 16px/1.2 var(--display); letter-spacing: 0.04em; }
-.cc-card-body small { color: #6b5f57; font-size: 12px; }
-.cc-price { font-size: 14px; margin-top: 2px; }
+.cc-card-body b { font: 400 var(--fs-base)/1.2 var(--display); letter-spacing: 0.04em; }
+.cc-card-body small { color: #6b5f57; font-size: var(--fs-sm); }
+.cc-price { font-size: var(--fs-md); margin-top: 2px; }
 .cc-avail { color: #a4412b !important; }
-.cc-card-actions { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+.cc-card-actions { display: flex; gap: 12px; margin-top: 6px; font-size: var(--fs-sm); letter-spacing: 0.1em; text-transform: uppercase; }
 .cc-card-actions a, .cc-card-actions button { padding: 6px 0; min-height: 32px; color: var(--burg); border-bottom: 1px solid currentColor; }
 
 .cc-handoff { display: grid; gap: 8px; justify-items: start; margin-top: 10px; }
@@ -223,20 +231,20 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
 .cc-typing span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes cc-dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .cc-typing span { animation: none; opacity: 0.6; } }
-.cc-error { padding: 12px 14px; border: 1px solid #e6c28f; background: #fff7ea; font-size: 14px; }
+.cc-error { padding: 12px 14px; border: 1px solid #e6c28f; background: #fff7ea; font-size: var(--fs-md); }
 .cc-error p { margin: 0 0 6px; }
 .cc-error div { display: flex; gap: 16px; flex-wrap: wrap; }
 
 .cc-form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid #e0d5c2; background: #fbf8f2; }
 .cc-form textarea {
   flex: 1; resize: none; max-height: 120px; min-height: 44px; padding: 11px 12px;
-  font: inherit; font-size: 15px; line-height: 1.4; color: var(--ink);
+  font: inherit; font-size: var(--fs-base); line-height: 1.4; color: var(--ink);
   background: var(--ivory); border: 1px solid #d6c9b3; border-radius: 0;
 }
 .cc-form textarea:focus { outline: 2px solid var(--gold); outline-offset: 0; border-color: var(--gold); }
 .cc-form button { width: 44px; height: 44px; flex: none; display: grid; place-items: center; background: var(--oxblood); color: var(--gold-soft); }
 .cc-form button:disabled { opacity: 0.45; }
-.cc-foot { margin: 0; padding: 6px 14px 10px; font-size: 11.5px; color: #7a6d63; background: #fbf8f2; }
+.cc-foot { margin: 0; padding: 6px 14px 10px; font-size: var(--fs-xs); color: #7a6d63; background: #fbf8f2; }
 .cc-foot a { color: var(--burg); text-decoration: underline; text-underline-offset: 2px; }
 
 /* Phones: a full-height sheet. */

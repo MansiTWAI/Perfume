@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { uploadFile } from '../../lib/api';
 import { useStore } from '../../context/StoreContext';
+import Icon from '../../components/Icon';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 const MAX_MB = 4;
@@ -117,9 +118,9 @@ export function PhotoGallery({ images = [], onChange }) {
             <img src={img.src} alt="" />
             {i === 0 && <span className="a-gallery-main">Main</span>}
             <div className="a-gallery-ctl">
-              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move earlier">←</button>
-              <button type="button" onClick={() => move(i, 1)} disabled={i === images.length - 1} aria-label="Move later">→</button>
-              <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label="Remove photo">✕</button>
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move earlier"><Icon name="arrow-left" size={16} /></button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === images.length - 1} aria-label="Move later"><Icon name="arrow-right" size={16} /></button>
+              <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label="Remove photo"><Icon name="close" size={16} /></button>
             </div>
           </li>
         ))}
@@ -136,7 +137,7 @@ export function PhotoGallery({ images = [], onChange }) {
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}
           >
-            <span aria-hidden="true">+</span>
+            <Icon name="plus" />
             {images.length ? 'Add photos' : 'Add photos'}
             <small>or drop them here</small>
             <input type="file" accept={IMAGE_TYPES.join(',')} multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ''; }} disabled={queue.length > 0} />
@@ -187,11 +188,11 @@ export function Pager({ page, pages, total, onPage, noun = 'items' }) {
   return (
     <div className="a-pager">
       <span className="a-muted">{total.toLocaleString()} {noun}</span>
-      <span className="a-actions">
-        <button className="a-btn" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Previous</button>
+      {pages > 1 && <span className="a-actions">
+        <button className="a-btn" disabled={page <= 1} onClick={() => onPage(page - 1)}><Icon name="arrow-left" size={16} /> Previous</button>
         <span>Page {page} of {pages}</span>
-        <button className="a-btn" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next →</button>
-      </span>
+        <button className="a-btn" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next <Icon name="arrow-right" size={16} /></button>
+      </span>}
     </div>
   );
 }
@@ -205,7 +206,7 @@ export function Modal({ title, onClose, children, wide }) {
   return (
     <div className="a-modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className={`a-modal ${wide ? 'is-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
-        <header><h2>{title}</h2>{onClose && <button className="a-x" onClick={onClose} aria-label="Close">✕</button>}</header>
+        <header><h2>{title}</h2>{onClose && <button className="a-x" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}</header>
         <div className="a-modal-body">{children}</div>
       </div>
     </div>
@@ -236,9 +237,9 @@ export function RowList({ rows = [], onChange, fields, addLabel = 'Add row', emp
             )
           )}
           <div className="a-row-ctl">
-            <button type="button" onClick={() => move(i, -1)} aria-label="Move up">↑</button>
-            <button type="button" onClick={() => move(i, 1)} aria-label="Move down">↓</button>
-            <button type="button" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+            <button type="button" onClick={() => move(i, -1)} aria-label="Move up"><Icon name="arrow-up" size={16} /></button>
+            <button type="button" onClick={() => move(i, 1)} aria-label="Move down"><Icon name="arrow-down" size={16} /></button>
+            <button type="button" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="close" size={16} /></button>
           </div>
         </div>
       ))}

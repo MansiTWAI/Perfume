@@ -5,6 +5,7 @@ import { SplitHeading } from './Motion';
 import Img from './Img';
 import AutoVideo from './AutoVideo';
 import { formatDate } from '../lib/format';
+import Icon from './Icon';
 
 export function Accordion({ items }) {
   const [open, setOpen] = useState(0);
@@ -97,9 +98,9 @@ export function Lightbox({ items, index, onClose, onIndex }) {
               <figcaption>{items[index].caption || items[index].alt}</figcaption>
             </motion.figure>
           </AnimatePresence>
-          <button className="lb-nav lb-prev" onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + items.length) % items.length); }} aria-label="Previous">‹</button>
-          <button className="lb-nav lb-next" onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % items.length); }} aria-label="Next">›</button>
-          <button className="lb-close icon-btn" onClick={onClose} aria-label="Close">✕</button>
+          <button className="lb-nav lb-prev" onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + items.length) % items.length); }} aria-label="Previous"><Icon name="arrow-left" className="flip-rtl" /></button>
+          <button className="lb-nav lb-next" onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % items.length); }} aria-label="Next"><Icon name="arrow-right" className="flip-rtl" /></button>
+          <button className="lb-close icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
         </motion.div>
       )}
     </AnimatePresence>

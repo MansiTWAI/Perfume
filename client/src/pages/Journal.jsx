@@ -8,6 +8,7 @@ import { useApi } from '../hooks/useApi';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { useStore } from '../context/StoreContext';
+import Icon from '../components/Icon';
 
 export default function Journal() {
   const { t } = useStore();
@@ -81,7 +82,7 @@ export default function Journal() {
                   <h2>{feature.title}</h2>
                   <p>{feature.excerpt}</p>
                   <p className="postcard-date">{formatDate(feature.publishedAt)} · {feature.readingMinutes} min read</p>
-                  <span className="text-link">Read the story →</span>
+                  <span className="text-link">Read the story <Icon name="arrow-right" size={16} className="flip-rtl" /></span>
                 </div>
               </Link>
             </Reveal>

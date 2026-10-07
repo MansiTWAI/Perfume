@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, uploadFile, downloadFile } from '../../lib/api';
 import { useStore } from '../../context/StoreContext';
 import { Modal } from './Fields';
+import Icon from '../../components/Icon';
 
 const when = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 const STEPS = ['Upload', 'Validate', 'Preview changes', 'Confirm', 'Result'];
@@ -227,7 +228,7 @@ export function ImportHistory() {
     <div>
       <header className="a-head">
         <h1>Import history</h1>
-        <Link to="/admin/orders" className="a-btn">← Orders</Link>
+        <Link to="/admin/orders" className="a-btn"><Icon name="arrow-left" size={16} /> Orders</Link>
       </header>
       <section className="a-panel">
         {error && <p className="a-error">{error}</p>}

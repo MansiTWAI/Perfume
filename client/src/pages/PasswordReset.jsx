@@ -4,6 +4,7 @@ import Seo from '../components/Seo';
 import { useStore } from '../context/StoreContext';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { api } from '../lib/api';
+import Icon from '../components/Icon';
 
 function Frame({ title, lede, children, seo }) {
   const { t } = useStore();
@@ -40,7 +41,7 @@ export function ForgotPassword() {
     <Frame seo="Forgot password" title={t('Forgot your password?')} lede={t('Enter the email you signed up with and we will send you a link to choose a new password.')}>
       {state.sent ? (
         <div className="auth-form form">
-          <p className="form-ok" role="status">✓ {t('If an account uses this email, a link to reset the password is on its way. It works for one hour.')}</p>
+          <p className="form-ok" role="status"><Icon name="check" size={16} /> {t('If an account uses this email, a link to reset the password is on its way. It works for one hour.')}</p>
           <p className="fine">{t('Check your spam folder if it does not arrive in a few minutes.')}</p>
           <Link to="/account" className="btn btn-ghost btn-block">{t('Back to sign in')}</Link>
         </div>

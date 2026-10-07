@@ -5,6 +5,7 @@ import { useStore } from '../context/StoreContext';
 import { renderFor } from '../lib/renders';
 import FloatingProduct from './FloatingProduct';
 import { stopScroll } from './SmoothScroll';
+import Icon from './Icon';
 
 // Each answer leans toward ELARISSE (-1), ZAFREON (+1) or neither (0).
 const Q = {
@@ -69,7 +70,7 @@ export default function SignatureFinder() {
     <AnimatePresence>
       {finderOpen && (
         <motion.div className="finder" role="dialog" aria-modal="true" aria-label={t('Find your signature')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-lenis-prevent>
-          <button className="finder-close icon-btn" onClick={() => setFinderOpen(false)} aria-label={t('Dismiss')}>✕</button>
+          <button className="finder-close icon-btn" onClick={() => setFinderOpen(false)} aria-label={t('Dismiss')}><Icon name="close" /></button>
           <div className="finder-layout">
             <div className="finder-stage" aria-hidden="true">
               <AnimatePresence mode="wait">

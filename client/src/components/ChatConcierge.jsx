@@ -6,6 +6,7 @@ import { useProducts } from '../hooks/useProducts';
 import { api } from '../lib/api';
 import { money, whatsappLink, CONTACT } from '../lib/format';
 import { Thumb } from './Img';
+import Icon from './Icon';
 
 // The AI fragrance concierge. Messages go to our server (/api/ai/chat),
 // which answers from the live catalogue; this panel only shows the reply and
@@ -86,7 +87,7 @@ function ProductCards({ items, onAdd }) {
   );
 }
 
-export default function ChatConcierge({ hidden, lift }) {
+export default function ChatConcierge({ hidden }) {
   const { pathname } = useLocation();
   const { t, region, addToCart, toast, cartOpen } = useStore();
   const { products } = useProducts();
@@ -162,12 +163,10 @@ export default function ChatConcierge({ hidden, lift }) {
     <>
       <AnimatePresence>
         {showLauncher && !open && (
-          <motion.div className={`concierge ${lift ? 'concierge-lift' : ''}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.6 } }} exit={{ opacity: 0, y: 20 }}>
+          <motion.div className="concierge" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.6 } }} exit={{ opacity: 0, y: 20 }}>
             <button type="button" className="concierge-btn cc-launch" onClick={() => setOpen(true)} aria-label={t('Ask our fragrance concierge')} aria-haspopup="dialog">
-              <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
-                <path d="M13 6h6M14 6v3.2c-3.4 1-5.5 3.8-5.5 7.3 0 4.6 3.4 8.5 7.5 8.5s7.5-3.9 7.5-8.5c0-3.5-2.1-6.3-5.5-7.3V6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-                <path d="M16 13.2l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z" fill="currentColor" />
-              </svg>
+              <Icon name="chat" size={18} />
+              <span className="cc-launch-label">{t('Ask')}</span>
             </button>
           </motion.div>
         )}
@@ -191,7 +190,7 @@ export default function ChatConcierge({ hidden, lift }) {
                 <h2>{t('The Concierge')}</h2>
                 <p>{t('Fragrance advice from the house')}</p>
               </div>
-              <button type="button" className="cc-close" onClick={() => setOpen(false)} aria-label={t('Close')}>✕</button>
+              <button type="button" className="cc-close" onClick={() => setOpen(false)} aria-label={t('Close')}><Icon name="close" /></button>
             </header>
 
             <div className="cc-list" ref={listRef} aria-live="polite">
@@ -257,7 +256,7 @@ export default function ChatConcierge({ hidden, lift }) {
                 }}
               />
               <button type="submit" disabled={busy || !input.trim()} aria-label={t('Send')}>
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <Icon name="send" size={18} className="flip-rtl" />
               </button>
             </form>
             <p className="cc-foot">

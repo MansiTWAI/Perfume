@@ -6,6 +6,7 @@ import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { money, whatsappLink } from '../lib/format';
 import { payOnline, checkPayment } from '../lib/payments';
+import Icon from '../components/Icon';
 
 export default function OrderSuccess() {
   const { orderNumber } = useParams();
@@ -61,7 +62,7 @@ export default function OrderSuccess() {
         <motion.p className="eyebrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>{t('Order {n}', { n: orderNumber })}</motion.p>
         <motion.h1 className="display-l" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>{t('Your signature is on its way.')}</motion.h1>
         <p className="section-lede">{t('Thank you. We have received your order and will confirm it shortly by WhatsApp or email.')}</p>
-        {payment === 'paid' && <p className="pay-note is-ok" role="status">✓ {t('Payment received. Thank you.')}</p>}
+        {payment === 'paid' && <p className="pay-note is-ok" role="status"><Icon name="check" size={16} /> {t('Payment received. Thank you.')}</p>}
         {confirming && (
           <div className="pay-note is-wait" role="status" aria-live="polite">
             <p><span className="pay-spin" aria-hidden="true" />{t('Confirming your payment with Razorpay…')}</p>

@@ -6,6 +6,7 @@ import { Reveal } from '../components/Motion';
 import { api } from '../lib/api';
 import { CONTACT, mapLink, whatsappLink } from '../lib/format';
 import { useStore } from '../context/StoreContext';
+import Icon from '../components/Icon';
 
 const CARD_FILE = '/media/al-barakah-lifestyle-business-card.jpg';
 
@@ -73,12 +74,6 @@ async function copyText(text) {
   }
 }
 
-const CopyIcon = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
-);
-const TickIcon = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-);
 
 // The house business card, with every detail one tap from the clipboard,
 // the card itself to download, and a contact file for phones.
@@ -126,7 +121,7 @@ function BusinessCard() {
             <span className="bcard-label">{t(r.label)}</span>
             <a className="bcard-value" dir="ltr" href={r.href} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.value}</a>
             <button type="button" className={`bcard-copy ${copied === r.key ? 'is-done' : ''}`} onClick={() => copy(r.key, r.value, r.label)} aria-label={t('Copy {what}', { what: t(r.label) })}>
-              {copied === r.key ? <TickIcon /> : <CopyIcon />}
+              {copied === r.key ? <Icon name="check" size={16} /> : <Icon name="copy" size={16} />}
               <span>{t(copied === r.key ? 'Copied' : 'Copy')}</span>
             </button>
           </li>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import AccountLayout from '../components/AccountLayout';
 import OrderTimeline from '../components/OrderTimeline';
+import ShipmentTracking from '../components/ShipmentTracking';
 import SignatureCard, { OCCASIONS } from '../components/SignatureCard';
 import { useStore } from '../context/StoreContext';
 import { useLive } from '../hooks/useLive';
@@ -10,6 +11,7 @@ import { formatDate, money, whatsappLink } from '../lib/format';
 import { payOnline } from '../lib/payments';
 import { AuthForm } from './Account';
 import { PAYMENT_METHOD, PAYMENT_STATUS, statusTone } from './MyOrders';
+import Icon from '../components/Icon';
 
 function Row({ label, children, strong }) {
   return (
@@ -116,9 +118,9 @@ function EditOrder({ order, onCancel, onSaved }) {
                 {i.image ? <img src={i.image} alt="" width="64" height="80" /> : <span className="my-order-noimg" />}
                 <span className="od-item-name"><b>{i.name}</b><small>{money(i.unitPrice, order.currency, lang)}</small></span>
                 <span className="qty-stepper" role="group" aria-label={t('Quantity of {name}', { name: i.name })}>
-                  <button type="button" onClick={() => step(i.slug, -1)} aria-label={t('One less')} disabled={qty[i.slug] === 0}>−</button>
+                  <button type="button" onClick={() => step(i.slug, -1)} aria-label={t('One less')} disabled={qty[i.slug] === 0}><Icon name="minus" size={16} /></button>
                   <output aria-live="polite">{qty[i.slug]}</output>
-                  <button type="button" onClick={() => step(i.slug, 1)} aria-label={t('One more')} disabled={qty[i.slug] >= 10}>+</button>
+                  <button type="button" onClick={() => step(i.slug, 1)} aria-label={t('One more')} disabled={qty[i.slug] >= 10}><Icon name="plus" size={16} /></button>
                 </span>
               </li>
             ))}
@@ -258,6 +260,9 @@ export default function OrderDetails() {
           </div>
         )}
 
+        {o.shipment && o.status !== 'Cancelled' ? (
+          <ShipmentTracking order={o} onRefreshed={() => { setSaved(null); reload(); }} />
+        ) : (
         <section className="od-card" aria-labelledby="od-status">
           <div className="od-card-head">
             <h2 id="od-status" className="od-title">{t('Order status')}</h2>
@@ -274,6 +279,7 @@ export default function OrderDetails() {
           )}
           {lastEdit && <p className="fine">{t('Last changed by you on {date}', { date: formatDate(lastEdit.at) })}</p>}
         </section>
+        )}
 
         <div className="od-grid">
           <section className="od-card" aria-labelledby="od-items">
@@ -340,7 +346,7 @@ export default function OrderDetails() {
       title={o ? <span dir="ltr">{o.orderNumber}</span> : t('Order details')}
       seoTitle={o ? `${t('Order {n}', { n: o.orderNumber })}` : 'Order details'}
       lede={o ? t('Placed on {date}', { date: formatDate(o.createdAt) }) : null}
-      actions={<Link to="/profile/orders" className="text-link">← {t('My orders')}</Link>}
+      actions={<Link to="/profile/orders" className="text-link"><Icon name="arrow-left" size={16} className="flip-rtl" /> {t('My orders')}</Link>}
       signedOut={<AuthForm />}
     >
       {body}

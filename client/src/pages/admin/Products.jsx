@@ -5,6 +5,7 @@ import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
 import { ImageField, PhotoGallery, RowList, csv, fromCsv } from './Fields';
+import Icon from '../../components/Icon';
 
 const EMPTY = {
   name: '', slug: '', subtitle: 'Eau de Parfum', tagline: '', family: '', description: '', story: '',
@@ -123,7 +124,7 @@ export function ProductEdit() {
       <header className="a-head">
         <h1>{isNew ? 'New product' : p.name}</h1>
         <div className="a-actions">
-          {!isNew && <a href={`/fragrances/${p.slug}`} target="_blank" rel="noreferrer" className="a-btn">View ↗</a>}
+          {!isNew && <a href={`/fragrances/${p.slug}`} target="_blank" rel="noreferrer" className="a-btn">View <Icon name="external" size={14} /></a>}
           <button className="a-btn a-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </header>

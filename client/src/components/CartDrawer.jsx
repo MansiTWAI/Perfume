@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { stopScroll } from './SmoothScroll';
+import Icon from './Icon';
 
 export default function CartDrawer() {
   const { cart, cartOpen, setCartOpen, setQty, subtotal, shipping, region, priceOf, fmt, t, dir } = useStore();
@@ -38,7 +39,7 @@ export default function CartDrawer() {
           >
             <div className="drawer-head">
               <h2>{t('Your bag')}</h2>
-              <button className="icon-btn" onClick={() => setCartOpen(false)} aria-label={t('Close bag')}>✕</button>
+              <button className="icon-btn" onClick={() => setCartOpen(false)} aria-label={t('Close bag')}><Icon name="close" /></button>
             </div>
             {rule && cart.length > 0 && (
               <div className="ship-meter">
@@ -66,9 +67,9 @@ export default function CartDrawer() {
                           <Link to={`/fragrances/${i.slug}`} onClick={() => setCartOpen(false)} className="di-name">{i.name}</Link>
                           <p className="di-sub">{i.subtitle === 'Eau de Parfum' ? t('Eau de Parfum') : i.subtitle} · <span dir="ltr">{i.sizeLabel}</span></p>
                           <div className="qty">
-                            <button onClick={() => setQty(i.slug, i.qty - 1)} aria-label={t('Remove one {name}', { name: i.name })}>−</button>
+                            <button onClick={() => setQty(i.slug, i.qty - 1)} aria-label={t('Remove one {name}', { name: i.name })}><Icon name="minus" size={16} /></button>
                             <span aria-live="polite">{i.qty}</span>
-                            <button onClick={() => setQty(i.slug, i.qty + 1)} aria-label={t('Add one {name}', { name: i.name })}>+</button>
+                            <button onClick={() => setQty(i.slug, i.qty + 1)} aria-label={t('Add one {name}', { name: i.name })}><Icon name="plus" size={16} /></button>
                           </div>
                         </div>
                         <div className="di-price">

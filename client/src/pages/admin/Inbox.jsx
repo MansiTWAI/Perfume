@@ -49,10 +49,10 @@ export function Subscribers() {
       <header className="a-head"><h1>Subscribers</h1><span className="a-muted">{list?.length ?? 0} {list?.length === 1 ? 'person' : 'people'}</span></header>
       <section className="a-panel">
         {!list ? <p>Loading…</p> : list.length === 0 ? <p className="a-muted">No subscribers yet.</p> : (
-          <table className="a-table">
+          <div className="a-table-wrap"><table className="a-table">
             <thead><tr><th>Email</th><th>Source</th><th>Joined</th></tr></thead>
             <tbody>{list.map((s) => <tr key={s._id}><td>{s.email}</td><td>{s.source}</td><td>{formatDate(s.createdAt)}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>

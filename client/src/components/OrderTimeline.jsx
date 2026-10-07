@@ -1,9 +1,10 @@
 import { formatDate } from '../lib/format';
 import { useStore } from '../context/StoreContext';
 
-function Lamp({ lit, current, cancelled, label, date }) {
+// One step of a journey. `warn` marks a delay or a return (amber).
+export function Lamp({ lit, current, cancelled, warn, label, date }) {
   return (
-    <div className={`lamp ${lit ? 'is-lit' : ''} ${current ? 'is-now' : ''} ${cancelled ? 'is-cancelled' : ''}`} aria-current={current ? 'step' : undefined}>
+    <div className={`lamp ${lit ? 'is-lit' : ''} ${current ? 'is-now' : ''} ${cancelled ? 'is-cancelled' : ''} ${warn ? 'is-warn' : ''}`} aria-current={current ? 'step' : undefined}>
       <span className="lamp-flame">
         {cancelled ? (
           <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M9 9l12 12M21 9L9 21" fill="none" strokeWidth="1.8" /></svg>

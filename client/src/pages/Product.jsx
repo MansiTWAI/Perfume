@@ -18,6 +18,7 @@ import { useStore } from '../context/StoreContext';
 import { whatsappLink, absUrl } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
 import { NotFound } from './InfoPages';
+import Icon from '../components/Icon';
 
 function Gallery({ product, mainRef }) {
   const media = [...(product.images || [])];
@@ -113,9 +114,20 @@ export default function Product() {
   useEffect(() => {
     const el = buyRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setShowBar(!e.isIntersecting && e.boundingClientRect.top < 0));
+    // The floating concierge steps aside while the buy buttons are on screen,
+    // and rises above the buy bar while that is showing, so it never covers
+    // "Add to bag".
+    const io = new IntersectionObserver(([e]) => {
+      const bar = !e.isIntersecting && e.boundingClientRect.top < 0;
+      setShowBar(bar);
+      document.body.classList.toggle('buy-in-view', e.isIntersecting);
+      document.body.classList.toggle('has-buybar', bar);
+    });
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      document.body.classList.remove('buy-in-view', 'has-buybar');
+    };
   }, [data]);
 
   if (loading && !data) return <div className="page-pad"><Loading /></div>;
@@ -207,9 +219,9 @@ export default function Product() {
 
               <div className="pinfo-buy" ref={buyRef}>
                 <div className="qty qty-lg">
-                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label={t('Decrease quantity')}>−</button>
+                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label={t('Decrease quantity')}><Icon name="minus" size={16} /></button>
                   <span aria-live="polite">{qty}</span>
-                  <button onClick={() => setQty((q) => Math.min(10, q + 1))} aria-label={t('Increase quantity')}>+</button>
+                  <button onClick={() => setQty((q) => Math.min(10, q + 1))} aria-label={t('Increase quantity')}><Icon name="plus" size={16} /></button>
                 </div>
                 <button className="btn btn-primary btn-add" disabled={soldOut} onClick={() => add()}>
                   {t(soldOut ? 'Sold out' : 'Add to bag')}

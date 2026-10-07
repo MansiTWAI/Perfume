@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
-
-const UserIcon = (
-  <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
-    <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-    <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-  </svg>
-);
+import Icon from './Icon';
 
 // The profile icon in the header: a small menu with the account shortcuts.
 export default function AccountMenu() {
@@ -56,7 +50,7 @@ export default function AccountMenu() {
         aria-label={t(user ? 'Your account' : 'Sign in')}
         onClick={() => setOpen((o) => !o)}
       >
-        {UserIcon}
+        <Icon name="user" />
         {user && <span className="acct-dot" aria-hidden="true" />}
       </button>
       <AnimatePresence>

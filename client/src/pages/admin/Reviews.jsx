@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import Icon from '../../components/Icon';
 
 const FILTERS = [['pending', 'Waiting'], ['approved', 'Published'], ['rejected', 'Hidden'], ['', 'All']];
 
@@ -37,7 +38,7 @@ export default function Reviews() {
             {list.map((r) => (
               <article key={r._id} className={`a-msg a-msg-${r.status === 'pending' ? 'new' : 'closed'}`}>
                 <header>
-                  <b>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</b> · {r.slug.toUpperCase()} · {r.name}{r.city && `, ${r.city}`}{r.phone && <> · <span dir="ltr">{r.phone}</span></>}
+                  <b className="a-stars" aria-label={`${r.rating} of 5`}>{[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={14} filled={n <= r.rating} />)}</b> · {r.slug.toUpperCase()} · {r.name}{r.city && `, ${r.city}`}{r.phone && <> · <span dir="ltr">{r.phone}</span></>}
                   <small>{formatDate(r.createdAt)} · order {r.orderNumber}</small>
                 </header>
                 {r.title && <p><b>{r.title}</b></p>}

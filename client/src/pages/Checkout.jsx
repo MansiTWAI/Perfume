@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import { payOnline } from '../lib/payments';
 import { whatsappLink } from '../lib/format';
 import { seasonFor } from '../lib/seasons';
+import Icon from '../components/Icon';
 
 const PAY_LABEL = {
   cod: ['Cash on delivery', 'Pay when your order arrives.'],
@@ -19,10 +20,19 @@ const PAY_LABEL = {
 
 const PHONE_CODE = { IN: '+91', AE: '+971' };
 
+// The order summary: beside the form on wide screens; on phones and tablets
+// a one-line total under the title that opens to show the items.
 function OrderSummary({ cart, subtotal, shipping, region }) {
   const { priceOf, fmt, t } = useStore();
+  const [open, setOpen] = useState(false);
+  const count = cart.reduce((n, i) => n + i.qty, 0);
   return (
-    <aside className="summary">
+    <aside className={`summary${open ? ' is-open' : ''}`}>
+      <button type="button" className="summary-toggle" aria-expanded={open} aria-controls="order-summary" onClick={() => setOpen((o) => !o)}>
+        <span>{t(count === 1 ? '1 item' : '{n} items', { n: count })} · <b>{fmt(subtotal + shipping)}</b></span>
+        <span className="summary-toggle-act">{t(open ? 'Hide' : 'Show')} <Icon name="chevron-down" size={16} /></span>
+      </button>
+      <div className="summary-body" id="order-summary">
       <h2>{t('Your order')}</h2>
       <ul>
         {cart.map((i) => (
@@ -41,6 +51,7 @@ function OrderSummary({ cart, subtotal, shipping, region }) {
           ? t('Prices {tax}.', { tax: t(region.taxLabel) })
           : t('Prices are estimates converted from UAE dirhams. We confirm the exact amount on WhatsApp before you pay.')}
       </p>
+      </div>
     </aside>
   );
 }
@@ -161,8 +172,8 @@ export default function Checkout() {
       <section className="section checkout page-pad">
         <Seo title="Checkout" />
         <div className="container checkout-grid">
+          <h1 className="display-l checkout-title">{t('Checkout')}</h1>
           <div className="form checkout-form">
-            <h1 className="display-l">{t('Checkout')}</h1>
             {regionPicker}
             <div className="enquiry-box">
               <h2>{t('Ordering from {country}', { country: t(region.name) })}</h2>
@@ -187,8 +198,8 @@ export default function Checkout() {
     <section className="section checkout page-pad">
       <Seo title="Checkout" />
       <div className="container checkout-grid">
+        <h1 className="display-l checkout-title">{t('Checkout')}</h1>
         <form onSubmit={submit} className="form checkout-form">
-          <h1 className="display-l">{t('Checkout')}</h1>
           {regionPicker}
 
           <fieldset>

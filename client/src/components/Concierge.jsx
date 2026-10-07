@@ -3,9 +3,10 @@ import { useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { useProducts } from '../hooks/useProducts';
-import { cx, whatsappLink } from '../lib/format';
+import { whatsappLink } from '../lib/format';
 import { api } from '../lib/api';
 import ChatConcierge from './ChatConcierge';
+import Icon from './Icon';
 
 // Asked once per page load: is the AI concierge switched on on the server?
 let aiStatus = null;
@@ -72,13 +73,13 @@ export default function Concierge() {
 
   // With the AI concierge on, it takes this place (WhatsApp stays one tap
   // away inside the chat).
-  if (ai) return <ChatConcierge hidden={hidden} lift={!!product} />;
+  if (ai) return <ChatConcierge hidden={hidden} />;
 
   return (
     <AnimatePresence>
       {!hidden && (
         <motion.div
-          className={cx('concierge', product && 'concierge-lift')}
+          className="concierge"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 1.2 } }}
           exit={{ opacity: 0, y: 20 }}
@@ -86,7 +87,7 @@ export default function Concierge() {
           <AnimatePresence>
             {teaser && (
               <motion.div className="concierge-teaser" role="status" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6 }}>
-                <button className="concierge-x" onClick={closeTeaser} aria-label={t('Dismiss')}>✕</button>
+                <button className="concierge-x" onClick={closeTeaser} aria-label={t('Dismiss')}><Icon name="close" size={16} /></button>
                 <p><b>{t('Need help choosing?')}</b>{t('Our concierge replies on WhatsApp.')}</p>
                 <a href={whatsappLink(message)} target="_blank" rel="noreferrer" className="text-link" onClick={closeTeaser}>{t('Chat with us')}</a>
               </motion.div>
