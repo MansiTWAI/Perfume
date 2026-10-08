@@ -1,26 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
-import { cx } from '../lib/format';
+import { cx, whatsappLink } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 import RegionSelect from './RegionSelect';
 import AccountMenu from './AccountMenu';
+import { openWhatsAppSignup, useSubscribed } from './WhatsAppUpdates';
 import Icon from './Icon';
 
-const PRIMARY = [
-  ['/fragrances', 'Fragrances'],
-  ['/our-story', 'Our Story'],
-  ['/journal', 'Journal'],
+// Every page, in the same groups as the footer. Desktop shows them as four
+// menus (Shop, The House, Journal, Help); phones get them in the menu.
+const FRAGRANCES = [
+  ['/fragrances/elarisse', 'ELARISSE', 'Luminous Floral Amber'],
+  ['/fragrances/zafreon', 'ZAFREON', 'Oriental Woody Oud'],
+  ['/fragrances/signature-duo', 'Signature Duo', 'Gift set · 2 × 100 ml'],
 ];
-const MENU = [
-  ['/fragrances', 'Fragrances'],
+const HOUSE = [
+  ['/about-us', 'About Us'],
   ['/our-story', 'Our Story'],
+  ['/mission-vision', 'Mission & Vision'],
   ['/fragrance-heritage', 'Heritage'],
-  ['/journal', 'Journal'],
   ['/gallery', 'Gallery'],
-  ['/contact', 'Contact'],
 ];
+const HELP = [
+  ['/track', 'Track an order'],
+  ['/contact', 'Contact'],
+  ['/faq', 'FAQ'],
+  ['/shipping-policy', 'Shipping Policy'],
+  ['/refund-policy', 'Refund & Cancellation'],
+];
+const inGroup = (pathname, group) => group.some(([to]) => pathname === to || pathname.startsWith(`${to}/`));
 
 // English ⇄ Arabic. Each option is labelled in its own language.
 function LangToggle({ className = 'lang-btn' }) {
@@ -38,11 +48,75 @@ function LangToggle({ className = 'lang-btn' }) {
   );
 }
 
+// "Subscribe" in the bar; hidden once this customer is subscribed.
+function SubscribeButton() {
+  const { t } = useStore();
+  const [state] = useSubscribed();
+  if (!state || state.subscribed) return null;
+  return (
+    <button type="button" className="nav-sub" onClick={() => openWhatsAppSignup({ source: 'header' })} aria-label={t('Subscribe to WhatsApp updates')}>
+      <Icon name="chat" size={15} /><span>{t('Subscribe')}</span>
+    </button>
+  );
+}
+
+// One desktop menu: opens on hover or click, closes on Esc, outside click or
+// leaving it. The panel holds plain links.
+function NavMenu({ id, label, active, open, setOpen, children }) {
+  const box = useRef(null);
+  const timer = useRef(0);
+  const isOpen = open === id;
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const outside = (e) => !box.current?.contains(e.target) && setOpen(null);
+    const key = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(null);
+        box.current?.querySelector('.nav-link')?.focus();
+      }
+    };
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('keydown', key); };
+  }, [isOpen, setOpen]);
+  const enter = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(id), 90); };
+  const leave = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen((o) => (o === id ? null : o)), 160); };
+  return (
+    <div className="nav-menu" ref={box} onMouseEnter={enter} onMouseLeave={leave}>
+      <button
+        type="button"
+        className={cx('nav-link', 'nav-trigger', (active || isOpen) && 'active', isOpen && 'is-open')}
+        aria-expanded={isOpen}
+        aria-controls={`nav-${id}`}
+        onClick={() => setOpen(isOpen ? null : id)}
+      >
+        {label}<span className="nav-caret" aria-hidden="true" />
+        {active && <motion.span layoutId="nav-underline" className="nav-underline" transition={{ type: 'spring', stiffness: 260, damping: 30 }} />}
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            id={`nav-${id}`}
+            className={`nav-panel nav-panel-${id}`}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function Header() {
   const { count, setCartOpen, user, logout, setSearchOpen, setFinderOpen, t } = useStore();
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [open, setOpen] = useState(null); // which desktop menu is open
   const { pathname } = useLocation();
 
   useEffect(() => {
@@ -59,16 +133,20 @@ export default function Header() {
     return () => removeEventListener('scroll', on);
   }, []);
 
-  useEffect(() => setMenu(false), [pathname]);
+  useEffect(() => { setMenu(false); setOpen(null); }, [pathname]);
+  useEffect(() => { if (hidden) setOpen(null); }, [hidden]);
   useEffect(() => {
     stopScroll(menu);
     document.body.style.overflow = menu ? 'hidden' : '';
-    if (!menu) return;
+    if (!menu) return undefined;
     // Escape closes the menu, as it does the bag and search.
     const onKey = (e) => e.key === 'Escape' && setMenu(false);
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, [menu]);
+
+  const finder = () => { setOpen(null); setMenu(false); setFinderOpen(true); };
+  const shopActive = pathname.startsWith('/fragrances');
 
   return (
     <>
@@ -84,16 +162,44 @@ export default function Header() {
               <span /><span />
             </button>
             <nav className="nav-desktop" aria-label={t('Primary')}>
-              {PRIMARY.map(([to, label]) => (
-                <NavLink key={to} to={to} className="nav-link">
-                  {({ isActive }) => (
-                    <>
-                      {t(label)}
-                      {isActive && <motion.span layoutId="nav-underline" className="nav-underline" transition={{ type: 'spring', stiffness: 260, damping: 30 }} />}
-                    </>
-                  )}
-                </NavLink>
-              ))}
+              <NavMenu id="shop" label={t('Shop')} active={shopActive} open={open} setOpen={setOpen}>
+                <div className="nav-col">
+                  <p className="nav-h">{t('Fragrances')}</p>
+                  {FRAGRANCES.map(([to, name, note]) => (
+                    <Link key={to} to={to} className="nav-product"><b>{name}</b><small>{t(note)}</small></Link>
+                  ))}
+                </div>
+                <div className="nav-col">
+                  <p className="nav-h">{t('Shop')}</p>
+                  <Link to="/fragrances">{t('All fragrances')}</Link>
+                  <button type="button" onClick={finder}>{t('Find your signature')}</button>
+                  <Link to="/track">{t('Track an order')}</Link>
+                </div>
+                <button type="button" className="nav-feature" onClick={finder}>
+                  <b>{t('Not sure which?')}</b>
+                  <span>{t('Answer four questions and we will match you.')}</span>
+                  <i>{t('Find your signature')} <span className="flip-rtl" aria-hidden="true">→</span></i>
+                </button>
+              </NavMenu>
+              <NavMenu id="house" label={t('The House')} active={inGroup(pathname, HOUSE)} open={open} setOpen={setOpen}>
+                <div className="nav-col">
+                  {HOUSE.map(([to, label]) => <Link key={to} to={to}>{t(label)}</Link>)}
+                </div>
+              </NavMenu>
+              <NavLink to="/journal" className="nav-link">
+                {({ isActive }) => (
+                  <>
+                    {t('Journal')}
+                    {isActive && <motion.span layoutId="nav-underline" className="nav-underline" transition={{ type: 'spring', stiffness: 260, damping: 30 }} />}
+                  </>
+                )}
+              </NavLink>
+              <NavMenu id="help" label={t('Help')} active={inGroup(pathname, HELP)} open={open} setOpen={setOpen}>
+                <div className="nav-col">
+                  {HELP.map(([to, label]) => <Link key={to} to={to}>{t(label)}</Link>)}
+                  <a href={whatsappLink(t('Hello Al Barakah'))} target="_blank" rel="noreferrer">{t('Chat on WhatsApp')}</a>
+                </div>
+              </NavMenu>
             </nav>
           </div>
 
@@ -106,6 +212,7 @@ export default function Header() {
           </Link>
 
           <div className="header-right">
+            <div className="nav-desktop-only"><SubscribeButton /></div>
             <LangToggle />
             <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}><Icon name="search" /></button>
             <div className="nav-desktop-only"><RegionSelect /></div>
@@ -128,24 +235,49 @@ export default function Header() {
         {menu && (
           <motion.div
             className="mobile-menu"
+            data-lenis-prevent
             initial={{ clipPath: 'inset(0 0 100% 0)' }}
             animate={{ clipPath: 'inset(0 0 0% 0)', transition: { duration: 0.7, ease: [0.76, 0, 0.24, 1] } }}
             exit={{ clipPath: 'inset(0 0 100% 0)', transition: { duration: 0.5, ease: [0.76, 0, 0.24, 1] } }}
           >
             <nav aria-label={t('Menu')}>
-              {MENU.map(([to, label], i) => (
-                <motion.div key={to} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 + i * 0.05 } }}>
-                  <NavLink to={to}>{t(label)}</NavLink>
-                </motion.div>
-              ))}
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 } }}>
+                <p className="mm-h">{t('Shop')}</p>
+                <div className="mm-big">
+                  <NavLink to="/fragrances" end>{t('All fragrances')}</NavLink>
+                  {FRAGRANCES.map(([to, name]) => <NavLink key={to} to={to}>{name}</NavLink>)}
+                </div>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.32 } }}>
+                <p className="mm-h">{t('The House')}</p>
+                <div className="mm-two">
+                  {HOUSE.map(([to, label]) => <NavLink key={to} to={to}>{t(label)}</NavLink>)}
+                  <NavLink to="/journal">{t('Journal')}</NavLink>
+                </div>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.39 } }}>
+                <p className="mm-h">{t('Help')}</p>
+                <div className="mm-two">
+                  {HELP.slice(0, 3).map(([to, label]) => <NavLink key={to} to={to}>{t(label)}</NavLink>)}
+                  <button type="button" onClick={finder}>{t('Find your signature')}</button>
+                </div>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.46 } }}>
+                <p className="mm-h">{t('Account')}</p>
+                <div className="mm-two">
+                  {user ? (
+                    <>
+                      <NavLink to="/profile/orders">{t('My orders')}</NavLink>
+                      <NavLink to="/profile/edit">{t('Edit profile')}</NavLink>
+                      <NavLink to="/profile" end>{t('Account overview')}</NavLink>
+                      <button type="button" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>
+                    </>
+                  ) : <NavLink to="/account">{t('Sign in')}</NavLink>}
+                </div>
+              </motion.div>
             </nav>
             <div className="mobile-menu-foot">
-              <button className="text-btn" onClick={() => { setMenu(false); setFinderOpen(true); }}>{t('Find your signature')}</button>
-              <Link to="/account" className="text-btn">{t(user ? 'Your account' : 'Sign in')}</Link>
-              {user && <Link to="/profile/orders" className="text-btn">{t('My orders')}</Link>}
-              {user && <Link to="/profile/edit" className="text-btn">{t('Edit profile')}</Link>}
-              <Link to="/track" className="text-btn">{t('Track an order')}</Link>
-              {user && <button type="button" className="text-btn" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>}
+              <MenuSubscribe onOpen={() => setMenu(false)} />
               <div className="menu-tools">
                 <LangToggle className="lang-btn lang-btn-menu" />
                 <RegionSelect align="left" />
@@ -155,5 +287,16 @@ export default function Header() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+function MenuSubscribe({ onOpen }) {
+  const { t } = useStore();
+  const [state] = useSubscribed();
+  if (!state || state.subscribed) return null;
+  return (
+    <button type="button" className="btn wa-gold btn-block mm-sub" onClick={() => { onOpen(); openWhatsAppSignup({ source: 'menu' }); }}>
+      <Icon name="chat" size={16} />{t('Subscribe on WhatsApp')}
+    </button>
   );
 }

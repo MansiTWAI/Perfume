@@ -141,7 +141,7 @@ export function WhatsAppSheet() {
 
 // Whether this customer is subscribed: the account's answer when signed in,
 // else what this device remembers.
-function useSubscribed() {
+export function useSubscribed() {
   const { user } = useStore();
   const [state, setState] = useState(null); // null loading · { subscribed, phone, since }
   const load = useCallback(() => {
