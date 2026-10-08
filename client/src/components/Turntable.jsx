@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { WhatsAppPill } from './WhatsAppUpdates';
 import { useMotionValueEvent } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { flyToCart } from '../lib/flyToCart';
@@ -99,6 +100,7 @@ export default function Turntable({ products }) {
         <div className="tt-intro">
           <h1 className="tt-kicker">{t('Luxury perfume house · Hyderabad')}</h1>
           <p className="tt-tagline">{t('Leave your signature.')}</p>
+          <WhatsAppPill />
         </div>
 
         <div className="tt-panel" aria-live="polite">

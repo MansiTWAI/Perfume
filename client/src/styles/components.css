@@ -496,6 +496,12 @@
 .wa-band h2 { font: 400 clamp(36px, 5vw, 60px)/1.04 var(--display); margin: 12px 0 16px; }
 .wa-band-lede { color: #cdb7a8; max-width: 46ch; font-size: var(--fs-lg); margin-bottom: 26px; }
 .wa-band .fine { color: #8f8177; }
+.wa-pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; min-height: 40px; padding: 0 16px; border: 1px solid rgba(210, 182, 132, 0.6); border-radius: 40px; background: rgba(13, 10, 9, 0.35); color: var(--ivory); font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background 0.3s, border-color 0.3s; }
+.wa-pill:hover { background: rgba(210, 182, 132, 0.18); border-color: var(--gold-soft); }
+.wa-pill .icon { color: var(--gold-soft); }
+.tt-day .wa-pill { color: var(--ink); background: rgba(255, 250, 240, 0.55); border-color: rgba(122, 90, 32, 0.45); }
+.tt-day .wa-pill .icon { color: var(--gold-ink); }
+@media (max-width: 560px) { .wa-pill { margin-top: 12px; min-height: 36px; padding: 0 14px; } }
 .wa-gold { background: var(--gold-soft); color: var(--black); border-color: var(--gold-soft); gap: 10px; }
 .wa-gold:hover { color: var(--black); }
 .wa-perks { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 22px 26px; }

@@ -13,7 +13,8 @@ import Icon from './Icon';
 // come back (the server answers WHATSAPP_STOPPED).
 //
 // Where it appears: the account page, the AI concierge (once, after
-// interest) and one band on the homepage. Nowhere else, and no pop-ups.
+// interest), and on the homepage: a small button on the first screen plus
+// one band lower down. Nowhere else, and no pop-ups.
 
 export const PERKS = [
   ['New arrivals', 'Be first to know when a fragrance launches or returns.'],
@@ -249,5 +250,17 @@ export function WhatsAppBand() {
         <ul className="wa-perks">{PERKS.map(([p, d]) => <li key={p}><b>{t(p)}</b><span>{t(d)}</span></li>)}</ul>
       </div>
     </section>
+  );
+}
+
+// ----- homepage first screen: one small button under the tagline -----
+export function WhatsAppPill() {
+  const { t } = useStore();
+  const [state] = useSubscribed();
+  if (!state || state.subscribed) return null;
+  return (
+    <button type="button" className="wa-pill" onClick={() => openWhatsAppSignup({ source: 'home' })}>
+      <Icon name="chat" size={15} />{t('Subscribe on WhatsApp')}
+    </button>
   );
 }

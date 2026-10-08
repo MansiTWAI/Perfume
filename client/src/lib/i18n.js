@@ -49,6 +49,7 @@ const AR = {
   'Send my code': 'أرسل الرمز',
   'Subscribe to WhatsApp updates': 'اشترك في تحديثات واتساب',
   'Subscribe': 'اشترك',
+  'Subscribe on WhatsApp': 'اشترك عبر واتساب',
   'Unsubscribe': 'إلغاء الاشتراك',
   "You're subscribed": 'تم اشتراكك',
   'A few messages a month. Reply STOP at any time.': 'بضع رسائل في الشهر. يمكنك الرد بكلمة STOP في أي وقت.',
