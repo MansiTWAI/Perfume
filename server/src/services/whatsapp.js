@@ -64,7 +64,7 @@ export async function subscribe({ phone, name, email, user, lead, source = 'webs
     if (l) c.lead = l._id;
   }
   await c.save();
-  // The number is verified now: an AI lead without a way to reach them gets it.
+  // An AI lead without a way to reach them gets this number.
   if (c.lead) {
     const l = await Lead.findById(c.lead);
     if (l && (!l.phone || (!l.name && c.name))) {

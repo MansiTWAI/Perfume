@@ -114,7 +114,7 @@
 }
 .pcard-badge {
   position: absolute; top: 24px; inset-inline-start: 24px; z-index: 3;
-  font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.26em; text-transform: uppercase;
+  font: 500 var(--fs-xs)/1 var(--body); letter-spacing: var(--caps); text-transform: uppercase;
   color: var(--gold-soft); padding: 7px 10px; border: 1px solid rgba(184, 149, 90, 0.4);
 }
 .stage-ivory .pcard-badge { color: var(--gold-ink); }

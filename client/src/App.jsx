@@ -11,7 +11,7 @@ import SearchOverlay from './components/SearchOverlay';
 import SignatureFinder from './components/SignatureFinder';
 import Concierge from './components/Concierge';
 import LangPrompt from './components/LangPrompt';
-import { WhatsAppSheet, WhatsAppNudge } from './components/WhatsAppUpdates';
+import { WhatsAppSheet } from './components/WhatsAppUpdates';
 import { useStore } from './context/StoreContext';
 import Home from './pages/Home';
 
@@ -133,7 +133,6 @@ export default function App() {
       <SignatureFinder />
       <Concierge />
       <LangPrompt />
-      <WhatsAppNudge />
       <WhatsAppSheet />
       <Toasts />
     </SmoothScroll>

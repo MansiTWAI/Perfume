@@ -123,7 +123,7 @@ export default function Campaign({ status }) {
         <section className="a-panel">
           <h2>Who should receive it?</h2>
           <div className="a-choice" role="radiogroup" aria-label="Audience">
-            {[['all', 'Everyone who verified their number and agreed.'], ['leads', 'Subscribers who came from the AI concierge.'], ['selected', 'Search and tick people, e.g. those who asked about one fragrance.']].map(([k, d]) => (
+            {[['all', 'Everyone who subscribed and agreed to updates.'], ['leads', 'Subscribers who came from the AI concierge.'], ['selected', 'Search and tick people, e.g. those who asked about one fragrance.']].map(([k, d]) => (
               <label key={k} className={audience === k ? 'is-on' : ''}>
                 <span className="a-choice-head"><input type="radio" name="aud" checked={audience === k} onChange={() => setAudience(k)} /> {AUDIENCE[k]}{k === 'leads' ? ' only' : ''}</span>
                 <span className="a-choice-n">{k === 'selected' ? (selected.size ? `${selected.size} chosen` : 'Choose…') : people(counts[k] || 0)}</span>

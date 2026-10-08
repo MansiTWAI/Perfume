@@ -11,7 +11,7 @@ import { History, HistoryList, CampaignResults } from './whatsapp/History';
 
 // WhatsApp updates, in six plain sections:
 //   Overview     how it is going, and "New campaign"
-//   Subscribers  who signed up (verified number + consent), unsubscribe
+//   Subscribers  who signed up (number + consent), unsubscribe
 //   Templates    saved messages (AI Generate or Create manually)
 //   Campaigns    send in five steps: audience, message, preview, send, results
 //   History      every campaign and each person's delivery
@@ -45,7 +45,7 @@ function Overview({ status }) {
       <section className="a-panel a-wa-how">
         <h2>How it works</h2>
         <ol>
-          <li><b>Customers subscribe</b> from the homepage, their account or the AI concierge, after confirming their number with a WhatsApp code.</li>
+          <li><b>Customers subscribe</b> from the homepage, their account or the AI concierge, with one tap and a consent tick. Anyone who replies STOP is removed and cannot be re-added from the website.</li>
           <li><b>You send a campaign</b>: choose who gets it, pick or write a message (or let the AI draft one), check the preview, send now or later.</li>
           <li><b>Follow the results</b>: sent, delivered, read and failed for each person. Anyone who replies STOP is unsubscribed straight away.</li>
         </ol>
@@ -79,7 +79,7 @@ function Subscribers({ onChanged }) {
   const REASON = { customer: 'by the customer', reply: 'replied STOP', admin: 'by the team', blocked: 'turned off in WhatsApp' };
   return (
     <div>
-      <p className="a-muted a-hint">People who confirmed their number with a WhatsApp code and agreed to updates. Only the customer can subscribe; you can unsubscribe someone here.</p>
+      <p className="a-muted a-hint">People who ticked the consent box and subscribed. Only the customer can subscribe; you can unsubscribe someone here.</p>
       <section className="a-panel">
         <div className="a-filters">
           <input type="search" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Search name, phone or email" aria-label="Search subscribers" />
@@ -117,7 +117,6 @@ function Settings({ status }) {
   const site = window.location.origin.includes('localhost') ? 'https://albarakah.me' : window.location.origin;
   const rows = [
     [status.account, 'WhatsApp account connected', 'The access token and phone number ID are on the server (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID).'],
-    [status.codesTemplate, 'Code template (for sign-up codes)', 'An approved “Authentication” template with a copy-code button (WHATSAPP_OTP_TEMPLATE). Without it customers cannot confirm their number on the live site.'],
     [!!status.template, <>Message template {status.template && <code>{status.template}</code>}</>, <>An approved “Marketing” template with the body <code>Hello {'{{1}}'}, {'{{2}}'}</code> and the footer “Reply STOP to unsubscribe” (WHATSAPP_NOTIFY_TEMPLATE).</>],
     [!!status.mediaTemplate, <>Picture template <small className="a-muted">(optional)</small> {status.mediaTemplate && <code>{status.mediaTemplate}</code>}</>, <>The same message with an image header and a URL button <code>{site}/{'{{1}}'}</code> (WHATSAPP_NOTIFY_MEDIA_TEMPLATE). Without it, messages go as text with the link at the end.</>, true],
     [status.statusUpdates && status.webhookVerify, 'Delivery receipts and STOP replies', <>Webhook <code>{site}/api/whatsapp/webhook</code>, subscribed to “messages”, with the app secret and verify token (WHATSAPP_APP_SECRET, WHATSAPP_WEBHOOK_VERIFY_TOKEN).</>],

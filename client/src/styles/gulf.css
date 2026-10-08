@@ -45,7 +45,8 @@ h3:lang(ar),
   font: 500 var(--fs-sm)/1 var(--body); color: #e6dccf;
   border-radius: 22px; transition: color 0.3s, background 0.3s;
 }
-.lang-btn[lang='ar'] { font: 400 var(--fs-lg)/1 var(--display); }
+.lang-btn[lang='ar'] { font: 500 15px/1 var(--arabic); }
+.site-header .lang-btn { min-height: 34px; min-width: 52px; border: 1px solid rgba(215, 195, 160, 0.32); border-radius: var(--radius); }
 .lang-btn:hover { color: var(--ivory); background: rgba(215, 195, 160, 0.12); }
 /* Small phones: the header is full; the switch lives in the menu instead. */
 .lang-btn-menu { display: none; }

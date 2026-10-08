@@ -106,7 +106,6 @@ export default function Header() {
           </Link>
 
           <div className="header-right">
-            <NavLink to="/contact" className="nav-link nav-desktop-only">{t('Contact')}</NavLink>
             <LangToggle />
             <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}><Icon name="search" /></button>
             <div className="nav-desktop-only"><RegionSelect /></div>
@@ -145,10 +144,12 @@ export default function Header() {
               <Link to="/account" className="text-btn">{t(user ? 'Your account' : 'Sign in')}</Link>
               {user && <Link to="/profile/orders" className="text-btn">{t('My orders')}</Link>}
               {user && <Link to="/profile/edit" className="text-btn">{t('Edit profile')}</Link>}
-              {user && <button type="button" className="text-btn" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>}
               <Link to="/track" className="text-btn">{t('Track an order')}</Link>
-              <LangToggle className="lang-btn lang-btn-menu" />
-              <RegionSelect align="left" />
+              {user && <button type="button" className="text-btn" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>}
+              <div className="menu-tools">
+                <LangToggle className="lang-btn lang-btn-menu" />
+                <RegionSelect align="left" />
+              </div>
             </div>
           </motion.div>
         )}

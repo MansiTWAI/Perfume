@@ -1,13 +1,15 @@
 /* ============ Tokens ============ */
 :root {
   /* Type scale: nine sizes for the whole shop (display sizes use clamp). */
-  --fs-xs: 11px; /* labels, eyebrows, small caps */
-  --fs-sm: 12.5px; /* meta, fine print */
+  --fs-xs: 12px; /* labels, eyebrows, small caps */
+  --fs-sm: 13px; /* meta, fine print */
   --fs-md: 14px; /* secondary text, buttons */
   --fs-base: 15px; /* body */
   --fs-lg: 17px; /* lead text, product names in lists */
   --fs-xl: 20px; /* small headings */
   --fs-2xl: 26px; /* section headings */
+  /* Tracking for small uppercase labels (eyebrows, buttons, form labels). */
+  --caps: 0.18em;
   --fs-3xl: 36px; /* page headings */
   /* Spacing rhythm. */
   --sp-1: 24px;
@@ -137,7 +139,7 @@ html.lenis, html.lenis body { height: auto; }
 .center-block { margin-inline: auto; }
 
 /* ============ Type ============ */
-.eyebrow { font: 500 var(--fs-xs)/1.4 var(--body); letter-spacing: 0.28em; text-transform: uppercase; color: var(--s-accent); }
+.eyebrow { font: 500 var(--fs-xs)/1.4 var(--body); letter-spacing: var(--caps); text-transform: uppercase; color: var(--s-accent); }
 .display-xl { font-size: clamp(44px, 6.2vw, 96px); letter-spacing: -0.02em; line-height: 1; }
 .display-l { font-size: clamp(32px, 4vw, 60px); letter-spacing: -0.015em; line-height: 1.05; }
 .lede { font-size: clamp(17px, 1.4vw, 20px); line-height: 1.7; color: var(--s-muted); max-width: 58ch; }
@@ -156,7 +158,7 @@ html.lenis, html.lenis body { height: auto; }
   min-height: 54px;
   padding: 0 34px;
   font: 500 var(--fs-xs)/1 var(--body);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--caps);
   text-transform: uppercase;
   border: 1px solid transparent;
   overflow: hidden;
@@ -181,7 +183,7 @@ html.lenis, html.lenis body { height: auto; }
   align-items: center;
   gap: 12px;
   font: 500 var(--fs-xs)/1.4 var(--body);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--caps);
   text-transform: uppercase;
   color: var(--s-fg);
   padding: 6px 0;
@@ -229,23 +231,25 @@ html.lenis, html.lenis body { height: auto; }
   transition: transform 0.7s var(--ease), background-color 0.5s, border-color 0.5s;
   border-bottom: 1px solid transparent;
 }
+.site-header::before { content: ''; position: absolute; inset: 0 0 -40px; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(13, 10, 9, 0.94) 0%, rgba(13, 10, 9, 0.84) 58%, rgba(13, 10, 9, 0) 100%); transition: opacity 0.5s; }
+.site-header.is-scrolled::before, html.solid-header .site-header::before { opacity: 0; }
 .site-header.is-scrolled, html.solid-header .site-header { background: rgba(13, 10, 9, 0.96); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-color: rgba(215, 195, 160, 0.14); }
 .site-header.is-hidden { transform: translateY(-100%); }
 .header-row { height: var(--header-h); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
-.header-left, .header-right { display: flex; align-items: center; gap: 4px; }
+.header-left, .header-right { display: flex; align-items: center; gap: 6px; }
 .header-right { justify-content: flex-end; }
-.nav-desktop { display: flex; gap: 8px; }
-.nav-link { position: relative; padding: 10px 12px; font: 400 var(--fs-xs)/1 var(--body); letter-spacing: 0.22em; text-transform: uppercase; color: #e6dccf; transition: color 0.3s; }
-.nav-link::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 1px; background: var(--gold-soft); transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease); }
+.nav-desktop { display: flex; gap: 2px; }
+.nav-link { position: relative; padding: 12px 14px; font: 500 13px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #e6dccf; transition: color 0.3s; }
+.nav-link::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1px; background: var(--gold-soft); transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease); }
 .nav-link:hover, .nav-link.active { color: var(--ivory); }
 .nav-link:hover::after { transform: scaleX(1); }
 .nav-link.active::after { display: none; }
-.nav-underline { position: absolute; left: 12px; right: 12px; bottom: 3px; height: 1px; background: var(--gold-soft); }
+.nav-underline { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1px; background: var(--gold-soft); }
 .logo { display: flex; align-items: center; gap: 12px; justify-self: center; }
 .logo img { width: 54px; height: auto; mix-blend-mode: lighten; -webkit-mask-image: radial-gradient(closest-side, #000 68%, transparent); mask-image: radial-gradient(closest-side, #000 68%, transparent); }
 .logo-word { display: grid; line-height: 1; white-space: nowrap; }
 .logo-word b { font: 400 18px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ivory); }
-.logo-word small { font: 400 9px/1 var(--body); letter-spacing: 0.56em; text-transform: uppercase; color: var(--gold-soft); margin-top: 7px; }
+.logo-word small { font: 500 10px/1 var(--body); letter-spacing: 0.44em; text-transform: uppercase; color: var(--gold-soft); margin-top: 7px; }
 .bag-count { position: absolute; top: 5px; inset-inline-end: 3px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--ivory); color: var(--black); font: 600 10px/17px var(--body); text-align: center; padding: 0 4px; }
 .menu-btn { display: none; width: 44px; height: 44px; position: relative; }
 .menu-btn span { position: absolute; left: 12px; right: 12px; height: 1px; background: var(--ivory); transition: transform 0.5s var(--ease), top 0.5s var(--ease); }
@@ -254,7 +258,7 @@ html.lenis, html.lenis body { height: auto; }
 .menu-open .menu-btn span:first-child { top: 22px; transform: rotate(45deg); }
 .menu-open .menu-btn span:last-child { top: 22px; transform: rotate(-45deg); }
 .region { position: relative; }
-.region-btn { display: inline-flex; gap: 6px; align-items: center; padding: 10px 12px; min-height: 44px; font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.16em; color: #e6dccf; }
+.region-btn { display: inline-flex; gap: 6px; align-items: center; padding: 10px 12px; min-height: 44px; font: 500 13px/1 var(--body); letter-spacing: 0.1em; white-space: nowrap; color: #e6dccf; }
 .region-btn i { font-style: normal; color: var(--gold); }
 .region-btn:hover { color: var(--ivory); }
 .region-list { position: absolute; top: calc(100% + 8px); inset-inline-end: 0; min-width: 260px; list-style: none; background: var(--umber); border: 1px solid rgba(215, 195, 160, 0.2); padding: 8px; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4); z-index: 5; }
@@ -272,8 +276,12 @@ html.lenis, html.lenis body { height: auto; }
 }
 .mobile-menu nav { display: grid; gap: 4px; }
 .mobile-menu nav a { font: 400 clamp(34px, 9vw, 52px)/1.15 var(--display); color: var(--ivory); }
+.mobile-menu nav a { display: flex; align-items: center; gap: 14px; }
 .mobile-menu nav a.active { font-style: italic; color: var(--gold-soft); }
-.mobile-menu-foot { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; padding-top: 24px; border-top: 1px solid rgba(215, 195, 160, 0.16); }
+.mobile-menu nav a.active::before { content: ''; width: 22px; height: 1px; background: currentColor; }
+.mobile-menu-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 24px; align-items: center; justify-items: start; padding-top: 24px; border-top: 1px solid rgba(215, 195, 160, 0.16); }
+.mobile-menu-foot .text-btn { min-height: 44px; display: inline-flex; align-items: center; text-align: start; }
+.mobile-menu-foot .menu-tools { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 12px; }
 .mobile-menu .region-btn { padding-left: 0; }
 @media (max-width: 1100px) {
   .nav-desktop, .nav-desktop-only { display: none !important; }
@@ -283,7 +291,7 @@ html.lenis, html.lenis body { height: auto; }
   :root { --header-h: 72px; }
   .logo img { width: 42px; }
   .logo-word b { font-size: 14.5px; letter-spacing: 0.16em; }
-  .logo-word small { font-size: 8px; letter-spacing: 0.44em; }
+  .logo-word small { font-size: 9px; letter-spacing: 0.38em; }
 }
 /* the smallest phones: logo, menu, search and bag must share 288px */
 @media (max-width: 420px) {
@@ -291,7 +299,7 @@ html.lenis, html.lenis body { height: auto; }
   .logo { gap: 8px; }
   .logo img { width: 34px; }
   .logo-word b { font-size: 12.5px; letter-spacing: 0.12em; }
-  .logo-word small { font-size: 7px; letter-spacing: 0.36em; margin-top: 5px; }
+  .logo-word small { font-size: 8px; letter-spacing: 0.3em; margin-top: 5px; }
   .icon-btn, .menu-btn { width: 40px; height: 40px; }
   .menu-btn span { left: 10px; right: 10px; }
 }
@@ -303,7 +311,7 @@ html.lenis, html.lenis body { height: auto; }
 .footer-statement em { color: var(--gold-soft); }
 .footer-news { display: grid; gap: 16px; }
 .footer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr); gap: 40px; padding: 64px 0; }
-.footer-h { font: 500 var(--fs-xs)/1.4 var(--body); letter-spacing: 0.26em; text-transform: uppercase; color: var(--gold-soft); margin-bottom: 20px; }
+.footer-h { font: 500 var(--fs-xs)/1.4 var(--body); letter-spacing: var(--caps); text-transform: uppercase; color: var(--gold-soft); margin-bottom: 20px; }
 .footer-grid ul { list-style: none; display: grid; gap: 10px; }
 .footer-grid a { transition: color 0.3s; }
 .footer-grid a:hover { color: var(--ivory); }
@@ -318,7 +326,7 @@ html.lenis, html.lenis body { height: auto; }
 .newsletter { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--s-line-strong); }
 .newsletter input { flex: 1; min-width: 0; background: transparent; border: 0; padding: 14px 0; color: var(--s-fg); font-size: 17px; outline: none; }
 .newsletter input::placeholder { color: var(--s-muted); opacity: 0.8; }
-.newsletter button { font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.22em; text-transform: uppercase; color: var(--s-fg); padding: 0 4px; min-height: 44px; }
+.newsletter button { font: 500 var(--fs-xs)/1 var(--body); letter-spacing: var(--caps); text-transform: uppercase; color: var(--s-fg); padding: 0 4px; min-height: 44px; }
 .newsletter button:hover { color: var(--s-accent); }
 .newsletter-msg { flex-basis: 100%; font-size: var(--fs-md); padding: 10px 0; color: var(--s-accent); }
 @media (max-width: 960px) {

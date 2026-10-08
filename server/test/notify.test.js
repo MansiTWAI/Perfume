@@ -15,15 +15,7 @@ beforeEach(reset);
 
 // Codes are limited to one per 30 seconds per number; tests move earlier codes back in time.
 const ageCodes = () => mongoose.connection.collection('otps').updateMany({}, { $set: { createdAt: new Date(Date.now() - 3600e3) } });
-// Ask for the code (development servers return it as devCode), then subscribe with it.
-async function codeFor(phone, token) {
-  await ageCodes();
-  return (await http('POST', '/api/whatsapp/subscribe/code', { token, body: { phone } })).body.devCode;
-}
-async function sub(phone, extra = {}) {
-  const code = extra.code ?? (await codeFor(phone));
-  return http('POST', '/api/whatsapp/subscribe', { body: { phone, name: 'Aisha Khan', consent: true, code, ...extra } });
-}
+const sub = (phone, extra = {}, token) => http('POST', '/api/whatsapp/subscribe', { token, body: { phone, name: 'Aisha Khan', consent: true, ...extra } });
 const notify = (token, body) => http('POST', '/api/admin/whatsapp/campaigns', { token, body });
 const settle = () => whatsapp.whatsappIdle();
 
@@ -46,7 +38,7 @@ describe('WhatsApp subscription', () => {
     const c = await WhatsAppContact.findOne({ phone: '+919876543211' }).lean();
     assert.equal(String(c.lead), String(lead._id));
     assert.equal(c.source, 'concierge');
-    // The lead had no way to reach them; it now has the verified number.
+    // The lead had no way to reach them; it now has the number.
     const updated = await Lead.findById(lead._id).lean();
     assert.equal(updated.phone, '+919876543211');
     assert.ok(updated.score > 0);
@@ -59,9 +51,7 @@ describe('WhatsApp subscription', () => {
   test('signed-in customers switch updates on and off from their account', async () => {
     const { user, token } = await makeUser('customer');
     assert.equal((await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true } })).status, 400); // no phone on the profile
-    const noCode = await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true, phone: '9876543212' } });
-    assert.equal(noCode.body.code, 'OTP_REQUIRED');
-    const on = await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true, phone: '9876543212', code: await codeFor('9876543212', token) } });
+    const on = await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true, phone: '9876543212' } });
     assert.equal(on.status, 200);
     assert.equal(on.body.subscribed, true);
     assert.equal((await http('GET', '/api/whatsapp/me', { token })).body.subscribed, true);
@@ -83,69 +73,47 @@ describe('WhatsApp subscription', () => {
   });
 });
 
-describe("WhatsApp subscription needs the number's one-time code", () => {
-  test('no code, a wrong code, an expired or reused code: not subscribed', async () => {
-    assert.equal((await http('POST', '/api/whatsapp/subscribe', { body: { phone: '9876543300', consent: true } })).body.code, 'OTP_INVALID');
-    const code = await codeFor('9876543300');
-    assert.match(code, /^\d{6}$/);
-    const wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
-    assert.equal((await sub('9876543300', { code: wrong })).body.code, 'OTP_INVALID');
-    // A code for one number does not work for another.
-    assert.equal((await sub('9876543301', { code })).status, 400);
-    assert.equal(await WhatsAppContact.countDocuments(), 0);
-    assert.equal((await sub('9876543300', { code })).status, 201);
-    // Used once only.
-    await http('POST', '/api/whatsapp/unsubscribe', { body: { phone: '9876543300' } });
-    assert.equal((await sub('9876543300', { code })).status, 400);
-    assert.equal((await WhatsAppContact.findOne({ phone: '+919876543300' })).subscribed, false);
-    // Expired.
-    const late = await codeFor('9876543302');
-    await mongoose.connection.collection('otps').updateMany({ phone: '+919876543302' }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
-    assert.equal((await sub('9876543302', { code: late })).body.code, 'OTP_EXPIRED');
+describe('WhatsApp subscription without a code', () => {
+  test('one tap: no code is asked for, the old code route is gone', async () => {
+    assert.equal((await sub('9876543300')).status, 201);
+    assert.equal((await WhatsAppContact.findOne({ phone: '+919876543300' })).subscribed, true);
+    assert.equal((await http('POST', '/api/whatsapp/subscribe/code', { body: { phone: '9876543301' } })).status, 404);
   });
 
-  test('five wrong tries end the code; codes are rate limited per number', async () => {
-    const code = await codeFor('9876543310');
-    const wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
-    for (let i = 0; i < 5; i++) await sub('9876543310', { code: wrong });
-    assert.equal((await sub('9876543310', { code })).body.code, 'OTP_EXPIRED');
-    await ageCodes();
-    assert.equal((await http('POST', '/api/whatsapp/subscribe/code', { body: { phone: '9876543311' } })).status, 200);
-    assert.equal((await http('POST', '/api/whatsapp/subscribe/code', { body: { phone: '9876543311' } })).status, 429);
-    assert.equal((await http('POST', '/api/whatsapp/subscribe/code', { body: { phone: '123' } })).status, 400);
+  test('a STOP sent on WhatsApp cannot be undone from the website', async () => {
+    await sub('9876543310');
+    await waHook({ messages: [{ from: '919876543310', id: 'wamid.stop1', timestamp: String(Math.floor(Date.now() / 1000)), type: 'text', text: { body: 'STOP' } }] });
+    assert.equal((await WhatsAppContact.findOne({ phone: '+919876543310' })).subscribed, false);
+    const again = await sub('9876543310');
+    assert.equal(again.status, 409);
+    assert.equal(again.body.code, 'WHATSAPP_STOPPED');
+    const { token } = await makeUser('customer');
+    assert.equal((await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true, phone: '9876543310' } })).status, 409);
+    assert.equal((await WhatsAppContact.findOne({ phone: '+919876543310' })).subscribed, false);
+    // START on WhatsApp turns it back on.
+    await waHook({ messages: [{ from: '919876543310', id: 'wamid.start1', timestamp: String(Math.floor(Date.now() / 1000)), type: 'text', text: { body: 'START' } }] });
+    assert.equal((await WhatsAppContact.findOne({ phone: '+919876543310' })).subscribed, true);
   });
 
-  test('a number already verified on the signed-in account needs no new code; any other number does', async () => {
+  test('stopping from the website can be undone from the website; removed by the team cannot', async () => {
+    await sub('9876543320');
+    await http('POST', '/api/whatsapp/unsubscribe', { body: { phone: '9876543320' } });
+    assert.equal((await sub('9876543320')).status, 201);
+    await WhatsAppContact.updateOne({ phone: '+919876543320' }, { subscribed: false, unsubscribeReason: 'admin' });
+    assert.equal((await sub('9876543320')).status, 409);
+  });
+
+  test('the owner of a number verified on their account can always switch it back on', async () => {
     const { user, token } = await makeUser('customer');
-    user.phone = '9876543320';
+    user.phone = '9876543330';
     await user.save();
     user.phoneVerified = true;
     await user.save();
-    const ask = await http('POST', '/api/whatsapp/subscribe/code', { token, body: { phone: '+91 98765 43320' } });
-    assert.equal(ask.body.needsCode, false);
+    await WhatsAppContact.create({ phone: '+919876543330', subscribed: false, unsubscribeReason: 'reply' });
     assert.equal((await http('GET', '/api/whatsapp/me', { token })).body.verified, true);
     const on = await http('PUT', '/api/whatsapp/me', { token, body: { subscribed: true } });
     assert.equal(on.status, 200);
     assert.equal(on.body.subscribed, true);
-    // Someone else's number from the same account: code required.
-    assert.equal((await http('POST', '/api/whatsapp/subscribe', { token, body: { phone: '9876543321', consent: true } })).body.code, 'OTP_INVALID');
-    assert.equal(await WhatsAppContact.countDocuments({ phone: '+919876543321' }), 0);
-  });
-
-  test('with WhatsApp set up, the code goes out through the sign-in code template', async () => {
-    process.env.WHATSAPP_OTP_TEMPLATE = 'login_code';
-    try {
-      await ageCodes();
-      const r = await http('POST', '/api/whatsapp/subscribe/code', { body: { phone: '9876543330' } });
-      assert.equal(r.status, 200);
-      assert.equal(r.body.devCode, undefined); // never shown when really sent
-      const sent = wa.sent.at(-1);
-      assert.equal(sent.to, '919876543330');
-      assert.equal(sent.body.template.name, 'login_code');
-      assert.match(sent.body.template.components[0].parameters[0].text, /^\d{6}$/);
-    } finally {
-      process.env.WHATSAPP_OTP_TEMPLATE = '';
-    }
   });
 
   test('sign-in by code still works after sharing the code helpers', async () => {
@@ -160,9 +128,6 @@ describe("WhatsApp subscription needs the number's one-time code", () => {
     const ok = await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: sent.body.devCode } });
     assert.equal(ok.status, 200);
     assert.ok(ok.body.token);
-    // A subscription code cannot be used to sign in.
-    const subCode = await codeFor('9876543340');
-    assert.notEqual((await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: subCode } })).status, 200);
   });
 });
 
