@@ -72,7 +72,7 @@ function LeadDetail({ id, onChanged, onClose }) {
         {lead.whatsapp?.subscribed ? (
           <>
             <span><Icon name="chat" size={16} /><span><b>WhatsApp updates:</b> subscribed since {formatDate(lead.whatsapp.since)}</span></span>
-            <Link to={`/admin/whatsapp?contact=${lead.whatsapp.id}`} className="a-btn">Notify {(c.name || 'them').split(' ')[0]}</Link>
+            <Link to={`/admin/whatsapp/campaigns?contact=${lead.whatsapp.id}`} className="a-btn">Notify {(c.name || 'them').split(' ')[0]}</Link>
           </>
         ) : (
           <>

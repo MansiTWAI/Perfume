@@ -7,8 +7,18 @@ export const WA_MESSAGE_STATUSES = ['queued', 'sending', 'sent', 'delivered', 'r
 const campaignSchema = new mongoose.Schema(
   {
     message: { type: String, required: true, maxlength: 600 },
-    audience: { type: String, enum: ['all', 'selected'], required: true },
-    template: String, // the approved WhatsApp template it went out with
+    title: { type: String, maxlength: 60 },
+    product: String, // product slug, checked again just before sending
+    image: String, // JPG/PNG shown above the message
+    coupon: String, // coupon code, checked again just before sending
+    cta: { label: String, path: String },
+    templateRef: { type: mongoose.Schema.Types.ObjectId, ref: 'NotificationTemplate' },
+    templateName: String, // the saved template it came from, if any
+    audience: { type: String, enum: ['all', 'selected', 'leads'], required: true },
+    template: String, // the approved WhatsApp (Meta) template it went out with
+    scheduledAt: Date, // sends at this time; empty = straight away
+    cancelledAt: Date,
+    problem: String, // why it stopped before sending (product removed, coupon expired…)
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdByEmail: String,
     recipients: { type: Number, default: 0 },

@@ -7,6 +7,9 @@
 //   WHATSAPP_NOTIFY_TEMPLATE      approved template name, body e.g.
 //                                 "Hello {{1}}, {{2}}"  (footer: Reply STOP to unsubscribe)
 //   WHATSAPP_NOTIFY_PARAMS        "name,message" (default) or "message"
+//   WHATSAPP_NOTIFY_MEDIA_TEMPLATE optional: the same body with an IMAGE
+//                                 header and a URL button "https://<site>/{{1}}";
+//                                 used when a notification has a picture
 //   WHATSAPP_TEMPLATE_LANG        template language, default en
 //   WHATSAPP_APP_SECRET           verifies status webhooks (X-Hub-Signature-256)
 //   WHATSAPP_WEBHOOK_VERIFY_TOKEN answers Meta's webhook verification
@@ -21,6 +24,7 @@ import WhatsAppContact from '../models/WhatsAppContact.js';
 import WhatsAppMessage, { WhatsAppCampaign } from '../models/WhatsAppMessage.js';
 import Lead, { scoreLead } from '../models/Lead.js';
 import { normalizePhone, validPhone, phoneKeys } from '../models/User.js';
+import { readContent, loadRefs, render } from './notifyContent.js';
 
 const GRAPH = 'https://graph.facebook.com/v20.0';
 export const MAX_ATTEMPTS = 4;
@@ -30,6 +34,7 @@ export const MAX_SELECTED = 500;
 
 export const whatsappNotifyConfigured = () =>
   !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_NOTIFY_TEMPLATE);
+export const mediaTemplate = () => process.env.WHATSAPP_NOTIFY_MEDIA_TEMPLATE || '';
 const params = () => (process.env.WHATSAPP_NOTIFY_PARAMS || 'name,message').split(',').map((s) => s.trim()).filter((s) => ['name', 'message'].includes(s));
 
 // Log lines carry ids and outcomes only, never message text or full numbers.
@@ -121,16 +126,39 @@ async function graphSend(to, body) {
   throw fail(REASONS[code] || oneLine(err.error_data?.details || err.message || `WhatsApp answered ${res.status}.`, 280), code, permanent);
 }
 
-function templateFor(msg) {
-  const values = { name: firstName(msg.name), message: oneLine(msg.campaignMessage, 600) };
+// The approved template filled in for one customer. With a picture (and the
+// picture template set up) it carries the image and a "Shop Now" button;
+// otherwise the button's link goes at the end of the text.
+function templateFor({ name, out, withMedia }) {
+  const line = withMedia || !out.cta?.url ? out.line : `${out.line} ${out.cta.label}: ${out.cta.url}`;
+  const values = { name: firstName(name), message: line.slice(0, 1000) };
+  const components = [{ type: 'body', parameters: params().map((p) => ({ type: 'text', text: values[p] })) }];
+  if (withMedia) {
+    components.unshift({ type: 'header', parameters: [{ type: 'image', image: { link: out.image } }] });
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: out.cta.path.replace(/^\//, '') }] });
+  }
   return {
     type: 'template',
-    template: {
-      name: process.env.WHATSAPP_NOTIFY_TEMPLATE,
-      language: { code: process.env.WHATSAPP_TEMPLATE_LANG || 'en' },
-      components: [{ type: 'body', parameters: params().map((p) => ({ type: 'text', text: values[p] })) }],
-    },
+    template: { name: withMedia ? mediaTemplate() : process.env.WHATSAPP_NOTIFY_TEMPLATE, language: { code: process.env.WHATSAPP_TEMPLATE_LANG || 'en' }, components },
   };
+}
+
+// A notification's product and coupon are checked again right before it goes
+// out (a scheduled one may wait days). If one is gone, nothing more is sent
+// and the team sees why.
+const refsCache = new Map();
+async function campaignRefs(campaign) {
+  const key = String(campaign._id);
+  const hit = refsCache.get(key);
+  if (hit && Date.now() - hit.at < 60000) return hit.refs;
+  const refs = await loadRefs(readContent(campaign).content);
+  refsCache.set(key, { at: Date.now(), refs });
+  return refs;
+}
+async function stopCampaign(campaign, problem) {
+  await WhatsAppCampaign.updateOne({ _id: campaign._id }, { problem, finishedAt: new Date() });
+  await WhatsAppMessage.updateMany({ campaign: campaign._id, status: { $in: ['queued', 'sending'] } }, { status: 'failed', error: `Not sent: ${problem}`, failedAt: new Date(), lockAt: null });
+  waLog('campaign_stopped', { campaign: String(campaign._id) });
 }
 
 // Sends one claimed message row.
@@ -140,10 +168,21 @@ async function sendOne(m) {
     await WhatsAppMessage.updateOne({ _id: m._id }, { status: 'skipped', error: 'Unsubscribed before sending.', lockAt: null });
     return;
   }
-  const campaign = await WhatsAppCampaign.findById(m.campaign).select('message').lean();
+  const campaign = await WhatsAppCampaign.findById(m.campaign).lean();
+  if (!campaign || campaign.cancelledAt) {
+    await WhatsAppMessage.updateOne({ _id: m._id }, { status: 'skipped', error: 'The notification was cancelled.', lockAt: null });
+    return;
+  }
+  const refs = await campaignRefs(campaign);
+  if (refs.problems.length) {
+    await stopCampaign(campaign, refs.problems[0]);
+    return;
+  }
+  const out = render(readContent(campaign).content, { name: m.name || contact.name, phone: contact.phone, product: refs.product, coupon: refs.coupon, image: refs.image });
+  const withMedia = !!(out.image && out.cta && mediaTemplate());
   let waId;
   try {
-    waId = await graphSend(contact.phone, templateFor({ name: m.name || contact.name, campaignMessage: campaign?.message || '' }));
+    waId = await graphSend(contact.phone, templateFor({ name: m.name || contact.name, out, withMedia }));
   } catch (e) {
     const attempts = (m.attempts || 0) + 1;
     const last = e.permanent || attempts >= MAX_ATTEMPTS;
@@ -158,7 +197,7 @@ async function sendOne(m) {
     return;
   }
   // Sent: from here on it is never sent again, whatever happens next.
-  await WhatsAppMessage.updateOne({ _id: m._id }, { status: 'sent', waId, sentAt: new Date(), error: null, errorCode: null, lockAt: null, $inc: { attempts: 1 } });
+  await WhatsAppMessage.updateOne({ _id: m._id }, { status: 'sent', waId, sentAt: new Date(), body: renderBody(out.line, m.name || contact.name).slice(0, 700), error: null, errorCode: null, lockAt: null, $inc: { attempts: 1 } });
   await WhatsAppContact.updateOne({ _id: contact._id }, { lastMessageAt: new Date() });
 }
 
@@ -209,34 +248,87 @@ export function startWhatsAppJobs() {
 }
 
 // ----- campaigns -----
-export async function createCampaign({ message, audience, contactIds = [], by }) {
-  const text = String(message ?? '').trim();
-  if (!oneLine(text, 1000)) throw Object.assign(new Error('Write the message first.'), { status: 400 });
-  if (oneLine(text, 1000).length > 600) throw Object.assign(new Error('Keep the message to 600 characters.'), { status: 400 });
-  if (!['all', 'selected'].includes(audience)) throw Object.assign(new Error('Choose who receives it: all subscribers or selected customers.'), { status: 400 });
-  if (!whatsappNotifyConfigured()) throw Object.assign(new Error('WhatsApp notifications are not set up on the server yet.'), { status: 503, code: 'WHATSAPP_NOT_CONFIGURED' });
-  const body = oneLine(text, 600);
-
-  // The same message to the same audience twice within a minute is a double click.
-  const recent = await WhatsAppCampaign.findOne({ message: body, audience, createdAt: { $gte: new Date(Date.now() - 60000) } }).lean();
-  if (recent) throw Object.assign(new Error('This message was just sent. Check the history below.'), { status: 409, campaign: recent._id });
-
+// Who receives it: everyone subscribed, chosen people, or subscribers who
+// came from the AI concierge. Unsubscribed people are never included.
+async function audienceFor(audience, contactIds) {
+  if (!['all', 'selected', 'leads'].includes(audience)) throw Object.assign(new Error('Choose who receives it: all subscribers, selected customers or AI leads.'), { status: 400 });
   let filter = { subscribed: true };
+  if (audience === 'leads') filter = { subscribed: true, lead: { $ne: null } };
   if (audience === 'selected') {
     const ids = [...new Set((Array.isArray(contactIds) ? contactIds : []).map(String))].filter((id) => /^[a-f0-9]{24}$/i.test(id));
     if (!ids.length) throw Object.assign(new Error('Select at least one customer.'), { status: 400 });
     if (ids.length > MAX_SELECTED) throw Object.assign(new Error(`Select up to ${MAX_SELECTED} customers, or notify all subscribers.`), { status: 400 });
     filter = { _id: { $in: ids }, subscribed: true };
   }
-  const contacts = await WhatsAppContact.find(filter).select('_id phone name').lean();
-  if (!contacts.length) throw Object.assign(new Error(audience === 'all' ? 'There are no subscribers yet.' : 'None of the selected customers are subscribed.'), { status: 400 });
+  return WhatsAppContact.find(filter).select('_id phone name').lean();
+}
+export async function audienceCount(audience, contactIds) {
+  return (await audienceFor(audience, contactIds)).length;
+}
 
-  const campaign = await WhatsAppCampaign.create({ message: body, audience, template: process.env.WHATSAPP_NOTIFY_TEMPLATE, createdBy: by?._id, createdByEmail: by?.email, recipients: contacts.length });
-  const now = new Date();
-  await WhatsAppMessage.insertMany(contacts.map((c) => ({ campaign: campaign._id, contact: c._id, phone: c.phone, name: c.name, body: renderBody(body, c.name), nextAttemptAt: now })));
-  waLog('campaign_created', { campaign: String(campaign._id), audience, recipients: contacts.length });
-  pumpWhatsApp();
+// Creates a notification (sent now or at `scheduledAt`). The content is a
+// saved template, typed content, or both (typed changes win). Nothing is
+// sent without this call, which only an admin's confirmed click makes.
+export async function createCampaign({ message, title, product, image, coupon, cta, templateId, audience, contactIds = [], scheduledAt, by }) {
+  if (!whatsappNotifyConfigured()) throw Object.assign(new Error('WhatsApp notifications are not set up on the server yet.'), { status: 503, code: 'WHATSAPP_NOT_CONFIGURED' });
+  let tpl = null;
+  if (templateId) {
+    const { default: NotificationTemplate } = await import('../models/NotificationTemplate.js');
+    tpl = /^[a-f0-9]{24}$/i.test(String(templateId)) ? await NotificationTemplate.findById(templateId) : null;
+    if (!tpl) throw Object.assign(new Error('That template no longer exists.'), { status: 400 });
+    if (!tpl.active) throw Object.assign(new Error('That template is switched off. Switch it on or choose another.'), { status: 400 });
+  }
+  const pick = (v, fallback) => (v === undefined ? fallback : v);
+  const { content, errors } = readContent({
+    title: pick(title, tpl?.title), message: pick(message, tpl?.message), product: pick(product, tpl?.product),
+    image: pick(image, tpl?.image), coupon: pick(coupon, tpl?.coupon), cta: pick(cta, tpl?.cta),
+  });
+  if (errors.length) throw Object.assign(new Error(errors[0].message), { status: 400, errors });
+  const refs = await loadRefs(content);
+  if (refs.problems.length) throw Object.assign(new Error(refs.problems[0]), { status: 400, code: 'CONTENT_PROBLEM', problems: refs.problems });
+
+  let when = null;
+  if (scheduledAt) {
+    when = new Date(scheduledAt);
+    if (Number.isNaN(when.getTime())) throw Object.assign(new Error('Choose a valid date and time.'), { status: 400 });
+    if (when < new Date(Date.now() - 60000)) throw Object.assign(new Error('That time has passed. Choose a time in the future or send now.'), { status: 400 });
+    if (when > new Date(Date.now() + 60 * 864e5)) throw Object.assign(new Error('Schedule within the next 60 days.'), { status: 400 });
+  }
+
+  // The same message to the same audience twice within a minute is a double click.
+  const recent = await WhatsAppCampaign.findOne({ message: content.message, title: content.title, audience, createdAt: { $gte: new Date(Date.now() - 60000) } }).lean();
+  if (recent) throw Object.assign(new Error('This notification was just created. Check History.'), { status: 409, campaign: recent._id });
+
+  const contacts = await audienceFor(audience, contactIds);
+  if (!contacts.length) throw Object.assign(new Error({ all: 'There are no subscribers yet.', leads: 'No AI leads have subscribed yet.', selected: 'None of the selected customers are subscribed.' }[audience]), { status: 400 });
+
+  const withMedia = !!(refs.image.url && mediaTemplate() && (content.cta.path || content.product || content.coupon));
+  const campaign = await WhatsAppCampaign.create({
+    message: content.message, title: content.title, product: content.product, image: content.image, coupon: content.coupon, cta: content.cta,
+    templateRef: tpl?._id, templateName: tpl?.name, audience, template: withMedia ? mediaTemplate() : process.env.WHATSAPP_NOTIFY_TEMPLATE,
+    scheduledAt: when || undefined, createdBy: by?._id, createdByEmail: by?.email, recipients: contacts.length,
+  });
+  if (tpl) await tpl.updateOne({ lastUsedAt: new Date(), $inc: { timesUsed: 1 } });
+  const due = when || new Date();
+  await WhatsAppMessage.insertMany(contacts.map((c) => {
+    const out = render(content, { name: c.name, phone: c.phone, product: refs.product, coupon: refs.coupon, image: refs.image });
+    return { campaign: campaign._id, contact: c._id, phone: c.phone, name: c.name, body: renderBody(out.line, c.name).slice(0, 700), nextAttemptAt: due };
+  }));
+  waLog('campaign_created', { campaign: String(campaign._id), audience, recipients: contacts.length, scheduled: !!when });
+  if (!when) pumpWhatsApp();
   return campaign;
+}
+
+// Cancels a scheduled notification (or what is still waiting of one).
+export async function cancelCampaign(id) {
+  const c = await WhatsAppCampaign.findById(id);
+  if (!c) return null;
+  const r = await WhatsAppMessage.updateMany({ campaign: c._id, status: 'queued' }, { status: 'skipped', error: 'Cancelled before sending.', lockAt: null });
+  if (!r.modifiedCount && c.finishedAt) throw Object.assign(new Error('Nothing is waiting to be sent in this notification.'), { status: 409 });
+  c.cancelledAt = new Date();
+  if (!(await WhatsAppMessage.exists({ campaign: c._id, status: 'sending' }))) c.finishedAt = new Date();
+  await c.save();
+  return { campaign: c, cancelled: r.modifiedCount };
 }
 
 export async function campaignCounts(ids) {
@@ -248,6 +340,14 @@ export async function campaignCounts(ids) {
 
 // Puts failed messages back in the queue (one, or every failed one in a campaign).
 export async function retryFailed(filter) {
+  const camp = filter.campaign ? await WhatsAppCampaign.findById(filter.campaign).lean() : filter._id ? await WhatsAppCampaign.findById((await WhatsAppMessage.findById(filter._id).select('campaign').lean())?.campaign).lean() : null;
+  if (camp?.cancelledAt) throw Object.assign(new Error('This notification was cancelled.'), { status: 409 });
+  if (camp) {
+    refsCache.delete(String(camp._id));
+    const refs = await loadRefs(readContent(camp).content);
+    if (refs.problems.length) throw Object.assign(new Error(refs.problems[0]), { status: 409, code: 'CONTENT_PROBLEM' });
+    await WhatsAppCampaign.updateOne({ _id: camp._id }, { $unset: { problem: 1 } });
+  }
   const r = await WhatsAppMessage.updateMany({ ...filter, status: 'failed' }, { status: 'queued', nextAttemptAt: new Date(), attempts: 0, error: null, errorCode: null, failedAt: null });
   if (r.modifiedCount) {
     const camps = await WhatsAppMessage.distinct('campaign', filter);

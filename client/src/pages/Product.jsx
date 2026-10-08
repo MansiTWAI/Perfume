@@ -19,6 +19,7 @@ import { whatsappLink, absUrl } from '../lib/format';
 import { flyToCart } from '../lib/flyToCart';
 import { NotFound } from './InfoPages';
 import Icon from '../components/Icon';
+import { noteProductView } from '../components/WhatsAppUpdates';
 
 function Gallery({ product, mainRef }) {
   const media = [...(product.images || [])];
@@ -104,6 +105,8 @@ export default function Product() {
   const { data: reviews } = useApi(`/reviews/product/${slug}`);
   const { region, addToCart, toast, priceOf, fmt, t } = useStore();
   const [qty, setQty] = useState(1);
+  // Two fragrances viewed counts as interest for the WhatsApp reminder.
+  useEffect(() => noteProductView(), [slug]);
   const buyRef = useRef(null);
   const mainImg = useRef(null);
   const [showBar, setShowBar] = useState(false);

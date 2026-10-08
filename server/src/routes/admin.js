@@ -666,7 +666,7 @@ r.post(
   asyncHandler(async (req, res) => {
     const c = validId(req.params.id) && (await Coupon.findById(req.params.id));
     if (!c) return res.status(404).json({ message: 'Coupon not found.' });
-    const now = new Date();
+    const now = new Date(Date.now() - 1000); // a moment ago, so it is expired at once
     c.expiresAt = now;
     if (c.startsAt && c.startsAt >= now) c.startsAt = undefined;
     await c.save();

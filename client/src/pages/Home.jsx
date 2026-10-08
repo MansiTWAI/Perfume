@@ -13,6 +13,7 @@ import Collection from '../components/story/Collection';
 import House from '../components/story/House';
 import NotesChapter from '../components/story/NotesChapter';
 import Epilogue from '../components/story/Epilogue';
+import { WhatsAppBand } from '../components/WhatsAppUpdates';
 import { ChapterOpening } from '../components/story/Chapter';
 import { useApi } from '../hooks/useApi';
 import { useProducts } from '../hooks/useProducts';
@@ -215,6 +216,7 @@ export default function Home() {
         <ServicePromise />
       </section>
       <Journal posts={posts?.items} />
+      <WhatsAppBand />
       <Epilogue />
     </>
   );

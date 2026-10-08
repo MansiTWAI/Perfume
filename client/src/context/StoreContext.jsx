@@ -259,6 +259,18 @@ export function StoreProvider({ children }) {
     return () => clearTimeout(id);
   }, [couponCode, checkCoupon, region.ships]); // eslint-disable-line react-hooks/exhaustive-deps
   const discount = coupon && region.ships && coupon.currency === currency ? Math.min(coupon.discount || 0, subtotal) : 0;
+  // A "Shop Now" link from a WhatsApp message can carry ?coupon=CODE: it is
+  // kept and applied once the bag has something in it.
+  useEffect(() => {
+    const code = query('coupon');
+    if (code && /^[A-Za-z0-9_-]{3,30}$/.test(code)) write('ab_coupon_pending', code.toUpperCase());
+  }, []);
+  useEffect(() => {
+    const pending = read('ab_coupon_pending', null);
+    if (!pending || !cart.length || !region.ships || coupon) return;
+    write('ab_coupon_pending', null);
+    applyCoupon(pending).then(() => toast(t('{code} applied to your bag', { code: pending })), (e) => setCouponNote(t('{code} was removed: {reason}', { code: pending, reason: e.message })));
+  }, [bagKey, region.ships]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value = useMemo(
     () => ({

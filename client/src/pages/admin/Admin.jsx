@@ -47,19 +47,11 @@ function AdminLogin() {
   );
 }
 
+// The menu in three groups, most-used first.
 const NAV = [
-  ['/admin', 'Dashboard', true],
-  ['/admin/orders', 'Orders'],
-  ['/admin/shipping', 'Shipping'],
-  ['/admin/users', 'Users'],
-  ['/admin/products', 'Products'],
-  ['/admin/coupons', 'Coupons'],
-  ['/admin/reviews', 'Reviews'],
-  ['/admin/journal', 'Journal'],
-  ['/admin/leads', 'AI leads'],
-  ['/admin/whatsapp', 'WhatsApp'],
-  ['/admin/enquiries', 'Enquiries'],
-  ['/admin/subscribers', 'Subscribers'],
+  ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders'], ['/admin/shipping', 'Shipping'], ['/admin/coupons', 'Coupons']]],
+  ['Catalogue', [['/admin/products', 'Products'], ['/admin/reviews', 'Reviews'], ['/admin/journal', 'Journal']]],
+  ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries'], ['/admin/subscribers', 'Newsletter']]],
 ];
 
 export default function Admin() {
@@ -77,8 +69,11 @@ export default function Admin() {
       <aside className="a-side">
         <Link to="/admin" className="a-brand"><img src="/media/calligraphy.webp" alt="" width="56" /> <span>Studio</span></Link>
         <nav ref={nav} aria-label="Studio">
-          {NAV.map(([to, label, end]) => (
-            <NavLink key={to} to={to} end={end}>{label}</NavLink>
+          {NAV.map(([group, links]) => (
+            <div key={group} className="a-nav-group" role="group" aria-label={group}>
+              <span className="a-nav-label" aria-hidden="true">{group}</span>
+              {links.map(([to, label, end]) => <NavLink key={to} to={to} end={end}>{label}</NavLink>)}
+            </div>
           ))}
         </nav>
         <div className="a-side-foot">
@@ -102,7 +97,7 @@ export default function Admin() {
           <Route path="coupons" element={<CouponList />} />
           <Route path="coupons/:id" element={<CouponEdit />} />
           <Route path="leads" element={<Leads />} />
-          <Route path="whatsapp" element={<WhatsApp />} />
+          <Route path="whatsapp/*" element={<WhatsApp />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
         </Routes>
