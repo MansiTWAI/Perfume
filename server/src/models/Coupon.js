@@ -19,8 +19,13 @@ const couponSchema = new mongoose.Schema(
     perUserLimit: { type: Number, min: 1, default: 1 },
     usedCount: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
+    // Listed on the website (bag and checkout) for anyone to apply. Codes
+    // that are not listed still work for whoever has them.
+    showOnSite: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
+
+couponSchema.index({ active: 1, showOnSite: 1 });
 
 export default mongoose.model('Coupon', couponSchema);

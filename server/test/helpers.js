@@ -8,7 +8,7 @@ import crypto from 'crypto';
 
 // Blank every outside service before the app loads server/.env (dotenv never
 // overwrites a variable that is already set).
-for (const k of ['CLOUDINARY_URL', 'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'CLIENT_ORIGIN']) process.env[k] = '';
+for (const k of ['CLOUDINARY_URL', 'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'WHATSAPP_OTP_TEMPLATE', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'CLIENT_ORIGIN']) process.env[k] = '';
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = crypto.randomBytes(24).toString('hex');
 process.env.RAZORPAY_KEY_ID = 'rzp_test_FAKEKEY123';
@@ -21,6 +21,12 @@ process.env.DELHIVERY_PICKUP_LOCATION = 'Test Warehouse';
 process.env.DELHIVERY_WEBHOOK_TOKEN = crypto.randomBytes(20).toString('hex');
 process.env.DELHIVERY_AUTO_CREATE = 'true';
 process.env.MAIL_TRANSPORT = 'memory';
+process.env.WHATSAPP_ACCESS_TOKEN = `wa-${crypto.randomBytes(12).toString('hex')}`;
+process.env.WHATSAPP_PHONE_NUMBER_ID = '100200300400';
+process.env.WHATSAPP_NOTIFY_TEMPLATE = 'house_update';
+process.env.WHATSAPP_NOTIFY_PARAMS = 'name,message';
+process.env.WHATSAPP_APP_SECRET = crypto.randomBytes(16).toString('hex');
+process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN = crypto.randomBytes(10).toString('hex');
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mem = await MongoMemoryServer.create();
@@ -38,6 +44,10 @@ export const { default: ChatSession } = await import('../src/models/ChatSession.
 const { signToken } = await import('../src/middleware/auth.js');
 export const { outbox } = await import('../src/services/mail.js');
 export const shipping = await import('../src/services/shipping.js');
+export const whatsapp = await import('../src/services/whatsapp.js');
+export const { default: WhatsAppContact } = await import('../src/models/WhatsAppContact.js');
+export const { default: WhatsAppMessage, WhatsAppCampaign } = await import('../src/models/WhatsAppMessage.js');
+export const { default: Coupon } = await import('../src/models/Coupon.js');
 const mongoose = (await import('mongoose')).default;
 await Promise.all([Order.init(), PaymentEvent.init(), Product.init(), User.init()]);
 
@@ -111,6 +121,29 @@ async function fakeDelhivery(u, opts) {
   return reply(404, { error: 'not found' });
 }
 
+// ----- fake WhatsApp Cloud API -----
+// Every send is kept in wa.sent ({ to, body }). Queue failures with
+// wa.fail.push({ status, code, message }) (one per send) or set wa.down.
+export const wa = { sent: [], fail: [], down: false };
+async function fakeWhatsApp(u, opts) {
+  if (wa.down) throw new TypeError('fetch failed');
+  if (opts.headers?.Authorization !== `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`) return reply(401, { error: { code: 190, message: 'Invalid OAuth access token.' } });
+  if (!u.endsWith(`/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`)) return reply(404, { error: { code: 100, message: 'Unknown path' } });
+  const body = JSON.parse(opts.body);
+  const f = wa.fail.shift();
+  if (f) return reply(f.status || 400, { error: { code: f.code, message: f.message || 'scripted failure' } });
+  const params = body.template?.components?.[0]?.parameters || [];
+  if (params.some((p) => /[\n\t]| {5,}/.test(p.text))) return reply(400, { error: { code: 132018, message: 'Param text cannot have new-line/tab characters or more than 4 consecutive spaces' } });
+  const id = `wamid.${crypto.randomBytes(12).toString('hex')}`;
+  wa.sent.push({ to: body.to, body, id });
+  return reply(200, { messaging_product: 'whatsapp', contacts: [{ input: body.to, wa_id: body.to }], messages: [{ id }] });
+}
+// A signed status/reply webhook from Meta.
+export function waHook(value, { secret = process.env.WHATSAPP_APP_SECRET } = {}) {
+  const raw = JSON.stringify({ object: 'whatsapp_business_account', entry: [{ id: 'WABA', changes: [{ field: 'messages', value: { messaging_product: 'whatsapp', ...value } }] }] });
+  return http('POST', '/api/whatsapp/webhook', { body: {}, raw, headers: { 'x-hub-signature-256': `sha256=${crypto.createHmac('sha256', secret).update(raw).digest('hex')}` } });
+}
+
 // ----- fake Razorpay -----
 export const rzp = { orders: new Map(), payments: new Map(), refunds: new Map(), down: false, calls: [] };
 const rid = (p) => `${p}_${crypto.randomBytes(7).toString('hex')}`;
@@ -128,6 +161,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return reply(200, { candidates: [{ content: typeof next === 'function' ? next(body) : next }] });
   }
   if (dlvBase.test(u)) return fakeDelhivery(u, opts);
+  if (u.startsWith('https://graph.facebook.com/')) return fakeWhatsApp(u, opts);
   if (!u.startsWith('https://api.razorpay.com/v1')) return realFetch(url, opts);
   const auth = Buffer.from(String(opts.headers?.Authorization || '').replace('Basic ', ''), 'base64').toString();
   if (auth !== `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`) return reply(401, { error: { code: 'BAD_REQUEST_ERROR', description: 'Authentication failed' } });
@@ -215,6 +249,7 @@ export async function placeOnline(items, { email = 'buyer@example.test', token, 
 }
 
 export async function reset() {
+  await whatsapp.whatsappIdle(); // let a send in progress finish before the data goes
   await mongoose.connection.db.dropDatabase();
   await Promise.all(Object.values(mongoose.models).map((m) => m.createIndexes())); // unique indexes are part of the rules
   gemini.queue.length = 0;
@@ -231,6 +266,9 @@ export async function reset() {
   dlv.cancelled.length = 0;
   Object.assign(dlv, { down: false, trackDown: false, timeoutAfterCreate: false, rejectNext: null });
   outbox.length = 0;
+  wa.sent.length = 0;
+  wa.fail.length = 0;
+  wa.down = false;
 }
 
 export async function close() {

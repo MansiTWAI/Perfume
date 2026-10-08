@@ -16,6 +16,7 @@ const chatSessionSchema = new mongoose.Schema(
     turns: { type: Number, default: 0 },
     orderLookups: { type: Number, default: 0 },
     contactAsked: { type: Boolean, default: false }, // asked once for a name/number
+    whatsappOffered: { type: Boolean, default: false }, // WhatsApp updates offered once per chat
     lastAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },
   },
   { timestamps: true }

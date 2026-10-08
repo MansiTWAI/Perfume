@@ -220,6 +220,46 @@ export function StoreProvider({ children }) {
   const rule = region.ships ? region.shipping : null;
   const shipping = !cart.length || !rule ? 0 : subtotal >= rule.freeOver ? 0 : rule.flat;
 
+  // ----- coupon -----
+  // One coupon per order, chosen in the bag or at checkout and kept on this
+  // device. The server works out the discount from catalogue prices
+  // (/coupons/check), re-checks it whenever the bag or market changes, and
+  // checks it once more when the order is placed.
+  const [coupon, setCoupon] = useState(() => read('ab_coupon', null));
+  const [couponNote, setCouponNote] = useState(''); // why a coupon was taken off
+  useEffect(() => write('ab_coupon', coupon), [coupon]);
+  const bagKey = cart.map((i) => `${i.slug}:${i.qty}`).join(',');
+  const checkCoupon = useCallback(
+    (code) => api('/coupons/check', { method: 'POST', body: { code, region: region.code, items: cart.map((i) => ({ slug: i.slug, qty: i.qty })), email: user?.email } }),
+    [region.code, bagKey, user?.email] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const applyCoupon = useCallback(async (code) => {
+    const c = await checkCoupon(code); // throws with the reason when it cannot be used
+    setCoupon(c);
+    setCouponNote('');
+    return c;
+  }, [checkCoupon]);
+  const removeCoupon = useCallback((note = '') => {
+    setCoupon(null);
+    setCouponNote(note);
+  }, []);
+  const couponCode = coupon?.code;
+  useEffect(() => {
+    if (!couponCode || !region.ships) return undefined;
+    if (!cart.length) {
+      setCoupon(null);
+      return undefined;
+    }
+    const id = setTimeout(() => {
+      checkCoupon(couponCode).then(setCoupon, (e) => {
+        if (e.status === 429 || !e.status) return; // busy or offline: keep it and let checkout decide
+        removeCoupon(t('{code} was removed: {reason}', { code: couponCode, reason: e.message }));
+      });
+    }, 400);
+    return () => clearTimeout(id);
+  }, [couponCode, checkCoupon, region.ships]); // eslint-disable-line react-hooks/exhaustive-deps
+  const discount = coupon && region.ships && coupon.currency === currency ? Math.min(coupon.discount || 0, subtotal) : 0;
+
   const value = useMemo(
     () => ({
       cart, addToCart, setQty, clearCart, refreshCart, subtotal, count, shipping,
@@ -227,8 +267,9 @@ export function StoreProvider({ children }) {
       lang, setLang, langChosen, t, dir: LANGS[lang].dir,
       cartOpen, setCartOpen, finderOpen, setFinderOpen, searchOpen, setSearchOpen,
       user, login, logout, toasts, toast,
+      coupon, discount, couponNote, applyCoupon, removeCoupon,
     }),
-    [cart, addToCart, setQty, clearCart, refreshCart, subtotal, count, shipping, regions, region, setRegion, currency, gulf, priceOf, fmt, lang, setLang, langChosen, t, cartOpen, finderOpen, searchOpen, user, login, logout, toasts, toast]
+    [coupon, discount, couponNote, applyCoupon, removeCoupon, cart, addToCart, setQty, clearCart, refreshCart, subtotal, count, shipping, regions, region, setRegion, currency, gulf, priceOf, fmt, lang, setLang, langChosen, t, cartOpen, finderOpen, searchOpen, user, login, logout, toasts, toast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

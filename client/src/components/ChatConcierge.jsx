@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { money, whatsappLink, CONTACT } from '../lib/format';
 import { Thumb } from './Img';
 import Icon from './Icon';
+import { ConciergeOptIn } from './WhatsAppUpdates';
 
 // The AI fragrance concierge. Messages go to our server (/api/ai/chat),
 // which answers from the live catalogue; this panel only shows the reply and
@@ -208,6 +209,7 @@ export default function ChatConcierge({ hidden }) {
                 <div key={i} className={`cc-msg is-${m.role}${m.products?.length ? ' has-cards' : ''}`}>
                   <Rich text={m.text} />
                   {m.products?.length > 0 && <ProductCards items={m.products} onAdd={add} />}
+                  {m.actions?.some((a) => a.type === 'whatsapp_optin') && <ConciergeOptIn sessionId={sessionRef.current} />}
                   {m.actions?.some((a) => a.type === 'handoff') && (
                     <div className="cc-handoff">
                       <a href={handoff} target="_blank" rel="noreferrer" className="btn btn-primary">{t('Continue on WhatsApp')}</a>

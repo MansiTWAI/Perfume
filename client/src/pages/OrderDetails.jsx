@@ -298,6 +298,7 @@ export default function OrderDetails() {
             </ul>
             <div className="od-totals">
               <Row label={t('Subtotal')}>{fmt(o.subtotal)}</Row>
+              {o.discount > 0 && <Row label={o.couponCode ? t('Coupon {code}', { code: o.couponCode }) : t('Discount')}>−{fmt(o.discount)}</Row>}
               <Row label={t('Delivery')}>{o.shipping ? fmt(o.shipping) : t('Complimentary')}</Row>
               <Row label={t('Total')} strong>{fmt(o.total)}</Row>
               {o.taxLabel && <p className="fine">{t('Prices {label}.', { label: t(o.taxLabel) })}</p>}

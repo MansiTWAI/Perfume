@@ -7,7 +7,7 @@ import RefreshToken from '../models/RefreshToken.js';
 import Otp from '../models/Otp.js';
 import { signToken, requireAuth, optionalAuth, asyncHandler } from '../middleware/auth.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
-import { otpAvailable, sendOtp, newCode, hashCode, OTP_MINUTES, OTP_MAX_ATTEMPTS } from '../services/otp.js';
+import { otpAvailable, issueOtp, consumeOtp, OTP_MINUTES } from '../services/otp.js';
 
 const r = Router();
 
@@ -113,12 +113,9 @@ r.post(
     const account = purpose === 'login' ? await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).select('_id status') : req.user;
     const reply = { ok: true, message: 'If this number can sign in, a code is on its way by WhatsApp.', expiresInSeconds: OTP_MINUTES * 60 };
     if (!account || account.status === 'blocked') return res.json(reply);
-    const code = newCode();
-    await Otp.updateMany({ phone, purpose, usedAt: null }, { $set: { usedAt: new Date() } }); // older codes stop working
-    await Otp.create({ phone, purpose, hash: hashCode(phone, code), expiresAt: new Date(Date.now() + OTP_MINUTES * 60000) });
     let sent;
     try {
-      sent = await sendOtp(phone, code);
+      sent = await issueOtp(Otp, phone, purpose);
     } catch (e) {
       return res.status(e.status || 502).json({ message: e.message });
     }
@@ -133,19 +130,8 @@ r.post(
   asyncHandler(async (req, res) => {
     const phone = normalizePhone(req.body?.phone);
     const purpose = PURPOSES.includes(req.body?.purpose) ? req.body.purpose : 'login';
-    const code = String(req.body?.otp || req.body?.code || '').trim();
-    const invalid = () => res.status(400).json({ code: 'OTP_INVALID', message: 'That code is not correct. Please check it or ask for a new one.' });
-    if (!phone || !/^\d{6}$/.test(code)) return invalid();
-    const otp = await Otp.findOne({ phone, purpose, usedAt: null }).sort({ createdAt: -1 });
-    if (!otp || otp.expiresAt < new Date()) return res.status(400).json({ code: 'OTP_EXPIRED', message: 'This code has expired. Please ask for a new one.' });
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) return res.status(400).json({ code: 'OTP_EXPIRED', message: 'Too many wrong attempts. Please ask for a new code.' });
-    if (otp.hash !== hashCode(phone, code)) {
-      otp.attempts += 1;
-      await otp.save();
-      return invalid();
-    }
-    otp.usedAt = new Date();
-    await otp.save();
+    const wrong = await consumeOtp(Otp, phone, purpose, req.body?.otp || req.body?.code);
+    if (wrong) return res.status(400).json(wrong);
 
     if (purpose === 'verify_phone') {
       if (!req.user) return res.status(401).json({ message: 'Please sign in to continue.' });

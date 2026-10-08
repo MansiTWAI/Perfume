@@ -316,6 +316,7 @@ export function OrderRow({ order, onSaved }) {
         <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">Signature Card</small></>}</td>
         <td>
           {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
+          {order.discount > 0 && <><br /><small className="a-gold">{order.coupon?.code || 'Discount'} −{money(order.discount, order.currency)}</small></>}
           {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn a-ico-line"><Icon name="alert" size={14} /> refund due</small></>}
         </td>
         <td><span className="a-pill">{order.status}</span></td>

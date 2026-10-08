@@ -5,9 +5,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { stopScroll } from './SmoothScroll';
 import Icon from './Icon';
+import Offers from './Offers';
 
 export default function CartDrawer() {
-  const { cart, cartOpen, setCartOpen, setQty, subtotal, shipping, region, priceOf, fmt, t, dir } = useStore();
+  const { cart, cartOpen, setCartOpen, setQty, subtotal, shipping, discount, coupon, region, priceOf, fmt, t, dir } = useStore();
   const navigate = useNavigate();
   const rule = region.ships ? region.shipping : null;
   const toFree = rule ? Math.max(rule.freeOver - subtotal, 0) : 0;
@@ -58,6 +59,7 @@ export default function CartDrawer() {
               </div>
             ) : (
               <>
+                <div className="drawer-scroll">
                 <ul className="drawer-items">
                   <AnimatePresence initial={false}>
                     {cart.map((i) => (
@@ -80,10 +82,13 @@ export default function CartDrawer() {
                     ))}
                   </AnimatePresence>
                 </ul>
+                <Offers />
+                </div>
                 <div className="drawer-foot">
                   <div className="row"><span>{t('Subtotal')}</span><span>{fmt(subtotal)}</span></div>
+                  {discount > 0 && <div className="row is-discount"><span>{t('Coupon {code}', { code: coupon.code })}</span><span>−{fmt(discount)}</span></div>}
                   {region.ships && <div className="row"><span>{t('Delivery')}</span><span>{shipping ? fmt(shipping) : t('Complimentary')}</span></div>}
-                  <div className="row total"><span>{t('Total')}</span><span>{fmt(subtotal + shipping)}</span></div>
+                  <div className="row total"><span>{t('Total')}</span><span>{fmt(subtotal - discount + shipping)}</span></div>
                   <p className="fine">
                     {region.ships
                       ? t('Prices {tax}.', { tax: t(region.taxLabel) })

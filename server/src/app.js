@@ -23,6 +23,8 @@ import storefrontRoutes from './routes/storefront.js';
 import adminRoutes from './routes/admin.js';
 import aiRoutes from './routes/ai.js';
 import shippingRoutes from './routes/shipping.js';
+import whatsappRoutes from './routes/whatsapp.js';
+import couponRoutes from './routes/coupons.js';
 import { openapi, docsPage } from './docs/openapi.js';
 import { errorCodes } from './middleware/errors.js';
 import { envelope } from './middleware/envelope.js';
@@ -111,6 +113,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/shipping', shippingRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/coupons', couponRoutes);
 app.use('/api', cartRoutes); // /api/cart and /api/wishlist
 app.use('/api', accountRoutes); // /me, /addresses, /devices, /checkout/preview, /coupons/validate
 app.use('/api', storefrontRoutes); // /config, /categories, /search, /home

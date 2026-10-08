@@ -245,6 +245,18 @@ describe('automatic lead capture (no createLead call from the model)', () => {
     assert.deepEqual(lead.budget, { amount: 3000, currency: 'INR' });
     assert.ok(lead.score >= 40 + 8 + 5 + 7);
   });
+  test('once interest shows, the chat offers WhatsApp updates once (never before)', async () => {
+    await catalogue();
+    gemini.reply(gemini.text('Hello! How can I help?'));
+    const hi = await say('hello');
+    assert.ok(!hi.body.actions.some((a) => a.type === 'whatsapp_optin'));
+    gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('For the night, ZAFREON.'));
+    const keen = await say('i want perfume for night', { body: { sessionId: hi.body.sessionId } });
+    assert.equal(keen.body.actions.filter((a) => a.type === 'whatsapp_optin').length, 1);
+    gemini.reply(gemini.text('Lovely.'));
+    const again = await say('I will buy 2 bottles', { body: { sessionId: hi.body.sessionId } });
+    assert.ok(!again.body.actions.some((a) => a.type === 'whatsapp_optin'), 'offered once per chat');
+  });
   test('words inside other words do not count (display, border)', async () => {
     await catalogue();
     gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('Here it is.'));

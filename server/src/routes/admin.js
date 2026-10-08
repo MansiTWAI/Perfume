@@ -32,6 +32,9 @@ import { geminiConfigured } from '../services/ai/gemini.js';
 import { usersPipeline, shape, readPeriod } from './users.js';
 import { publicCoupon } from '../services/coupons.js';
 import { getHome } from './storefront.js';
+import whatsappAdmin from './adminWhatsapp.js';
+import WhatsAppContact from '../models/WhatsAppContact.js';
+import { phoneKeys } from '../models/User.js';
 import { slugify, escapeRegex } from '../utils.js';
 
 const r = Router();
@@ -62,6 +65,9 @@ const page = (q, fallback = 20) => {
 const paged = (items, total, p) => ({ items, total, page: p.page, pages: Math.max(1, Math.ceil(total / p.limit)), limit: p.limit });
 const validId = (id) => mongoose.isValidObjectId(id);
 const bad = (res, message, errors) => res.status(400).json({ message, ...(errors && { errors }) });
+
+// WhatsApp notifications to subscribers (see adminWhatsapp.js).
+r.use('/whatsapp', whatsappAdmin);
 
 // ----- products -----
 r.get(
@@ -428,7 +434,9 @@ r.get(
     if (!lead) return res.status(404).json({ message: 'Lead not found.' });
     const chats = await ChatSession.find({ sessionId: { $in: lead.sessionIds || [] } }).sort({ createdAt: 1 }).select('messages createdAt lastAt').lean();
     const conversation = chats.flatMap((c) => c.messages.map((m) => ({ role: m.role, text: m.text, at: m.at })));
-    res.json({ ...lead, conversation, asked: conversation.filter((m) => m.role === 'user'), customer: await customerFor(lead, chats) });
+    const customer = await customerFor(lead, chats);
+    const wa = await WhatsAppContact.findOne({ $or: [{ lead: lead._id }, ...(customer.phone ? [{ phone: { $in: phoneKeys(customer.phone) } }] : [])] }).sort({ subscribed: -1 }).lean();
+    res.json({ ...lead, conversation, asked: conversation.filter((m) => m.role === 'user'), customer, whatsapp: wa ? { id: String(wa._id), subscribed: wa.subscribed, since: wa.subscribedAt, unsubscribedAt: wa.unsubscribedAt || null } : null });
   })
 );
 r.patch(
@@ -565,6 +573,7 @@ function readCoupon(body, partial) {
   for (const k of ['usageLimit', 'perUserLimit']) if (body[k] !== undefined) out[k] = body[k] === null || body[k] === '' ? null : Math.max(1, parseInt(body[k], 10) || 1);
   if (body.description !== undefined) out.description = String(body.description || '').slice(0, 200);
   if (body.active !== undefined) out.active = !!body.active;
+  if (body.showOnSite !== undefined) out.showOnSite = !!body.showOnSite;
   return { out, errors };
 }
 function checkCouponRules(c) {
@@ -573,17 +582,45 @@ function checkCouponRules(c) {
   if (c.startsAt && c.expiresAt && c.startsAt >= c.expiresAt) return [{ field: 'expiresAt', message: 'Must be after startsAt' }];
   return [];
 }
+// Orders that used each code (cancelled ones not counted): how many, the
+// discount given and the sales they brought, per currency.
+async function couponUsage(codes) {
+  if (!codes.length) return {};
+  const rows = await Order.aggregate([
+    { $match: { 'coupon.code': { $in: codes }, status: { $ne: ORDER_CANCELLED } } },
+    { $group: { _id: { code: '$coupon.code', cur: '$currency' }, orders: { $sum: 1 }, discount: { $sum: '$discount' }, sales: { $sum: '$total' } } },
+  ]);
+  const out = {};
+  for (const x of rows) {
+    const u = (out[x._id.code] ||= { orders: 0, discount: {}, sales: {} });
+    u.orders += x.orders;
+    u.discount[x._id.cur] = x.discount;
+    u.sales[x._id.cur] = x.sales;
+  }
+  return out;
+}
 r.get(
   '/coupons',
   requireRole(...MANAGE),
   asyncHandler(async (req, res) => {
     const filter = {};
+    const now = new Date();
     if (req.query.active === 'true') filter.active = true;
     if (req.query.active === 'false') filter.active = false;
-    if (req.query.q) filter.code = new RegExp(escapeRegex(String(req.query.q).toUpperCase().slice(0, 30)));
+    // state: active (usable now), scheduled, expired, used_up, inactive
+    const state = {
+      active: { active: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }] }, { $or: [{ usageLimit: null }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] }] },
+      scheduled: { active: true, startsAt: { $gt: now } },
+      expired: { active: true, expiresAt: { $lt: now } },
+      used_up: { active: true, usageLimit: { $ne: null }, $expr: { $gte: ['$usedCount', '$usageLimit'] } },
+      inactive: { active: false },
+    }[req.query.state];
+    if (state) Object.assign(filter, state);
+    if (typeof req.query.q === 'string' && req.query.q) filter.code = new RegExp(escapeRegex(req.query.q.toUpperCase().slice(0, 30)));
     const p = page(req.query, 50);
     const [items, total] = await Promise.all([Coupon.find(filter).sort({ createdAt: -1 }).skip((p.page - 1) * p.limit).limit(p.limit), Coupon.countDocuments(filter)]);
-    res.json(paged(items.map(publicCoupon), total, p));
+    const usage = await couponUsage(items.map((c) => c.code));
+    res.json(paged(items.map((c) => ({ ...publicCoupon(c), usage: usage[c.code] || { orders: 0, discount: {}, sales: {} } })), total, p));
   })
 );
 r.post(
@@ -620,6 +657,40 @@ r.put(
     if (rules.length) return bad(res, 'Please check the coupon.', rules);
     await c.save();
     res.json(publicCoupon(c));
+  })
+);
+// Ends a coupon now (it stays in the list, marked expired).
+r.post(
+  '/coupons/:id/expire',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    const c = validId(req.params.id) && (await Coupon.findById(req.params.id));
+    if (!c) return res.status(404).json({ message: 'Coupon not found.' });
+    const now = new Date();
+    c.expiresAt = now;
+    if (c.startsAt && c.startsAt >= now) c.startsAt = undefined;
+    await c.save();
+    res.json(publicCoupon(c));
+  })
+);
+// The orders that used a coupon, newest first.
+r.get(
+  '/coupons/:id/orders',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    const c = validId(req.params.id) && (await Coupon.findById(req.params.id).lean());
+    if (!c) return res.status(404).json({ message: 'Coupon not found.' });
+    const p = page(req.query, 20);
+    const filter = { 'coupon.code': c.code };
+    const [items, total, usage] = await Promise.all([
+      Order.find(filter).sort({ createdAt: -1 }).skip((p.page - 1) * p.limit).limit(p.limit).select('orderNumber status paymentStatus currency subtotal discount total createdAt customer.name customer.email').lean(),
+      Order.countDocuments(filter),
+      couponUsage([c.code]),
+    ]);
+    res.json({
+      ...paged(items.map((o) => ({ id: o._id, orderNumber: o.orderNumber, status: o.status, paymentStatus: o.paymentStatus, currency: o.currency, subtotal: o.subtotal, discount: o.discount, total: o.total, createdAt: o.createdAt, customer: { name: o.customer?.name || '', email: o.customer?.email || '' } })), total, p),
+      usage: usage[c.code] || { orders: 0, discount: {}, sales: {} },
+    });
   })
 );
 r.delete(

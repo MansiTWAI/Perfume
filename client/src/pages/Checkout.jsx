@@ -11,6 +11,7 @@ import { payOnline } from '../lib/payments';
 import { whatsappLink } from '../lib/format';
 import { seasonFor } from '../lib/seasons';
 import Icon from '../components/Icon';
+import Offers from '../components/Offers';
 
 const PAY_LABEL = {
   cod: ['Cash on delivery', 'Pay when your order arrives.'],
@@ -22,14 +23,14 @@ const PHONE_CODE = { IN: '+91', AE: '+971' };
 
 // The order summary: beside the form on wide screens; on phones and tablets
 // a one-line total under the title that opens to show the items.
-function OrderSummary({ cart, subtotal, shipping, region }) {
+function OrderSummary({ cart, subtotal, shipping, discount = 0, region, locked = false }) {
   const { priceOf, fmt, t } = useStore();
   const [open, setOpen] = useState(false);
   const count = cart.reduce((n, i) => n + i.qty, 0);
   return (
     <aside className={`summary${open ? ' is-open' : ''}`}>
       <button type="button" className="summary-toggle" aria-expanded={open} aria-controls="order-summary" onClick={() => setOpen((o) => !o)}>
-        <span>{t(count === 1 ? '1 item' : '{n} items', { n: count })} · <b>{fmt(subtotal + shipping)}</b></span>
+        <span>{t(count === 1 ? '1 item' : '{n} items', { n: count })} · <b>{fmt(subtotal - discount + shipping)}</b></span>
         <span className="summary-toggle-act">{t(open ? 'Hide' : 'Show')} <Icon name="chevron-down" size={16} /></span>
       </button>
       <div className="summary-body" id="order-summary">
@@ -43,9 +44,11 @@ function OrderSummary({ cart, subtotal, shipping, region }) {
           </li>
         ))}
       </ul>
+      {!locked && <Offers compact />}
       <div className="row"><span>{t('Subtotal')}</span><span>{fmt(subtotal)}</span></div>
+      {discount > 0 && <div className="row is-discount"><span>{t('Coupon')}</span><span>−{fmt(discount)}</span></div>}
       {region.ships && <div className="row"><span>{t('Delivery')}</span><span>{shipping ? fmt(shipping) : t('Complimentary')}</span></div>}
-      <div className="row total"><span>{t('Total')}</span><span>{fmt(subtotal + shipping)}</span></div>
+      <div className="row total"><span>{t('Total')}</span><span>{fmt(subtotal - discount + shipping)}</span></div>
       <p className="fine">
         {region.ships
           ? t('Prices {tax}.', { tax: t(region.taxLabel) })
@@ -57,7 +60,7 @@ function OrderSummary({ cart, subtotal, shipping, region }) {
 }
 
 export default function Checkout() {
-  const { cart, subtotal, shipping, fmt, region, regions, setRegion, clearCart, refreshCart, user, t } = useStore();
+  const { cart, subtotal, shipping, discount, coupon, removeCoupon, fmt, region, regions, setRegion, clearCart, refreshCart, user, t } = useStore();
   const navigate = useNavigate();
   useSolidHeader();
   const methods = region.payments || ['pay-on-confirmation'];
@@ -107,7 +110,8 @@ export default function Checkout() {
           paymentMethod: pay,
           // The server recalculates everything; this only lets it stop if the
           // prices changed since the customer saw this total.
-          expectedTotal: subtotal + shipping,
+          expectedTotal: subtotal - discount + shipping,
+          ...(coupon && discount > 0 && { couponCode: coupon.code }),
           items: cart.map((i) => ({ slug: i.slug, qty: i.qty })),
           customer: {
             name: f.name, email: f.email, phone: f.phone,
@@ -116,7 +120,8 @@ export default function Checkout() {
           giftNote: gift,
         },
       });
-      setPlaced({ cart, subtotal, shipping });
+      setPlaced({ cart, subtotal, shipping, discount });
+      if (coupon) removeCoupon();
       clearCart();
       // Online payment opens straight away; the order is already saved, so a
       // closed or failed payment can be finished later from the order page.
@@ -133,7 +138,13 @@ export default function Checkout() {
       navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email, payment } });
     } catch (err) {
       if (err.code === 'PRICE_CHANGED') refreshCart().catch(() => {});
-      setError(err.message);
+      // The coupon stopped working since it was applied (expired, used up,
+      // already used with this email): take it off and show the new total
+      // before anything is charged.
+      if (String(err.code || '').startsWith('COUPON_') && coupon) {
+        removeCoupon();
+        setError(t('{code} could not be used: {reason} Your total is now {amount}. Please review and place the order again.', { code: coupon.code, reason: err.message, amount: fmt(subtotal + shipping) }));
+      } else setError(err.message);
       busyRef.current = false;
       setBusy('');
       setPlaced(null);
@@ -263,7 +274,7 @@ export default function Checkout() {
 
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="btn btn-primary btn-block btn-lg" disabled={!!busy} aria-busy={!!busy}>
-            {busy === 'paying' ? t('Waiting for payment…') : busy ? t('Placing your order…') : t(pay === 'online' ? 'Pay securely · {amount}' : 'Place order · {amount}', { amount: fmt(placed ? placed.subtotal + placed.shipping : subtotal + shipping) })}
+            {busy === 'paying' ? t('Waiting for payment…') : busy ? t('Placing your order…') : t(pay === 'online' ? 'Pay securely · {amount}' : 'Place order · {amount}', { amount: fmt(placed ? placed.subtotal - placed.discount + placed.shipping : subtotal - discount + shipping) })}
           </button>
           {pay === 'online' && <p className="fine pay-secure">{t('You pay on Razorpay’s secure page. We never see your card or UPI details.')}</p>}
           <p className="fine">
@@ -273,7 +284,7 @@ export default function Checkout() {
             })}
           </p>
         </form>
-        <OrderSummary cart={placed?.cart || cart} subtotal={placed?.subtotal ?? subtotal} shipping={placed?.shipping ?? shipping} region={region} />
+        <OrderSummary cart={placed?.cart || cart} subtotal={placed?.subtotal ?? subtotal} shipping={placed?.shipping ?? shipping} discount={placed?.discount ?? discount} locked={!!busy} region={region} />
       </div>
     </section>
   );

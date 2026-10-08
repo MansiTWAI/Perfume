@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
+import { Link } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
+import Icon from '../../components/Icon';
 
 // Leads from the website's AI concierge: ask in plain words, filter, open a
 // lead to read the conversation, add notes and move its status on.
@@ -65,6 +67,20 @@ function LeadDetail({ id, onChanged, onClose }) {
           {c.email && <a className="a-btn" href={`mailto:${c.email}`}>Email</a>}
         </div>
       )}
+
+      <div className="a-lead-wa">
+        {lead.whatsapp?.subscribed ? (
+          <>
+            <span><Icon name="chat" size={16} /><span><b>WhatsApp updates:</b> subscribed since {formatDate(lead.whatsapp.since)}</span></span>
+            <Link to={`/admin/whatsapp?contact=${lead.whatsapp.id}`} className="a-btn">Notify {(c.name || 'them').split(' ')[0]}</Link>
+          </>
+        ) : (
+          <>
+            <span className="a-muted"><Icon name="chat" size={16} />{lead.whatsapp ? 'Unsubscribed from WhatsApp updates' : 'Not subscribed to WhatsApp updates'}</span>
+            <small className="a-muted">Only the customer can subscribe</small>
+          </>
+        )}
+      </div>
 
       <h3>Customer details</h3>
       <dl className="a-lead-table">

@@ -5,6 +5,7 @@ import { useStore } from '../context/StoreContext';
 import { useLive } from '../hooks/useLive';
 import { api } from '../lib/api';
 import { formatDate, money, whatsappLink } from '../lib/format';
+import WhatsAppUpdates from '../components/WhatsAppUpdates';
 
 export function AuthForm() {
   const { login, t } = useStore();
@@ -145,6 +146,8 @@ function Overview() {
           )}
         </section>
       </div>
+
+      <WhatsAppUpdates />
 
       <section className="acct-help">
         <p>{t('Need help with an order?')}</p>

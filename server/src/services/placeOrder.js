@@ -76,7 +76,7 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
   let coupon = null;
   if (couponCode) {
     const subtotal = items.reduce((n, it) => n + (priceOf.get(it.slug) || 0) * it.qty, 0);
-    coupon = await checkCoupon(couponCode, { subtotal, currency, user: userId ? { _id: userId } : null });
+    coupon = await checkCoupon(couponCode, { subtotal, currency, user: userId ? { _id: userId } : null, email: customer.email });
   }
 
   const lines = [];

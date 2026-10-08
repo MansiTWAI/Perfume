@@ -45,3 +45,39 @@ export async function sendOtp(phone, code) {
   }
   return { channel: 'whatsapp' };
 }
+
+// ----- shared by every place that asks for a code -----
+// Sign-in, phone verification and WhatsApp-update subscriptions all use the
+// same rules: at most one code every 30 seconds and five per 15 minutes for a
+// number; a new code cancels older ones; codes last OTP_MINUTES and allow
+// OTP_MAX_ATTEMPTS tries. The models are passed in to keep this file free of
+// database imports.
+export async function issueOtp(Otp, phone, purpose) {
+  const recent = await Otp.find({ phone, createdAt: { $gt: new Date(Date.now() - 15 * 60000) } }).sort({ createdAt: -1 }).limit(5);
+  if (recent.length >= 5 || (recent[0] && Date.now() - recent[0].createdAt.getTime() < 30000)) {
+    throw Object.assign(new Error('Too many codes requested for this number. Please wait a moment and try again.'), { status: 429 });
+  }
+  const code = newCode();
+  await Otp.updateMany({ phone, purpose, usedAt: null }, { $set: { usedAt: new Date() } }); // older codes stop working
+  await Otp.create({ phone, purpose, hash: hashCode(phone, code), expiresAt: new Date(Date.now() + OTP_MINUTES * 60000) });
+  return sendOtp(phone, code);
+}
+
+// Checks a code and uses it up. Returns null when it is right, else
+// { code, message } to send back with a 400.
+export async function consumeOtp(Otp, phone, purpose, rawCode) {
+  const code = String(rawCode ?? '').trim();
+  const invalid = { code: 'OTP_INVALID', message: 'That code is not correct. Please check it or ask for a new one.' };
+  if (!phone || !/^\d{6}$/.test(code)) return invalid;
+  const otp = await Otp.findOne({ phone, purpose, usedAt: null }).sort({ createdAt: -1 });
+  if (!otp || otp.expiresAt < new Date()) return { code: 'OTP_EXPIRED', message: 'This code has expired. Please ask for a new one.' };
+  if (otp.attempts >= OTP_MAX_ATTEMPTS) return { code: 'OTP_EXPIRED', message: 'Too many wrong attempts. Please ask for a new code.' };
+  if (otp.hash !== hashCode(phone, code)) {
+    otp.attempts += 1;
+    await otp.save();
+    return invalid;
+  }
+  // Used once only, even if two requests race with the same code.
+  const used = await Otp.updateOne({ _id: otp._id, usedAt: null }, { $set: { usedAt: new Date() } });
+  return used.modifiedCount === 1 ? null : invalid;
+}

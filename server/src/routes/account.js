@@ -200,7 +200,7 @@ r.post(
     let discount = 0;
     if (req.body?.couponCode) {
       try {
-        const c = await checkCoupon(req.body.couponCode, { subtotal: cart.subtotal, currency: region.currency, user: req.user });
+        const c = await checkCoupon(req.body.couponCode, { subtotal: cart.subtotal, currency: region.currency, user: req.user, email: req.user.email });
         discount = c.discount;
         coupon = { code: c.rule.code, valid: true, discount, discountType: c.rule.type, message: 'Coupon applied' };
       } catch (e) {
@@ -236,7 +236,7 @@ r.post(
     const cartTotal = Number(req.body?.cartTotal);
     const subtotal = Number.isFinite(cartTotal) && cartTotal > 0 ? cartTotal : (await priced(req.user, region)).subtotal;
     try {
-      const c = await checkCoupon(req.body?.code, { subtotal, currency: region.currency, user: req.user });
+      const c = await checkCoupon(req.body?.code, { subtotal, currency: region.currency, user: req.user, email: req.user.email });
       res.json({
         valid: true, code: c.rule.code, discount: c.discount, discountType: c.rule.type,
         percent: c.rule.percent ?? null, amount: c.rule.amount ?? null, currency: region.currency, subtotal,

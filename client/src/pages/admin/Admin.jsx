@@ -13,6 +13,8 @@ import { Enquiries, Subscribers } from './Inbox';
 import Reviews from './Reviews';
 import Leads from './Leads';
 import Shipping from './Shipping';
+import { CouponList, CouponEdit } from './Coupons';
+import WhatsApp from './WhatsApp';
 import Icon from '../../components/Icon';
 
 function AdminLogin() {
@@ -51,9 +53,11 @@ const NAV = [
   ['/admin/shipping', 'Shipping'],
   ['/admin/users', 'Users'],
   ['/admin/products', 'Products'],
+  ['/admin/coupons', 'Coupons'],
   ['/admin/reviews', 'Reviews'],
   ['/admin/journal', 'Journal'],
   ['/admin/leads', 'AI leads'],
+  ['/admin/whatsapp', 'WhatsApp'],
   ['/admin/enquiries', 'Enquiries'],
   ['/admin/subscribers', 'Subscribers'],
 ];
@@ -95,7 +99,10 @@ export default function Admin() {
           <Route path="reviews" element={<Reviews />} />
           <Route path="journal" element={<PostList />} />
           <Route path="journal/:id" element={<PostEdit />} />
+          <Route path="coupons" element={<CouponList />} />
+          <Route path="coupons/:id" element={<CouponEdit />} />
           <Route path="leads" element={<Leads />} />
+          <Route path="whatsapp" element={<WhatsApp />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
         </Routes>

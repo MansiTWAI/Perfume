@@ -23,7 +23,38 @@ export function discountFor(rule, subtotal, currency) {
 
 // Checks a code for a subtotal in a currency (and a customer, for per-customer
 // limits). Returns { coupon, discount, rule } or throws a 400 with `code`.
-export async function checkCoupon(rawCode, { subtotal, currency, user } = {}) {
+// Where a coupon stands right now: active, scheduled, expired, used_up or inactive.
+export function couponState(c, now = new Date()) {
+  if (!c.active) return 'inactive';
+  if (c.expiresAt && c.expiresAt < now) return 'expired';
+  if (c.usageLimit && c.usedCount >= c.usageLimit) return 'used_up';
+  if (c.startsAt && c.startsAt > now) return 'scheduled';
+  return 'active';
+}
+
+// Usable now in a currency (ignores the order's minimum).
+export const usableIn = (c, currency) => couponState(c) === 'active' && (c.type === 'percent' || !!c.amount?.[currency]);
+
+// What a shopper sees about a listed coupon, in one currency. Usage counts
+// and limits stay with the team.
+export function offerView(c, currency) {
+  const left = c.usageLimit ? Math.max(0, c.usageLimit - c.usedCount) : null;
+  return {
+    code: c.code,
+    description: c.description || '',
+    type: c.type,
+    percent: c.type === 'percent' ? c.percent : null,
+    amount: c.type === 'fixed' ? c.amount?.[currency] || 0 : null,
+    maxDiscount: c.type === 'percent' ? c.maxDiscount?.[currency] || null : null,
+    minSubtotal: c.minSubtotal?.[currency] || 0,
+    currency,
+    expiresAt: c.expiresAt || null,
+    fewLeft: left !== null && left <= 10,
+    perCustomer: c.perUserLimit || null,
+  };
+}
+
+export async function checkCoupon(rawCode, { subtotal, currency, user, email } = {}) {
   const code = String(rawCode || '').toUpperCase().trim();
   if (!code) throw fail('Please enter a coupon code.');
   const c = await Coupon.findOne({ code });
@@ -35,8 +66,12 @@ export async function checkCoupon(rawCode, { subtotal, currency, user } = {}) {
   if (c.type === 'fixed' && !c.amount?.[currency]) throw fail(`This coupon cannot be used for orders in ${currency}.`);
   const min = c.minSubtotal?.[currency];
   if (min && subtotal < min) throw fail(`This coupon needs an order of at least ${min} ${currency}.`, 'COUPON_MIN_NOT_MET');
-  if (user && c.perUserLimit) {
-    const used = await Order.countDocuments({ 'coupon.code': code, user: user._id, status: { $ne: ORDER_CANCELLED } });
+  // Per-customer limit: by account and by email, so checking out as a guest
+  // with the same email does not start the count again.
+  const mail = typeof email === 'string' && email.includes('@') ? email.toLowerCase().trim() : '';
+  if ((user || mail) && c.perUserLimit) {
+    const who = [...(user ? [{ user: user._id }] : []), ...(mail ? [{ 'customer.email': mail }] : [])];
+    const used = await Order.countDocuments({ 'coupon.code': code, $or: who, status: { $ne: ORDER_CANCELLED } });
     if (used >= c.perUserLimit) throw fail('You have already used this coupon.', 'COUPON_ALREADY_USED');
   }
   const rule = {
@@ -75,6 +110,8 @@ export const publicCoupon = (c) => ({
   perUserLimit: c.perUserLimit,
   usedCount: c.usedCount,
   active: c.active,
+  showOnSite: !!c.showOnSite,
+  state: couponState(c),
   createdAt: c.createdAt,
   updatedAt: c.updatedAt,
 });

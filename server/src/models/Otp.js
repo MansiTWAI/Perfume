@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 const otpSchema = new mongoose.Schema(
   {
     phone: { type: String, required: true, index: true }, // normalised, e.g. +919111279997
-    purpose: { type: String, enum: ['login', 'verify_phone'], required: true },
+    purpose: { type: String, enum: ['login', 'verify_phone', 'whatsapp_subscribe'], required: true },
     hash: { type: String, required: true },
     attempts: { type: Number, default: 0 },
     expiresAt: { type: Date, required: true },

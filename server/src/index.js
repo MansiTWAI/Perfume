@@ -2,6 +2,7 @@
 import app from './app.js';
 import { connectDB } from './config/db.js';
 import { startShippingJobs } from './services/shipping.js';
+import { startWhatsAppJobs } from './services/whatsapp.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -15,6 +16,8 @@ connectDB()
     app.listen(PORT, () => console.log(`AL BARAKAH LIFESTYLE on http://localhost:${PORT}`));
     // Delhivery: retries, missed shipments and tracking polls (only when configured).
     startShippingJobs();
+    // WhatsApp notifications: sends queued messages and retries (only when configured).
+    startWhatsAppJobs();
   })
   .catch((e) => {
     console.error(e.message);

@@ -376,3 +376,100 @@
 
 /* A product saved without a photo: the house emblem on a dark ground. */
 .img-empty { display: block; flex: none; background: var(--umber) url(/media/emblem.webp) center / 46% no-repeat; border-radius: inherit; opacity: 0.9; }
+
+/* ---------- coupons: offers in the bag and at checkout ---------- */
+/* Items and offers scroll together; the totals stay in view. */
+.drawer-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.drawer-scroll .drawer-items { flex: none; overflow: visible; }
+/* Short screens (phones held sideways): the whole bag scrolls, so items and
+   offers never shrink to nothing behind the totals. */
+@media (max-height: 640px) {
+  .drawer { overflow-y: auto; overscroll-behavior: contain; }
+  .drawer-scroll { flex: none; overflow: visible; }
+}
+.offers { display: grid; gap: 10px; padding: 18px 26px 6px; }
+.offers-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.offers .text-btn, .coupon-line .text-btn, .wa-verify .text-btn, .cc-optin .text-btn {
+  font-size: var(--fs-sm); letter-spacing: 0.02em; text-transform: none; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; justify-self: start;
+}
+.offer-list { list-style: none; display: grid; gap: 8px; }
+.offer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; row-gap: 3px; align-items: center;
+  padding: 13px 14px; border: 1px solid var(--s-line); border-radius: var(--radius); background: var(--s-card);
+}
+.offer > span { grid-column: 1; }
+.offer.is-best { border-color: var(--s-line-strong); }
+.offer-tag { font: 500 var(--fs-xs)/1.3 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--s-accent); }
+.offer-what { font: 400 var(--fs-lg)/1.25 var(--display); }
+.offer-terms, .offer-desc { font-size: var(--fs-sm); color: var(--s-muted); }
+.offer-code { font-weight: 500; letter-spacing: 0.14em; color: var(--s-fg); }
+.offer-save { font-size: var(--fs-sm); color: #2f6b45; }
+.offer-need { font-size: var(--fs-sm); color: #8a5a0e; }
+.offer-apply {
+  grid-column: 2; grid-row: 1 / span 5; min-height: 40px; padding: 0 14px;
+  border: 1px solid var(--s-fg); border-radius: var(--radius);
+  font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; transition: background 0.25s, color 0.25s;
+}
+.offer-apply:hover:not(:disabled) { background: var(--s-fg); color: var(--s-bg); }
+.offer-apply:disabled { border-color: var(--s-line-strong); color: var(--s-muted); cursor: not-allowed; }
+.coupon-entry { display: flex; gap: 8px; }
+.coupon-entry input {
+  flex: 1; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--s-line-strong); border-radius: var(--radius);
+  background: transparent; color: var(--s-fg); font: 400 var(--fs-md) var(--body); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.coupon-entry input::placeholder { text-transform: none; letter-spacing: 0.02em; color: var(--s-muted); }
+.coupon-entry button {
+  height: 44px; padding: 0 16px; border: 1px solid var(--s-fg); border-radius: var(--radius);
+  font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.coupon-entry button:disabled { opacity: 0.5; }
+.coupon-error { display: flex; gap: 6px; align-items: flex-start; font-size: var(--fs-sm); color: #a4412b; }
+.coupon-error .icon { flex: none; margin-top: 1px; }
+.coupon-applied {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #b9d0bd; border-radius: var(--radius);
+  background: #eef4ec; color: #24543a; font-size: var(--fs-md);
+}
+.coupon-applied > span { flex: 1; min-width: 0; }
+.coupon-applied b { font-weight: 500; letter-spacing: 0.1em; }
+.coupon-applied button { font-size: var(--fs-sm); color: var(--ink); text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
+.row.is-discount { color: #2f6b45; }
+/* checkout summary: one line that opens the offers */
+.offers-compact { padding: 0; gap: 8px; }
+.coupon-line { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--s-line); font-size: var(--fs-md); }
+.coupon-line-on { display: flex; align-items: center; gap: 8px; color: #24543a; min-width: 0; }
+.coupon-line-on b { font-weight: 500; letter-spacing: 0.1em; }
+.offers-panel { display: grid; gap: 10px; padding: 4px 0 8px; }
+/* The order summary styles its own item list; offers keep their card layout. */
+.summary .offer-list { padding: 0; margin: 0; border: 0; gap: 8px; }
+.summary .offer-list li.offer { grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; row-gap: 3px; }
+@media (max-width: 400px) {
+  .offers:not(.offers-compact) { padding-inline: 18px; }
+  .offer { padding: 12px; }
+}
+
+/* ---------- WhatsApp updates: verify the number, then subscribe ---------- */
+.wa-verify { display: grid; gap: 10px; }
+.wa-verify label { display: grid; gap: 6px; font-size: var(--fs-sm); color: var(--s-muted); }
+.wa-verify input[type='tel'], .wa-verify .wa-code {
+  height: 46px; padding: 0 12px; border: 1px solid var(--s-line-strong); border-radius: var(--radius); background: transparent; color: var(--s-fg); font: 400 var(--fs-base) var(--body);
+}
+.wa-verify .wa-code { max-width: 180px; letter-spacing: 0.4em; font-variant-numeric: tabular-nums; }
+.wa-verify-sent { font-size: var(--fs-md); }
+.wa-verify-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.wa-verify-actions .btn { min-height: 44px; }
+.wa-consent { display: flex !important; align-items: flex-start; gap: 10px; font-size: var(--fs-sm); line-height: 1.5; }
+.wa-consent input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--oxblood); flex: none; }
+.wa-switch-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-block: 1px solid var(--s-line); }
+.wa-switch-row b { display: block; font-weight: 500; }
+.wa-switch-row small { color: var(--s-muted); font-size: var(--fs-sm); }
+.switch { position: relative; flex: none; width: 46px; height: 26px; border-radius: 13px; background: #cfc2ad; transition: background 0.25s; }
+.switch::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: inset-inline-start 0.25s; }
+.switch.is-on { background: var(--oxblood); }
+.switch.is-on::after { inset-inline-start: 23px; }
+.switch:disabled { opacity: 0.6; }
+.switch:focus-visible { outline: 2px solid var(--gold-ink); outline-offset: 3px; }
+.cc-optin { display: grid; gap: 10px; margin-top: 10px; padding: 14px; border: 1px solid #c9b48a; background: #fffaf2; }
+.cc-optin > b { font: 400 var(--fs-lg)/1.25 var(--display); }
+.cc-optin .btn { min-height: 42px; padding-inline: 20px; }
+.cc-optin-done { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #24543a; font-size: var(--fs-sm); }
+.coupon-applied + .offers-head { margin-top: 8px; }

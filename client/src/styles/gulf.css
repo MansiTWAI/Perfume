@@ -177,7 +177,7 @@ html[data-market='gulf'].solid-header .site-header { border-bottom-color: rgba(1
   width: min(400px, calc(100vw - 32px)); height: min(640px, calc(100svh - 120px));
   display: grid; grid-template-rows: auto 1fr auto auto;
   background: var(--ivory); color: var(--ink);
-  --s-fg: var(--ink); --s-accent: var(--gold-ink); --s-muted: #6b5f57;
+  --s-bg: var(--ivory); --s-fg: var(--ink); --s-accent: var(--gold-ink); --s-muted: #6b5f57; --s-line: #dcd1bf; --s-line-strong: #b9a78a;
   border: 1px solid #dcd1bf; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
