@@ -51,11 +51,13 @@ export function resetEmail({ name, link }) {
   };
 }
 
-// A one-time code: customer sign-in ('login') or the staff two-step code ('staff').
+// A one-time code: customer sign-in ('login'), the staff two-step code
+// ('staff') or confirming the email of a new account ('verify').
 export function codeEmail({ code, minutes, kind = 'login' }) {
   const staff = kind === 'staff';
-  const subject = staff ? `${code} is your AL BARAKAH admin sign-in code` : `${code} is your AL BARAKAH LIFESTYLE sign-in code`;
-  const lead = staff ? 'Use this code to finish signing in to the admin studio.' : 'Use this code to sign in to your account.';
+  const verify = kind === 'verify';
+  const subject = staff ? `${code} is your AL BARAKAH admin sign-in code` : verify ? `${code} is your AL BARAKAH LIFESTYLE verification code` : `${code} is your AL BARAKAH LIFESTYLE sign-in code`;
+  const lead = staff ? 'Use this code to finish signing in to the admin studio.' : verify ? 'Welcome to AL BARAKAH LIFESTYLE. Use this code to confirm your email and finish creating your account.' : 'Use this code to sign in to your account.';
   const warn = staff
     ? 'If you did not just sign in, someone has your password: change it now and tell the team.'
     : 'If you did not ask for this code, you can ignore this email.';
@@ -72,7 +74,7 @@ ${warn}
 AL BARAKAH LIFESTYLE`,
     html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#2a1a17">
 <p style="letter-spacing:.2em;color:#8a6424;font-size:12px">AL BARAKAH LIFESTYLE</p>
-<h1 style="font-family:Georgia,serif;font-weight:400;color:#4b0e14">${staff ? 'Admin sign-in code' : 'Your sign-in code'}</h1>
+<h1 style="font-family:Georgia,serif;font-weight:400;color:#4b0e14">${staff ? 'Admin sign-in code' : verify ? 'Confirm your email' : 'Your sign-in code'}</h1>
 <p>${esc(lead)}</p>
 <p style="margin:24px 0;font-size:32px;letter-spacing:.35em;font-weight:bold;color:#4b0e14">${esc(code)}</p>
 <p style="color:#6b5f57;font-size:13px">It expires in ${Number(minutes)} minutes and works once. Never share it: we will never ask you for it.</p>

@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { formatDate, money, whatsappLink } from '../lib/format';
 import WhatsAppUpdates from '../components/WhatsAppUpdates';
 import TwoStepCode from '../components/TwoStepCode';
+import VerifyEmail from '../components/VerifyEmail';
 
 export function AuthForm() {
   const { login, t } = useStore();
@@ -17,6 +18,7 @@ export function AuthForm() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [challenge, setChallenge] = useState(null);
+  const [verifying, setVerifying] = useState(''); // the email waiting for its code
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   async function submit(e) {
@@ -27,13 +29,18 @@ export function AuthForm() {
       const signIn = { email: f.email, password: f.password };
       const d = await api(`/auth/${mode === 'login' ? 'login' : 'register'}`, { method: 'POST', body: mode === 'login' ? signIn : f });
       if (d.twoFactorRequired) return setChallenge(d);
+      // New account: confirm the email once with the code we sent.
+      if (d.verificationRequired) return setVerifying(d.email);
       login(d.token, d.user);
     } catch (err) {
+      if (err.data?.verificationRequired) return setVerifying(err.data.email);
       setError(err.message);
     } finally {
       setBusy(false);
     }
   }
+
+  if (verifying) return <VerifyEmail email={verifying} onBack={() => setVerifying('')} />;
 
   if (challenge) {
     return (

@@ -163,7 +163,9 @@ describe('staff sessions without the code', () => {
     assert.equal((await http('GET', '/api/admin/products', { token: next.body.token })).status, 200);
 
     const before = outbox.length;
+    process.env.CODE_LOGIN = 'on';
     const sent = await http('POST', '/api/auth/send-otp', { body: { phone: '9876543777' } });
+    process.env.CODE_LOGIN = '';
     assert.equal(sent.status, 200, 'same answer as for anyone');
     assert.equal(outbox.length, before, 'no code for a staff account');
   });

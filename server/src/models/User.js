@@ -51,6 +51,9 @@ const userSchema = new mongoose.Schema(
     // The phone in one comparable form (+ and digits), for sign-in by phone or OTP.
     phoneNormalized: { type: String, index: true },
     phoneVerified: { type: Boolean, default: false },
+    // false only for sign-ups still waiting for their emailed code; accounts
+    // made before email verification (no value) count as verified.
+    emailVerified: { type: Boolean },
     address: {
       line1: { type: String, trim: true, maxlength: 200 },
       line2: { type: String, trim: true, maxlength: 200 },
@@ -95,6 +98,7 @@ userSchema.methods.toSafe = function () {
     status: this.status || 'active',
     phone: this.phone || '',
     phoneVerified: !!this.phoneVerified,
+    emailVerified: this.emailVerified !== false,
     address: { line1: a.line1 || '', line2: a.line2 || '', city: a.city || '', state: a.state || '', postalCode: a.postalCode || '', region: a.region || '' },
     createdAt: this.createdAt,
   };

@@ -41,6 +41,7 @@ describe('sign-up', () => {
   });
   test('sign in with the number in another format', async () => {
     await register({ email: 'p@example.test', phone: '+91 98765 43210' });
+    await User.updateOne({ email: 'p@example.test' }, { $set: { emailVerified: true } });
     const r = await http('POST', '/api/auth/login', { body: { identifier: '09876543210', password: 'long-enough-1' } });
     assert.equal(r.status, 200);
     assert.equal(r.body.user.email, 'p@example.test');

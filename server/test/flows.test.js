@@ -11,7 +11,14 @@ import {
 after(close);
 beforeEach(reset);
 
-const register = (email, extra = {}) => http('POST', '/api/auth/register', { body: { name: 'Flow Person', email, phone: `98${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`, password: 'flow-pass-123', ...extra } });
+// Sign-up, then the emailed code (from the test outbox), as a customer does.
+const signUp = (email, extra = {}) => http('POST', '/api/auth/register', { body: { name: 'Flow Person', email, phone: `98${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`, password: 'flow-pass-123', ...extra } });
+const register = async (email, extra = {}) => {
+  const r = await signUp(email, extra);
+  if (r.status !== 201 || !r.body.verificationRequired) return r;
+  const code = outbox.filter((m) => m.to === email).at(-1).subject.match(/\d{6}/)[0];
+  return http('POST', '/api/auth/verify-email', { body: { email, code } });
+};
 const login = (email, password = 'flow-pass-123') => http('POST', '/api/auth/login', { body: { email, password } });
 const cod = (items, extra = {}) => http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items, customer: customer(), ...extra } });
 const load = (orderNumber) => Order.findOne({ orderNumber }).lean();
@@ -63,7 +70,7 @@ describe('password reset', () => {
     await register('r@example.test');
     const asked = await http('POST', '/api/auth/forgot-password', { body: { email: 'r@example.test' }, headers: { Host: 'evil.example', 'X-Forwarded-Host': 'evil.example' } });
     assert.equal(asked.status, 200);
-    const mail = outbox.find((m) => m.to === 'r@example.test');
+    const mail = outbox.find((m) => m.to === 'r@example.test' && /Reset/.test(m.subject));
     assert.ok(mail, 'reset email sent');
     assert.ok(!mail.text.includes('evil.example'), 'link must not follow the Host header');
     const token = mail.text.match(/token=([A-Za-z0-9_-]+)/)[1];

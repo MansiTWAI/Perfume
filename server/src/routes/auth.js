@@ -8,13 +8,14 @@ import Otp from '../models/Otp.js';
 import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff } from '../middleware/auth.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
 import {
-  otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, staffTwoStepOn, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
+  otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, codeLoginOn, staffTwoStepOn, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
 } from '../services/otp.js';
 
 const r = Router();
 
 // Brute-force protection: per connection, across sign-in, sign-up and reset.
 const signInLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, message: { message: 'Too many sign-in attempts. Please wait a few minutes and try again.' } });
+const otpLimiterEarly = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: { message: 'Too many code requests. Please wait a few minutes and try again.' } });
 
 // ----- tokens -----
 // Access token (JWT, 7 days) for every request; refresh token (opaque, 60
@@ -65,13 +66,79 @@ r.post(
     // The website always asks for a mobile number; the app API keeps it optional.
     if (!phone && !req.apiV1) return res.status(400).json({ message: 'Please enter your mobile number.', errors: [{ field: 'phone', message: 'phone is required' }] });
     if (phone && !validPhone(phone)) return res.status(400).json({ message: 'Please enter a valid mobile number, e.g. +91 98765 43210.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
+    // A sign-up still waiting for its code can be started again (the code
+    // proves the email, so nobody can take an address they cannot read).
     const exists = await User.findOne({ email: String(email).toLowerCase() });
-    if (exists) return res.status(409).json({ message: 'An account with this email already exists. Sign in instead.' });
-    if (phone && (await User.exists({ phoneNormalized: { $in: phoneKeys(phone) } }))) {
+    if (exists && exists.emailVerified !== false) return res.status(409).json({ message: 'An account with this email already exists. Sign in instead.' });
+    if (phone && (await User.exists({ phoneNormalized: { $in: phoneKeys(phone) }, ...(exists && { _id: { $ne: exists._id } }) }))) {
       return res.status(409).json({ message: 'An account with this phone number already exists. Sign in instead.' });
     }
-    const user = await User.create({ name, email, phone: phone || undefined, passwordHash: await User.hashPassword(password) });
-    res.status(201).json(await session(user, req));
+    // Without email on the server the account cannot be confirmed: it is
+    // created ready to use, as before.
+    const verify = otpAvailable();
+    const fields = { name, phone: phone || undefined, passwordHash: await User.hashPassword(password) };
+    let user;
+    if (exists) {
+      exists.set(fields);
+      user = await exists.save();
+    } else {
+      user = await User.create({ ...fields, email, ...(verify && { emailVerified: false }) });
+    }
+    if (!verify) return res.status(201).json(await session(user, req));
+    res.status(201).json(await sendVerification(user));
+  })
+);
+
+// ----- confirming the email of a new account: once, with a code -----
+const verifyKey = (email) => `verify:${email}`;
+// Emails the code (or says one was sent moments ago). Never fails the sign-up:
+// the customer can ask for a new code.
+async function sendVerification(user) {
+  const reply = {
+    verificationRequired: true,
+    email: user.email,
+    expiresInSeconds: OTP_MINUTES * 60,
+    message: 'We emailed you a 6-digit code. Enter it to finish creating your account.',
+  };
+  try {
+    const sent = await issueOtp(Otp, verifyKey(user.email), 'verify_email', user.email, 'verify');
+    return { ...reply, ...(sent.devCode && { devCode: sent.devCode }) };
+  } catch (e) {
+    if (e.status === 429) return { ...reply, message: 'We sent you a code a moment ago. Please check your email.' };
+    return { ...reply, emailFailed: true, message: 'We could not send the code just now. Please ask for a new one in a minute.' };
+  }
+}
+
+r.post(
+  '/verify-email',
+  signInLimiter,
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
+    const wrong = await consumeOtp(Otp, verifyKey(email), 'verify_email', req.body?.code ?? req.body?.otp);
+    if (wrong) return res.status(400).json(wrong);
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'No account uses this email. Please sign up again.' });
+    if (user.status === 'blocked') return blocked(res);
+    if (user.emailVerified === false) {
+      user.emailVerified = true;
+      await user.save();
+    }
+    res.json(await session(user, req, undefined, { mfa: isStaff(user) }));
+  })
+);
+
+// The same answer whether or not the email waits for a code.
+r.post(
+  '/verify-email/resend',
+  otpLimiterEarly,
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
+    const user = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (await User.findOne({ email }));
+    const reply = { ok: true, message: 'If this email is waiting for a code, a new one is on its way.', expiresInSeconds: OTP_MINUTES * 60 };
+    if (!user || user.emailVerified !== false || user.status === 'blocked') return res.json(reply);
+    const sent = await sendVerification(user);
+    if (sent.emailFailed) return res.status(502).json({ message: sent.message });
+    res.json({ ...reply, ...(sent.devCode && { devCode: sent.devCode }) });
   })
 );
 
@@ -89,6 +156,11 @@ r.post(
       return res.status(401).json({ message: id.includes('@') || !id ? 'That email and password do not match.' : 'That phone number and password do not match.' });
     }
     if (user.status === 'blocked') return blocked(res);
+    // A new account that never entered its code: send one and ask for it.
+    if (user.emailVerified === false) {
+      const sent = await sendVerification(user);
+      return res.status(403).json({ ...sent, code: 'EMAIL_NOT_VERIFIED', message: 'Please confirm your email first. We emailed you a 6-digit code.' });
+    }
     // Staff with two-step sign-in on: the password is only the first step; a
     // code by email is the second. Off: the password signs staff in.
     if (isStaff(user) && !staffTwoStepOn()) return res.json(await session(user, req, undefined, { mfa: true }));
@@ -160,6 +232,7 @@ r.post(
   asyncHandler(async (req, res) => {
     const purpose = PURPOSES.includes(req.body?.purpose) ? req.body.purpose : 'login';
     if (purpose === 'verify_phone') return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Phone verification is not available right now.' });
+    if (!codeLoginOn()) return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Please sign in with your email and password.' });
     const byEmail = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
     if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(byEmail)) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
     const phone = byEmail ? `email:${byEmail}` : normalizePhone(req.body?.phone);
@@ -194,6 +267,7 @@ r.post(
   asyncHandler(async (req, res) => {
     const purpose = PURPOSES.includes(req.body?.purpose) ? req.body.purpose : 'login';
     if (purpose === 'verify_phone') return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Phone verification is not available right now.' });
+    if (!codeLoginOn()) return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Please sign in with your email and password.' });
     const byEmail = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
     const phone = byEmail ? `email:${byEmail}` : normalizePhone(req.body?.phone);
     const wrong = await consumeOtp(Otp, phone, purpose, req.body?.otp || req.body?.code);
@@ -306,6 +380,7 @@ r.post(
     }
     user.passwordHash = await User.hashPassword(String(password));
     user.passwordReset = undefined;
+    if (user.emailVerified === false) user.emailVerified = true; // the link proved the email
     user.tokenVersion = (user.tokenVersion || 0) + 1; // sign out everywhere else
     await user.save();
     await revokeAll(user._id);

@@ -27,7 +27,11 @@ export const hashCode = (phone, code) =>
   crypto.createHmac('sha256', process.env.JWT_SECRET || 'otp').update(`${phone}:${code}`).digest('hex');
 const sameHash = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-// Sends a code by email. `kind` picks the wording: 'login' or 'staff'.
+// Signing in with a code instead of the password: off unless CODE_LOGIN=on
+// (the owner wants codes only once, to confirm the email at sign-up).
+export const codeLoginOn = () => String(process.env.CODE_LOGIN || '').toLowerCase() === 'on';
+
+// Sends a code by email. `kind` picks the wording: 'login', 'staff' or 'verify'.
 export async function sendOtp(to, code, kind = 'login') {
   // WhatsApp delivery is paused; codes go by email.
   // return sendOtpWhatsApp(phone, code);
@@ -77,7 +81,7 @@ export async function sendOtpWhatsApp(phone, code) {
 // new code cancels older ones; codes last OTP_MINUTES and allow
 // OTP_MAX_ATTEMPTS tries. The models are passed in to keep this file free of
 // database imports. `email` is where the code goes (the account's own address).
-export async function issueOtp(Otp, phone, purpose, email) {
+export async function issueOtp(Otp, phone, purpose, email, kind = 'login') {
   const recent = await Otp.find({ phone, createdAt: { $gt: new Date(Date.now() - 15 * 60000) } }).sort({ createdAt: -1 }).limit(5);
   if (recent.length >= 5 || (recent[0] && Date.now() - recent[0].createdAt.getTime() < 30000)) {
     throw Object.assign(new Error('Too many codes requested for this number. Please wait a moment and try again.'), { status: 429 });
@@ -85,7 +89,7 @@ export async function issueOtp(Otp, phone, purpose, email) {
   const code = newCode();
   await Otp.updateMany({ phone, purpose, usedAt: null }, { $set: { usedAt: new Date() } }); // older codes stop working
   await Otp.create({ phone, purpose, hash: hashCode(phone, code), expiresAt: new Date(Date.now() + OTP_MINUTES * 60000) });
-  return sendOtp(email, code, 'login');
+  return sendOtp(email, code, kind);
 }
 
 // Checks a code and uses it up. Returns null when it is right, else

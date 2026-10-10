@@ -121,6 +121,7 @@ describe('WhatsApp subscription without a code', () => {
     user.phone = '9876543340';
     await user.save();
     await ageCodes();
+    process.env.CODE_LOGIN = 'on';
     const before = wa.sent.length;
     const sent = await http('POST', '/api/auth/send-otp', { body: { phone: '9876543340', purpose: 'login' } });
     assert.equal(sent.status, 200);
@@ -134,6 +135,7 @@ describe('WhatsApp subscription without a code', () => {
     const ok = await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: code } });
     assert.equal(ok.status, 200);
     assert.ok(ok.body.token);
+    process.env.CODE_LOGIN = '';
   });
 });
 
