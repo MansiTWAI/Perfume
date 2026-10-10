@@ -108,6 +108,9 @@ export async function consumeOtp(Otp, phone, purpose, rawCode) {
 }
 
 // ----- staff two-step sign-in -----
+// Off unless STAFF_TWO_STEP=on in the server environment (switched off at the
+// owner's request on 2026-10-10). Off: staff sign in with the password alone.
+export const staffTwoStepOn = () => String(process.env.STAFF_TWO_STEP || '').toLowerCase() === 'on';
 // After the right password, staff get a code by email. The browser that
 // passed the password step gets a random challenge token; the code works only
 // together with it, once, for STAFF_MINUTES and STAFF_MAX_ATTEMPTS tries.

@@ -8,7 +8,10 @@ import mongoose from 'mongoose';
 import { http, reset, close, User, outbox, wa } from './helpers.js';
 
 after(close);
-beforeEach(reset);
+beforeEach(async () => {
+  await reset();
+  process.env.STAFF_TWO_STEP = 'on';
+});
 
 const Otp = () => mongoose.model('Otp');
 const PASSWORD = 'staff-pass-123';
@@ -116,6 +119,22 @@ describe('staff two-step sign-in', () => {
     const r = await login(u.email);
     await User.updateOne({ _id: u._id }, { $set: { status: 'blocked' } });
     assert.equal((await verify(r.body.challengeToken, lastCode(u.email))).status, 403);
+  });
+});
+
+describe('two-step sign-in switched off (the default)', () => {
+  test('staff sign in with the password alone and can use the studio', async () => {
+    process.env.STAFF_TWO_STEP = '';
+    const u = await staff('admin');
+    const r = await login(u.email);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.twoFactorRequired, undefined);
+    assert.ok(r.body.token && r.body.refreshToken);
+    assert.equal(lastCode(u.email), undefined, 'no code emailed');
+    assert.equal((await http('GET', '/api/admin/products', { token: r.body.token })).status, 200);
+    const next = await http('POST', '/api/auth/refresh', { body: { refreshToken: r.body.refreshToken } });
+    assert.equal((await http('GET', '/api/admin/products', { token: next.body.token })).status, 200);
+    assert.equal((await login(u.email, 'wrong-password')).status, 401);
   });
 });
 

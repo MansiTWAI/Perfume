@@ -8,7 +8,7 @@ import Otp from '../models/Otp.js';
 import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff } from '../middleware/auth.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
 import {
-  otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
+  otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, staffTwoStepOn, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
 } from '../services/otp.js';
 
 const r = Router();
@@ -89,7 +89,9 @@ r.post(
       return res.status(401).json({ message: id.includes('@') || !id ? 'That email and password do not match.' : 'That phone number and password do not match.' });
     }
     if (user.status === 'blocked') return blocked(res);
-    // Staff: the password is only the first step; a code by email is the second.
+    // Staff with two-step sign-in on: the password is only the first step; a
+    // code by email is the second. Off: the password signs staff in.
+    if (isStaff(user) && !staffTwoStepOn()) return res.json(await session(user, req, undefined, { mfa: true }));
     if (isStaff(user)) {
       let challenge;
       try {
@@ -307,7 +309,8 @@ r.post(
     user.tokenVersion = (user.tokenVersion || 0) + 1; // sign out everywhere else
     await user.save();
     await revokeAll(user._id);
-    // Staff still need the emailed code: they sign in again with the new password.
+    // With two-step sign-in on, staff sign in again with the new password and the code.
+    if (isStaff(user) && !staffTwoStepOn()) return res.json(await session(user, req, undefined, { mfa: true }));
     if (isStaff(user)) return res.json({ ok: true, signInRequired: true, message: 'Your password is changed. Please sign in.' });
     res.json(await session(user, req));
   })

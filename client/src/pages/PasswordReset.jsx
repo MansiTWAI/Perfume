@@ -72,7 +72,7 @@ export function ResetPassword() {
     setState({ busy: true, error: '' });
     try {
       const d = await api('/auth/reset-password', { method: 'POST', body: { token, password: f.password } });
-      // Team accounts sign in again with the emailed code.
+      // With two-step sign-in on, team accounts sign in again with the emailed code.
       if (d.signInRequired) return navigate('/account', { replace: true });
       login(d.token, d.user);
       navigate('/profile', { replace: true });
