@@ -1,19 +1,23 @@
 // Outgoing email (sign-in codes, password reset, shipping updates). Configure SMTP in the server environment:
 // SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS, MAIL_FROM, and
 // SMTP_SECURE=true for port 465. Works with Gmail (app password), Zoho,
-// Brevo, Amazon SES and others. MAIL_TRANSPORT=memory keeps messages in
-// `outbox` instead of sending them (used by the tests).
+// Brevo, Amazon SES and others. MAIL_TRANSPORT=sendmail sends through the
+// host's own mail server instead (cPanel: no mailbox password needed; MAIL_FROM
+// must be an address on a domain of the hosting account). MAIL_TRANSPORT=memory
+// keeps messages in `outbox` instead of sending them (used by the tests).
 import nodemailer from 'nodemailer';
 
 export const outbox = [];
 let transport = null;
 
-export const mailConfigured = () => process.env.MAIL_TRANSPORT === 'memory' || !!(process.env.SMTP_HOST && process.env.MAIL_FROM);
+export const mailConfigured = () => process.env.MAIL_TRANSPORT === 'memory' || (process.env.MAIL_TRANSPORT === 'sendmail' && !!process.env.MAIL_FROM) || !!(process.env.SMTP_HOST && process.env.MAIL_FROM);
 
 function getTransport() {
   if (transport) return transport;
   if (process.env.MAIL_TRANSPORT === 'memory') {
     transport = { sendMail: async (m) => outbox.push(m) };
+  } else if (process.env.MAIL_TRANSPORT === 'sendmail') {
+    transport = nodemailer.createTransport({ sendmail: true, newline: 'unix', path: process.env.SENDMAIL_PATH || '/usr/sbin/sendmail' });
   } else {
     transport = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
