@@ -13,6 +13,7 @@ import {
 } from './razorpay.js';
 import { orderReady } from './shipping.js';
 import User from '../models/User.js';
+import { alertTeam, emailCustomer } from './orderEmails.js';
 import { release } from './orderStock.js';
 import { releaseCoupon } from './coupons.js';
 
@@ -45,6 +46,7 @@ async function recordIssue(order, kind, p, note) {
     { _id: order._id, 'payment.issues.providerPaymentId': { $ne: p.id } },
     { $push: { 'payment.issues': { kind, providerPaymentId: p.id, amount: p.amount, note } } }
   );
+  alertTeam('payment_issue', { ...(order.toObject ? order.toObject() : order), detail: `${note} (Razorpay payment ${p.id})` });
   payLog('payment_issue', { orderNumber: order.orderNumber, razorpayOrderId: p.order_id, razorpayPaymentId: p.id, amount: p.amount, currency: p.currency, outcome: kind });
 }
 
@@ -112,6 +114,8 @@ export async function applyPayment(p, source, round = 0) {
   }
   await Order.updateOne({ _id: order._id, 'payment.attempts.providerOrderId': p.order_id }, { $set: { 'payment.attempts.$.status': 'paid' } });
   if (claimed.clearBagOnPay && claimed.user) await User.updateOne({ _id: claimed.user }, { $set: { cart: [] } });
+  // The customer gets "confirmed" (orderReady below); the team gets the order.
+  if (claimed.status !== ORDER_CANCELLED) alertTeam('paid_order', claimed.toObject());
   if (claimed.status === 'Order Placed') {
     await Order.updateOne(
       { _id: order._id, status: 'Order Placed' },
@@ -211,6 +215,7 @@ export async function refundOrder(orderId, { amount, paymentId, reason, by }) {
       { $push: { 'payment.refunds': { providerRefundId: rf.id, providerPaymentId: target, amount: rf.amount || want, status: rf.status === 'processed' ? 'processed' : 'pending', reason: String(reason || '').slice(0, 200), by } } }
     );
     payLog('refund_created', { orderNumber: order.orderNumber, razorpayPaymentId: target, razorpayRefundId: rf.id, amount: want, currency: order.currency, status: rf.status, source: 'admin' });
+    emailCustomer(order, `refunded:${rf.id}`, { amount: (rf.amount || want) / 100 });
     return await settleRefundState(order._id);
   } finally {
     await Order.updateOne({ _id: order._id }, { $unset: { 'payment.refundLockAt': 1 } });
@@ -239,6 +244,8 @@ export async function applyRefund(rf) {
     );
   }
   payLog('refund_update', { orderNumber: order.orderNumber, razorpayPaymentId: rf.payment_id, razorpayRefundId: rf.id, amount: rf.amount, status, source: 'webhook' });
+  // Refunds made from the Razorpay Dashboard reach the customer too (once).
+  if (status !== 'failed' && rf.payment_id === order.payment?.providerPaymentId) emailCustomer(order, `refunded:${rf.id}`, { amount: (rf.amount || 0) / 100 });
   await settleRefundState(order._id);
   return { outcome: status };
 }

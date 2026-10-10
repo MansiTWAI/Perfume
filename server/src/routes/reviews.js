@@ -4,6 +4,7 @@ import Review from '../models/Review.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
+import { alertTeam } from '../services/orderEmails.js';
 
 const r = Router();
 const submitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, message: { message: 'Too many reviews from this connection. Please try again later.' } });
@@ -103,6 +104,7 @@ r.post(
       if (e?.code === 11000) return res.status(409).json({ message: 'You have already reviewed this fragrance for this order. Thank you.' });
       throw e;
     }
+    alertTeam('review', { orderNumber: order.orderNumber, name: order.customer.name, slug, rating: stars, title: String(title || '').trim().slice(0, 80), body: text.slice(0, 1200) });
     res.status(201).json({ ok: true, message: 'Thank you. Your review will appear once the house has read it.' });
   })
 );

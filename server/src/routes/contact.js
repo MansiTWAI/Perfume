@@ -3,6 +3,7 @@ import { validPhone } from '../models/User.js';
 import rateLimit from 'express-rate-limit';
 import { Enquiry, Subscriber } from '../models/Enquiry.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
+import { alertTeam } from '../services/orderEmails.js';
 
 const r = Router();
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: { message: 'Too many messages from this connection. Please try again in a few minutes, or write to us on WhatsApp.' } });
@@ -20,6 +21,7 @@ r.post(
     if (!phone && !req.apiV1) return res.status(400).json({ message: 'Please enter your mobile number.', errors: [{ field: 'phone', message: 'phone is required' }] });
     if (phone && !validPhone(String(phone))) return res.status(400).json({ message: 'Please enter a valid mobile number, e.g. +91 98765 43210.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
     await Enquiry.create({ name, email, phone, topic, message });
+    alertTeam('enquiry', { name: String(name).slice(0, 120), email: String(email).slice(0, 160), phone: String(phone || '').slice(0, 40), topic: String(topic || '').slice(0, 80), message: String(message).slice(0, 4000) });
     res.status(201).json({ ok: true });
   })
 );

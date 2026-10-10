@@ -370,6 +370,7 @@ export function OrderRow({ order, onSaved }) {
                 )}
                 <label>Internal notes<textarea rows="2" value={f.notes} onChange={set('notes')} placeholder="Only the team sees these" /></label>
                 {error && <p className="a-error" role="alert">{error}</p>}
+                <p className="a-muted a-hint">{statusChanged ? `Saving emails the customer: “${f.status}”${note ? ' with your message' : ''}.` : 'The customer is emailed automatically whenever the status changes.'}</p>
                 <div className="a-actions">
                   <button className="a-btn a-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save update'}</button>
                   {wa.length >= 8 && (

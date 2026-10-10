@@ -15,6 +15,7 @@ import { reserve, release } from '../services/orderStock.js';
 import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
 import { orderFilter, describeFilters } from '../services/filters.js';
 import { shipmentView, freshen, orderReady, cancelShipmentFor } from '../services/shipping.js';
+import { emailCustomer, alertTeam, STATUS_EMAIL } from '../services/orderEmails.js';
 import { newWorkbook, addTableSheet, sendWorkbook, fileName, tzLabel } from '../services/excel.js';
 import { buildOrdersWorkbook, buildTemplate, readOrderSheet, planOrderImport, applyOrderChanges, MAX_IMPORT_ROWS } from '../services/orderSheet.js';
 
@@ -65,6 +66,12 @@ r.post(
         ({ customer, regionCode } = await checkoutTarget(req.user, { addressId: req.body?.addressId, customer, region: req.body?.region }));
       }
       const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, couponCode, expectedTotal, userId: req.user?._id });
+      // Cash on delivery / pay on confirmation: emails now. Paid online: when
+      // the payment is confirmed (services/payments.js).
+      if (!order.paymentHold) {
+        emailCustomer(order, 'received');
+        alertTeam('new_order', order.toObject());
+      }
       // Paid online: the bag empties once the payment is confirmed.
       if (fromCart && order.paymentHold) {
         await Order.updateOne({ _id: order._id }, { $set: { clearBagOnPay: true } });
@@ -239,6 +246,7 @@ r.post(
         if (notes) order.notes = String(notes).slice(0, 2000);
         await order.save();
       }
+      emailCustomer(order, 'received');
       res.status(201).json(order);
     } catch (e) {
       if (httpError(res, e)) return;
@@ -537,6 +545,7 @@ r.get(
 export const updateOrder = asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found.' });
+    const statusBefore = order.status;
     const { status, carrier, carrierUrl, trackingNumber, eta, paymentStatus, note, notes, customer } = req.body || {};
     const problems = [];
     const text = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -613,6 +622,9 @@ export const updateOrder = asyncHandler(async (req, res) => {
     if (stockMove === 'release' && order.coupon?.code) await releaseCoupon(order.coupon.code);
     // Confirmed or paid: confirmation email and, when automatic, the
     // Delhivery shipment. Cancelled: cancel the booked shipment too.
+    // The customer hears about every status change by email, with the
+    // team's message (one email per status and order).
+    if (order.status !== statusBefore && STATUS_EMAIL[order.status]) emailCustomer(order, STATUS_EMAIL[order.status], { note: String(note ?? '') });
     if (wasReady && (['Confirmed', 'Packed'].includes(order.status) || (order.status === 'Order Placed' && order.paymentStatus === 'paid'))) orderReady(order._id);
     let out = order;
     if (stockMove === 'release' && order.shipment?.awb && order.shipment.status !== 'cancelled') out = (await cancelShipmentFor(order._id, { by: 'admin' })).order || order;
@@ -754,6 +766,7 @@ r.patch(
 
     if (!summary.length) return res.json(customerView(order.toObject()));
     order.edits.push({ by: 'customer', summary: `Changed ${summary.join(', ')}` });
+    const changedNote = `Changed ${summary.join(', ')}`;
     // A payment that lands while the items change must not be applied to
     // the new items: save only if the order is still unpaid.
     if (stockDelta.length) order.$where = { paymentStatus: 'pending' };
@@ -766,6 +779,7 @@ r.patch(
       if (e?.name === 'DocumentNotFoundError') return res.status(409).json({ message: 'This order was just paid, so its items cannot be changed here. Message us on WhatsApp and we will help.' });
       throw e;
     }
+    alertTeam('customer_edited', { ...order.toObject(), detail: changedNote });
     res.json(customerView(order.toObject()));
   })
 );
@@ -787,6 +801,8 @@ r.post(
     await order.save();
     await release(order.items.map((i) => ({ product: i.product, qty: i.qty })));
     if (order.coupon?.code) await releaseCoupon(order.coupon.code);
+    emailCustomer(order, 'cancelled');
+    alertTeam('customer_cancelled', { ...order.toObject(), detail: reason ? `Reason: ${reason}` : '' });
     if (order.shipment?.awb) {
       const c = await cancelShipmentFor(order._id, { by: 'customer' });
       return res.json(customerView((c.order || order).toObject()));

@@ -593,6 +593,8 @@ const AR = {
   'Your orders, tracking and details, kept in one place.': 'طلباتك وتتبّعها وبياناتك في مكان واحد.',
   'Create account': 'إنشاء حساب',
   'Confirm your email': 'أكّد بريدك الإلكتروني',
+  'We confirm your order by email and send a secure payment link.': 'نؤكد طلبك عبر البريد الإلكتروني ونرسل رابط دفع آمناً.',
+  'Thank you. We have received your order and emailed you a confirmation. We will email you at every step.': 'شكراً لك. استلمنا طلبك وأرسلنا إليك تأكيداً بالبريد الإلكتروني. سنراسلك بالبريد في كل خطوة.',
   'Payment was cancelled. No order was placed, and your bag is still here.': 'أُلغي الدفع. لم يُسجَّل أي طلب، وحقيبتك ما زالت كما هي.',
   'Payment failed. No order was placed and no money was taken.': 'فشل الدفع. لم يُسجَّل أي طلب ولم يُخصم أي مبلغ.',
   'Please try again or choose another payment method.': 'يرجى المحاولة مرة أخرى أو اختيار طريقة دفع أخرى.',
