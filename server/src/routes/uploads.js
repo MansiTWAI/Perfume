@@ -60,7 +60,28 @@ async function toCloudinary(cfg, file, publicId) {
   return data.secure_url;
 }
 
-const receive = (req, res, next) =>
+// Stores an uploaded image (req.file from multer, real type already checked):
+// Cloudinary when configured, else the database. Returns { src, storage, warning? }.
+export async function storeImage(file, ext, baseName) {
+  const base = `${slugify(baseName) || 'image'}-${code(5).toLowerCase()}`;
+  const cfg = cloudinaryConfig();
+  let warning;
+  if (cfg) {
+    try {
+      return { src: await toCloudinary(cfg, file, base), storage: 'cloud' };
+    } catch {
+      // Cloudinary refused (e.g. a key without upload permission) or is
+      // down: keep the image in the database so the upload still works.
+      // The reason is in the server log.
+      warning = 'Cloud storage refused this image, so it was saved on our own server instead.';
+    }
+  }
+  const name = base + ext;
+  await Media.create({ name, contentType: file.mimetype, size: file.size, data: file.buffer });
+  return { src: `/uploads/${name}`, storage: 'database', ...(warning && { warning }) };
+}
+
+export const receive = (req, res, next) =>
   upload.single('file')(req, res, (err) => {
     if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ message: 'That image is larger than 4 MB. Please choose a smaller one.' });
     next(err);
@@ -76,23 +97,7 @@ r.post(
     const real = sniffImage(req.file.buffer);
     if (!real) return res.status(400).json({ message: 'That file is not a JPG, PNG, WebP or AVIF image. Please choose a photo.' });
     req.file.mimetype = real.type;
-    const ext = real.ext;
-    const base = `${slugify(path.parse(req.file.originalname).name) || 'image'}-${code(5).toLowerCase()}`;
-    const cfg = cloudinaryConfig();
-    let warning;
-    if (cfg) {
-      try {
-        return res.status(201).json({ src: await toCloudinary(cfg, req.file, base), storage: 'cloud' });
-      } catch {
-        // Cloudinary refused (e.g. a key without upload permission) or is
-        // down: keep the image in the database so the upload still works.
-        // The reason is in the server log.
-        warning = 'Cloud storage refused this image, so it was saved on our own server instead.';
-      }
-    }
-    const name = base + ext;
-    await Media.create({ name, contentType: req.file.mimetype, size: req.file.size, data: req.file.buffer });
-    res.status(201).json({ src: `/uploads/${name}`, storage: 'database', ...(warning && { warning }) });
+    res.status(201).json(await storeImage(req.file, real.ext, path.parse(req.file.originalname).name));
   })
 );
 

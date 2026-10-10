@@ -80,6 +80,52 @@ r.get(
   })
 );
 
+// Image links for the app: site paths become full URLs on our own domain.
+export const absUrl = (src) => {
+  if (!src || /^https?:\/\//.test(src)) return src || '';
+  const site = String(process.env.SITE_URL || 'https://albarakah.me').replace(/\/$/, '');
+  return `${site}${src.startsWith('/') ? '' : '/'}${src}`;
+};
+const liveBanner = (now) => ({ active: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] }] });
+const bannerView = (b) => ({
+  id: String(b._id),
+  title: b.title || '',
+  subtitle: b.subtitle || '',
+  image: b.image,
+  imageUrl: absUrl(b.image),
+  width: b.width || 1080,
+  height: b.height || 540,
+  link: b.link || '',
+  buttonLabel: b.buttonLabel || '',
+  placement: b.placement,
+  sortOrder: b.sortOrder || 0,
+});
+// Shown in the app until the team uploads its own app banner.
+export const DEFAULT_APP_BANNER = {
+  _id: 'default-app-banner',
+  title: 'Two signatures. One house.',
+  subtitle: 'ELARISSE and ZAFREON, Eau de Parfum',
+  image: '/media/banners/app-banner-1.jpg',
+  width: 1080,
+  height: 540,
+  link: '/fragrances',
+  buttonLabel: 'Shop now',
+  placement: 'app',
+  sortOrder: 0,
+};
+
+// Store banners for the mobile app (and any placement): live ones only, in
+// their order. ?placement=app (default), hero, strip or offer.
+r.get(
+  '/banners',
+  asyncHandler(async (req, res) => {
+    const placement = ['hero', 'strip', 'offer', 'app'].includes(req.query.placement) ? req.query.placement : 'app';
+    const list = await Banner.find({ placement, ...liveBanner(new Date()) }).sort({ sortOrder: 1, createdAt: -1 }).limit(20).lean();
+    const items = (list.length || placement !== 'app' ? list : [DEFAULT_APP_BANNER]).map(bannerView);
+    res.set('Cache-Control', 'public, max-age=60').json({ placement, size: { width: 1080, height: 540 }, items });
+  })
+);
+
 // Everything the homepage shows, arranged in the admin.
 export const getHome = () => HomeContent.findOne({ key: 'home' }).lean();
 

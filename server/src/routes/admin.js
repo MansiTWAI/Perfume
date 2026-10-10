@@ -33,6 +33,9 @@ import { usersPipeline, shape, readPeriod } from './users.js';
 import { publicCoupon } from '../services/coupons.js';
 import { getHome } from './storefront.js';
 import whatsappAdmin from './adminWhatsapp.js';
+import { receive, storeImage, sniffImage } from './uploads.js';
+import { imageSize } from '../services/imageSize.js';
+import { absUrl } from './storefront.js';
 import WhatsAppContact from '../models/WhatsAppContact.js';
 import { phoneKeys } from '../models/User.js';
 import { slugify, escapeRegex } from '../utils.js';
@@ -775,7 +778,7 @@ function readBanner(body, partial) {
   }
   for (const [k, max] of [['title', 120], ['subtitle', 240], ['mobileImage', 500], ['link', 500], ['buttonLabel', 40]]) if (body[k] !== undefined) out[k] = String(body[k] || '').slice(0, max);
   if (body.placement !== undefined) {
-    if (!['hero', 'strip', 'offer'].includes(body.placement)) errors.push({ field: 'placement', message: 'hero, strip or offer' });
+    if (!['hero', 'strip', 'offer', 'app'].includes(body.placement)) errors.push({ field: 'placement', message: 'hero, strip, offer or app' });
     else out.placement = body.placement;
   }
   if (body.sortOrder !== undefined) out.sortOrder = parseInt(body.sortOrder, 10) || 0;
@@ -798,6 +801,57 @@ r.post(
     res.status(201).json(await Banner.create(out));
   })
 );
+// Banner image upload for the mobile app store: multipart `file` (JPG, PNG or
+// WebP, exactly 1080 × 540 pixels, under 4 MB) plus the banner's fields
+// (title, subtitle, link, buttonLabel, sortOrder, active, startsAt, endsAt;
+// placement defaults to app). POST /banners/upload creates a banner;
+// POST /banners/:id/image replaces the image of one.
+export const BANNER_SIZE = { width: 1080, height: 540 };
+async function readBannerImage(req) {
+  if (!req.file) return { error: 'Upload the banner image as `file`: a JPG, PNG or WebP of 1080 × 540 pixels.' };
+  const real = sniffImage(req.file.buffer);
+  if (!real || real.type === 'image/avif') return { error: 'The banner must be a JPG, PNG or WebP image.' };
+  const size = imageSize(req.file.buffer);
+  if (!size) return { error: 'We could not read the size of this image. Please export it again as JPG or PNG.' };
+  if (size.width !== BANNER_SIZE.width || size.height !== BANNER_SIZE.height) {
+    return { error: `The banner must be exactly ${BANNER_SIZE.width} × ${BANNER_SIZE.height} pixels; this image is ${size.width} × ${size.height}.`, code: 'BANNER_SIZE' };
+  }
+  req.file.mimetype = real.type;
+  const stored = await storeImage(req.file, real.ext, `banner-${String(req.body?.title || 'app')}`);
+  return { stored, size };
+}
+const bannerImageError = (res, e) => res.status(400).json({ code: e.code || 'BANNER_IMAGE_INVALID', message: e.error, errors: [{ field: 'file', message: e.error }] });
+
+r.post(
+  '/banners/upload',
+  requireRole(...MANAGE),
+  receive,
+  asyncHandler(async (req, res) => {
+    const body = { placement: 'app', ...(req.body || {}) };
+    if (typeof body.active === 'string') body.active = body.active !== 'false' && body.active !== '0';
+    const { out, errors } = readBanner({ ...body, image: 'pending' }, false);
+    if (errors.length) return bad(res, 'Please check the banner.', errors);
+    const img = await readBannerImage(req);
+    if (img.error) return bannerImageError(res, img);
+    const banner = await Banner.create({ ...out, image: img.stored.src, width: img.size.width, height: img.size.height });
+    res.status(201).json({ ...banner.toObject(), imageUrl: absUrl(banner.image), ...(img.stored.warning && { warning: img.stored.warning }) });
+  })
+);
+r.post(
+  '/banners/:id/image',
+  requireRole(...MANAGE),
+  receive,
+  asyncHandler(async (req, res) => {
+    const banner = validId(req.params.id) && (await Banner.findById(req.params.id));
+    if (!banner) return res.status(404).json({ message: 'Banner not found.' });
+    const img = await readBannerImage(req);
+    if (img.error) return bannerImageError(res, img);
+    banner.set({ image: img.stored.src, mobileImage: undefined, width: img.size.width, height: img.size.height });
+    await banner.save();
+    res.json({ ...banner.toObject(), imageUrl: absUrl(banner.image), ...(img.stored.warning && { warning: img.stored.warning }) });
+  })
+);
+
 r.put(
   '/banners/:id',
   requireRole(...MANAGE),

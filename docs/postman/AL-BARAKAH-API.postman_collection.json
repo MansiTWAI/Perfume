@@ -2,7 +2,7 @@
   "info": {
     "name": "AL BARAKAH LIFESTYLE API",
     "_postman_id": "a1b2c3d4-al-barakah-api-v1",
-    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (143 paths). Regenerate with `npm run postman`.",
+    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (150 paths). Regenerate with `npm run postman`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -311,7 +311,7 @@
                 "login"
               ]
             },
-            "description": "Send `identifier` (email or phone, e.g. +919999999999) and `password`; `email` instead of `identifier` also works. Returns `accessToken` (same as `token`), `refreshToken` and `user`. Blocked accounts get 403 ACCOUNT_BLOCKED.\n\n**Responses:** `200` Signed in · `401` Email and password do not match",
+            "description": "Send `identifier` (email or phone, e.g. +919999999999) and `password`; `email` instead of `identifier` also works. Returns `accessToken` (same as `token`), `refreshToken` and `user`. Blocked accounts get 403 ACCOUNT_BLOCKED. A new account that never entered its code gets 403 EMAIL_NOT_VERIFIED with `verificationRequired: true` and a fresh code is emailed. **Staff accounts (admin, manager, support), when the server has STAFF_TWO_STEP=on** (off by default), get no session here: the answer is `{ twoFactorRequired: true, challengeToken, sentTo, expiresInSeconds, resendInSeconds }` and a 6-digit code is emailed; finish with POST /auth/2fa/verify. Staff endpoints refuse staff tokens issued without the code (401 MFA_REQUIRED).\n\n**Responses:** `200` Signed in · `401` Email and password do not match",
             "auth": {
               "type": "noauth"
             },
@@ -361,7 +361,7 @@
                 "register"
               ]
             },
-            "description": "Body: `name`, `email`, `password` (8+), optional `phone`. A phone already used by another account → 409. Returns `accessToken` (same as `token`), `refreshToken`, `user`.\n\n**Responses:** `201` Signed in · `400` Invalid input. `message` says what to fix. · `409` Email already registered",
+            "description": "Body: `name`, `email`, `password` (8+), optional `phone`. A phone already used by another account → 409. **Confirms the email once:** returns `{ verificationRequired: true, email, expiresInSeconds }` and emails a 6-digit code; finish with POST /auth/verify-email, which returns the session. Signing up again with an email still waiting for its code updates that sign-up and sends a new code. (Servers without email return the session straight away.)\n\n**Responses:** `201` Signed in · `400` Invalid input. `message` says what to fix. · `409` Email already registered",
             "auth": {
               "type": "noauth"
             },
@@ -411,7 +411,7 @@
                 "login"
               ]
             },
-            "description": "Send `identifier` (email or phone, e.g. +919999999999) and `password`; `email` instead of `identifier` also works. Returns `accessToken` (same as `token`), `refreshToken` and `user`. Blocked accounts get 403 ACCOUNT_BLOCKED.\n\n**Responses:** `200` Signed in · `401` Email and password do not match",
+            "description": "Send `identifier` (email or phone, e.g. +919999999999) and `password`; `email` instead of `identifier` also works. Returns `accessToken` (same as `token`), `refreshToken` and `user`. Blocked accounts get 403 ACCOUNT_BLOCKED. A new account that never entered its code gets 403 EMAIL_NOT_VERIFIED with `verificationRequired: true` and a fresh code is emailed. **Staff accounts (admin, manager, support), when the server has STAFF_TWO_STEP=on** (off by default), get no session here: the answer is `{ twoFactorRequired: true, challengeToken, sentTo, expiresInSeconds, resendInSeconds }` and a 6-digit code is emailed; finish with POST /auth/2fa/verify. Staff endpoints refuse staff tokens issued without the code (401 MFA_REQUIRED).\n\n**Responses:** `200` Signed in · `401` Email and password do not match",
             "auth": {
               "type": "noauth"
             },
@@ -466,6 +466,229 @@
                   "type": "string"
                 }
               ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm a new account with the emailed code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Once per account, after sign-up. Codes last 5 minutes, work once and allow 5 tries (OTP_INVALID / OTP_EXPIRED). Returns a session like /auth/login.\n\n**Responses:** `200` Confirmed and signed in · `400` Wrong or expired code · `404` Not found (also returned for other people’s orders). · `429` Too many requests from this connection; try again later.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Email a new confirmation code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email",
+                "resend"
+              ]
+            },
+            "description": "Same answer whether or not the email is waiting for a code. One code every 30 s, 5 per 15 minutes.\n\n**Responses:** `200` Sent · `429` Too many requests from this connection; try again later. · `502` Email could not be sent",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff sign-in, step 2: the emailed code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "verify"
+              ]
+            },
+            "description": "Only when STAFF_TWO_STEP=on. Send the `challengeToken` from /auth/login and the 6-digit `code` from the email. Codes last 10 minutes, work once and allow 5 tries; a new password sign-in cancels older codes. Returns a session; staff tokens from here carry the two-step mark that staff endpoints require.\n\n**Responses:** `200` Signed in · `400` Wrong code (`OTP_INVALID`) · `401` Expired, used or unknown challenge, or too many tries (`OTP_EXPIRED`): sign in again · `403` Account blocked · `429` Too many requests from this connection; try again later.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challengeToken\": \"\",\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff sign-in: email a new code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "resend"
+              ]
+            },
+            "description": "Same `challengeToken`; the new code replaces the old one. Wait 30 s between emails (429 OTP_COOLDOWN with `retryAfter`); at most 5 emails per sign-in and per account every 15 minutes (429 OTP_RATE_LIMITED).\n\n**Responses:** `200` Sent · `401` Expired challenge (`OTP_EXPIRED`): sign in again · `429` Too many requests from this connection; try again later.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challengeToken\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -820,7 +1043,7 @@
                 "reset-password"
               ]
             },
-            "description": "Signs the user in (returns a session) and signs out every other device.\n\n**Responses:** `200` Signed in · `400` Weak password, or invalid/expired/used token (`RESET_TOKEN_INVALID`) · `429` Too many requests from this connection; try again later.",
+            "description": "Signs the user in (returns a session) and signs out every other device. With STAFF_TWO_STEP=on, staff accounts get `{ ok: true, signInRequired: true }` instead and sign in again with the emailed code.\n\n**Responses:** `200` Signed in · `400` Weak password, or invalid/expired/used token (`RESET_TOKEN_INVALID`) · `429` Too many requests from this connection; try again later.",
             "auth": {
               "type": "noauth"
             },
@@ -849,7 +1072,7 @@
           ]
         },
         {
-          "name": "Send a one-time code by WhatsApp",
+          "name": "Email a one-time sign-in code",
           "request": {
             "method": "POST",
             "header": [
@@ -868,7 +1091,7 @@
                 "send-otp"
               ]
             },
-            "description": "purpose `login` (sign in by phone; the answer is the same whether or not an account uses the number) or `verify_phone` (signed in). One code per 30 s, 5 per 15 min per number; codes last 5 minutes. Needs WhatsApp configured on the server (else 503 OTP_NOT_CONFIGURED; development servers return `devCode`).\n\n**Responses:** `200` Sent · `400` Invalid input. `message` says what to fix. · `429` Too many requests from this connection; try again later. · `503` OTP not configured",
+            "description": "Off unless the server has CODE_LOGIN=on (503 OTP_NOT_CONFIGURED otherwise). Send `phone` or `email`; the code goes to the email address on the matching account (never to an address in the request). The answer is the same whether or not an account matches. Staff accounts cannot sign in by code. One code per 30 s, 5 per 15 min; codes last 5 minutes. `verify_phone` is not available while WhatsApp is paused (503). Needs email (SMTP) on the server, else 503 OTP_NOT_CONFIGURED; development servers return `devCode`.\n\n**Responses:** `200` Sent · `400` Invalid input. `message` says what to fix. · `429` Too many requests from this connection; try again later. · `503` OTP not configured",
             "auth": {
               "type": "noauth"
             },
@@ -916,7 +1139,7 @@
                 "verify-otp"
               ]
             },
-            "description": "`login`: returns a session like /auth/login (404 ACCOUNT_NOT_FOUND if no account uses the phone). `verify_phone`: marks the signed-in user's phone verified. Wrong code → OTP_INVALID (5 tries); expired → OTP_EXPIRED.\n\n**Responses:** `200` Signed in / verified · `400` Invalid input. `message` says what to fix. · `404` Not found (also returned for other people’s orders).",
+            "description": "Send the same `phone` or `email` as for /auth/send-otp. Returns a session like /auth/login (404 ACCOUNT_NOT_FOUND if no account matches; 403 STAFF_PASSWORD_REQUIRED for staff). Wrong code → OTP_INVALID (5 tries); expired → OTP_EXPIRED.\n\n**Responses:** `200` Signed in / verified · `400` Invalid input. `message` says what to fix. · `404` Not found (also returned for other people’s orders).",
             "auth": {
               "type": "noauth"
             },
@@ -6397,6 +6620,86 @@
               }
             }
           ]
+        },
+        {
+          "name": "Store banners for the mobile app",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/banners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "banners"
+              ],
+              "query": [
+                {
+                  "key": "placement",
+                  "value": "",
+                  "description": "app (default), hero, strip or offer",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Live banners (active, within their dates) for a placement, in order. `placement` = app (default: the app store banners, 1080 × 540 images), hero, strip or offer. Each banner has `imageUrl` (full URL), `width`, `height`, `title`, `subtitle`, `link` (a site path such as /fragrances/zafreon) and `buttonLabel`. Until the team uploads an app banner, the default house banner is returned. Uploaded in the admin with POST /admin/banners/upload.\n\n**Responses:** `200` Banners",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [
+            {
+              "name": "200 Banners",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/banners",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "banners"
+                  ],
+                  "query": [
+                    {
+                      "key": "placement",
+                      "value": "",
+                      "description": "app (default), hero, strip or offer",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Live banners (active, within their dates) for a placement, in order. `placement` = app (default: the app store banners, 1080 × 540 images), hero, strip or offer. Each banner has `imageUrl` (full URL), `width`, `height`, `title`, `subtitle`, `link` (a site path such as /fragrances/zafreon) and `buttonLabel`. Until the team uploads an app banner, the default house banner is returned. Uploaded in the admin with POST /admin/banners/upload.\n\n**Responses:** `200` Banners",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "status": "Banners",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Banners\",\n  \"data\": {\n    \"placement\": \"app\",\n    \"size\": {\n      \"width\": 1080,\n      \"height\": 540\n    },\n    \"items\": [\n      {\n        \"id\": \"default-app-banner\",\n        \"title\": \"Two signatures. One house.\",\n        \"subtitle\": \"ELARISSE and ZAFREON, Eau de Parfum\",\n        \"image\": \"/media/banners/app-banner-1.jpg\",\n        \"imageUrl\": \"https://albarakah.me/media/banners/app-banner-1.jpg\",\n        \"width\": 1080,\n        \"height\": 540,\n        \"link\": \"/fragrances\",\n        \"buttonLabel\": \"Shop now\",\n        \"placement\": \"app\",\n        \"sortOrder\": 0\n      }\n    ]\n  }\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -8382,6 +8685,169 @@
                 "exec": [
                   "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
                   "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('bannerId', o.id || o._id);",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload a store banner for the app (1080 × 540)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/banners/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "banners",
+                "upload"
+              ]
+            },
+            "description": "Multipart form: `file` (JPG, PNG or WebP, **exactly 1080 × 540 pixels**, up to 4 MB) and optional text fields title, subtitle, link, buttonLabel, sortOrder, active (true/false), startsAt, endsAt, placement (default app). Any other size is refused with 400 BANNER_SIZE, naming the size that was sent. Managers and admins.\n\n**Responses:** `201` Banner created · `400` No file, not an image, or not 1080 × 540 (`BANNER_SIZE`) · `401` Missing, invalid or expired token. · `403` Signed in, but not an admin. · `413` Over 4 MB",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Choose the file"
+                },
+                {
+                  "key": "title",
+                  "value": "Eid Collection",
+                  "type": "text"
+                },
+                {
+                  "key": "subtitle",
+                  "value": "Gift sets for the season",
+                  "type": "text"
+                },
+                {
+                  "key": "link",
+                  "value": "/fragrances/zafreon",
+                  "type": "text"
+                },
+                {
+                  "key": "buttonLabel",
+                  "value": "Shop now",
+                  "type": "text"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "0",
+                  "type": "text"
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "startsAt",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "endsAt",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "placement",
+                  "value": "app",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('uploadId', o.id || o._id);",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace a banner image (1080 × 540)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/banners/:id/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "banners",
+                ":id",
+                "image"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{bannerId}}",
+                  "description": "Banner id"
+                }
+              ]
+            },
+            "description": "Multipart `file`, same rules as /admin/banners/upload. The banner keeps its text, link and dates.\n\n**Responses:** `200` Updated · `400` Not 1080 × 540 (`BANNER_SIZE`) or not an image · `404` Not found (also returned for other people’s orders).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Choose the file"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('imageId', o.id || o._id);",
                   "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
                 ]
               }

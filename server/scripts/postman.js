@@ -93,7 +93,10 @@ function request(p, method, op) {
   else req.auth = { type: 'noauth' };
   const content = op.requestBody?.content || {};
   if (content['multipart/form-data']) {
-    req.body = { mode: 'formdata', formdata: [{ key: 'file', type: 'file', src: [], description: 'Choose the file' }] };
+    // The file, then any text fields the form takes (with their examples).
+    const props = content['multipart/form-data'].schema?.properties || {};
+    const fields = Object.entries(props).filter(([k]) => k !== 'file').map(([key, s]) => ({ key, value: s.example !== undefined ? String(s.example) : '', type: 'text', ...(s.example === undefined && { disabled: true }) }));
+    req.body = { mode: 'formdata', formdata: [{ key: 'file', type: 'file', src: [], description: 'Choose the file' }, ...fields] };
   } else if (content['application/json']) {
     const c = content['application/json'];
     const ex = c.example !== undefined ? c.example : sample(c.schema);
