@@ -15,6 +15,7 @@ import Leads from './Leads';
 import Shipping from './Shipping';
 import { CouponList, CouponEdit } from './Coupons';
 import WhatsApp from './WhatsApp';
+import Banners from './Banners';
 import Icon from '../../components/Icon';
 import TwoStepCode from '../../components/TwoStepCode';
 
@@ -82,7 +83,7 @@ function AdminLogin({ notice = '' }) {
 // The menu in three groups, most-used first.
 const NAV = [
   ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders'], ['/admin/shipping', 'Shipping'], ['/admin/coupons', 'Coupons']]],
-  ['Catalogue', [['/admin/products', 'Products'], ['/admin/reviews', 'Reviews'], ['/admin/journal', 'Journal']]],
+  ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews'], ['/admin/journal', 'Journal']]],
   ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries'], ['/admin/subscribers', 'Newsletter']]],
 ];
 
@@ -131,6 +132,7 @@ export default function Admin() {
           <Route path="products" element={<ProductList />} />
           <Route path="products/:id" element={<ProductEdit />} />
           <Route path="reviews" element={<Reviews />} />
+          <Route path="banners" element={<Banners />} />
           <Route path="journal" element={<PostList />} />
           <Route path="journal/:id" element={<PostEdit />} />
           <Route path="coupons" element={<CouponList />} />

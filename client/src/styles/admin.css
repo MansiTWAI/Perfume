@@ -584,3 +584,22 @@ button.a-link { background: none; border: 0; padding: 0; cursor: pointer; font: 
   .a-stepper { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .a-stepper li:not(.is-on) { display: none; }
 }
+
+/* App banners (1080 x 540): picture on the left, details on the right. */
+.a-banner { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.a-banner-media { position: relative; display: grid; gap: 10px; }
+.a-banner-media img, .a-banner-drop { width: 100%; height: auto; aspect-ratio: 2 / 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--a-line); background: #f4ede1; display: block; }
+.a-banner-media .a-pill { position: absolute; top: 10px; left: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+.a-banner-drop { display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--a-muted); font-size: 13px; border-style: dashed; }
+.a-banner-choose { justify-self: start; }
+.a-banner .a-form h3 { margin: 0 0 4px; }
+.a-file { position: relative; overflow: hidden; cursor: pointer; }
+.a-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.a-banner .a-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.a-banner .a-grid2, .a-banner .a-grid3 { align-items: start; }
+@media (max-width: 1000px) {
+  .a-banner { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .a-banner .a-grid3 { grid-template-columns: 1fr; }
+}
