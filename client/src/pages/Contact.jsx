@@ -179,7 +179,7 @@ export default function Contact() {
                 <label>{t('Email')}<input type="email" dir="ltr" required value={form.email} onChange={set('email')} autoComplete="email" /></label>
               </div>
               <div className="form-row">
-                <label>{t('Mobile (WhatsApp)')}<input type="tel" dir="ltr" required inputMode="tel" value={form.phone} onChange={set('phone')} autoComplete="tel" placeholder="+91 98765 43210" pattern="[+0-9 ()-]{10,20}" /></label>
+                <label>{t('Mobile (WhatsApp)')}<input type="tel" dir="ltr" required inputMode="tel" value={form.phone} onChange={set('phone')} autoComplete="tel" placeholder="+91 98765 43210" pattern="[+0-9 \(\)\-]{10,20}" /></label>
                 <label>{t('Topic')}
                   <select value={form.topic} onChange={set('topic')}>
                     {TOPICS.map((x) => <option key={x} value={x}>{t(x)}</option>)}

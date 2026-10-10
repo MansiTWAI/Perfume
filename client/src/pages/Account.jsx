@@ -62,7 +62,7 @@ export function AuthForm() {
       <label>{t('Email')}<input type="email" dir="ltr" required value={f.email} onChange={set('email')} autoComplete="email" /></label>
       {mode === 'register' && (
         <label>{t('Mobile (WhatsApp)')}
-          <input type="tel" dir="ltr" required inputMode="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" placeholder="+91 98765 43210" pattern="[+0-9 ()-]{10,20}" />
+          <input type="tel" dir="ltr" required inputMode="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" placeholder="+91 98765 43210" pattern="[+0-9 \(\)\-]{10,20}" />
           <small className="field-hint">{t('For order updates on WhatsApp. One account per number.')}</small>
         </label>
       )}
