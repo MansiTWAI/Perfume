@@ -11,7 +11,7 @@ import { generate, textOf, callsOf } from './gemini.js';
 import { inspect } from './redact.js';
 import { CUSTOMER_TOOLS, runCustomerTool, upsertLead } from './tools.js';
 import WhatsAppContact from '../../models/WhatsAppContact.js';
-import { otpAvailable } from '../otp.js';
+import { whatsappAvailable } from '../otp.js';
 import { CONTACT } from './policies.js';
 
 export const SESSION_RX = /^[A-Za-z0-9_-]{32}$/;
@@ -128,7 +128,7 @@ export async function chatTurn({ sessionId, message, user, regionCode, page }) {
 
   // Once a shopper shows interest, offer WhatsApp updates once in this chat
   // (the website shows a sign-up card that verifies the number by code).
-  if (session.lead && !session.whatsappOffered && otpAvailable() && !(await WhatsAppContact.exists({ lead: session.lead, subscribed: true }))) {
+  if (session.lead && !session.whatsappOffered && whatsappAvailable() && !(await WhatsAppContact.exists({ lead: session.lead, subscribed: true }))) {
     session.whatsappOffered = true;
     ctx.actions.push({ type: 'whatsapp_optin' });
   }

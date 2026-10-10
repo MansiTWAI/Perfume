@@ -123,6 +123,14 @@
 .admin-card img { justify-self: center; }
 .admin-card h1 { font: 500 28px/1 var(--display); text-align: center; margin-bottom: 6px; }
 .admin-card .a-link { justify-self: center; font-size: 14px; }
+/* Two-step sign-in: the emailed code. */
+.a-step { text-align: center; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--a-accent); margin: -4px 0 2px; }
+.a-2fa-form { display: grid; gap: 14px; }
+.a-2fa-form > p { margin: 0; line-height: 1.5; }
+.admin-card input.a-code-input { font: 600 26px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .5em; text-align: center; padding: 14px 10px 14px calc(10px + .5em); }
+.a-code-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.a-link-btn { background: none; border: 0; padding: 4px 0; color: var(--a-accent); font: inherit; font-size: 13.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.a-link-btn:disabled { color: var(--a-muted); text-decoration: none; cursor: default; }
 .a-error { color: #a4412b; font-size: 14px; }
 @media (max-width: 1100px) {
   .a-edit, .a-two { grid-template-columns: 1fr; }

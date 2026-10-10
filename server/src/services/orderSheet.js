@@ -7,7 +7,6 @@ import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import { ORDER_STAGES } from '../config/commerce.js';
 import { addTableSheet, addNotesSheet, cellText } from './excel.js';
-import { COURIERS, courierByName, trackingUrl, isUrl } from '../../../shared/couriers.js';
 
 export const PAYMENT_STATUSES = ['pending', 'paid', 'refunded'];
 export const MAX_IMPORT_ROWS = 20000;
@@ -37,9 +36,9 @@ export const ORDER_COLUMNS = [
   { key: 'paymentStatus', header: 'Payment Status', width: 15, editable: { path: 'paymentStatus', options: PAYMENT_STATUSES } },
   { key: 'status', header: 'Order Status', width: 17, editable: { path: 'status', options: ORDER_STAGES } },
   { key: 'statusNote', header: 'Status Note', width: 26, editable: { note: true, max: 300 }, note: 'Optional. Saved in the tracking history when the Order Status changes.' },
-  { key: 'carrier', header: 'Courier', width: 16, editable: { path: 'carrier', max: 80, courier: true }, note: 'Pick from the list, or type another courier name.' },
-  { key: 'trackingNumber', header: 'Tracking Number', width: 18, editable: { path: 'trackingNumber', max: 80 }, note: 'The courier AWB / consignment number. For couriers in the list the customer tracking link is built from it automatically.' },
-  { key: 'carrierUrl', header: 'Courier Tracking URL', width: 30, editable: { path: 'carrierUrl', max: 500, url: true }, note: 'Optional. Leave blank: for couriers in the list the link is made from the Tracking Number.' },
+  { key: 'carrier', header: 'Courier', width: 16, readOnlyCheck: true, note: 'Set by Delhivery when the shipment is created. Read-only.' },
+  { key: 'trackingNumber', header: 'Tracking Number', width: 18, readOnlyCheck: true, note: 'The Delhivery AWB. Read-only.' },
+  { key: 'carrierUrl', header: 'Courier Tracking URL', width: 30, readOnlyCheck: true, note: 'Set by Delhivery. Read-only.' },
   { key: 'eta', header: 'Expected Delivery', width: 18, editable: { path: 'eta', max: 60, eta: true } },
   { key: 'notes', header: 'Internal Notes', width: 30, editable: { path: 'notes', max: 2000 } },
   { key: 'gift', header: 'Signature Card', width: 26, wrap: true },
@@ -90,7 +89,7 @@ export function orderToRow(o) {
   };
 }
 
-const VALIDATIONS = { status: ORDER_STAGES, paymentStatus: PAYMENT_STATUSES, carrier: COURIERS.map((c) => c.name) };
+const VALIDATIONS = { status: ORDER_STAGES, paymentStatus: PAYMENT_STATUSES };
 
 export function instructions() {
   return [
@@ -352,19 +351,6 @@ export async function planOrderImport(sheet) {
         rowOk = false;
         continue;
       }
-      // The tracking link is optional and never blocks a row. A tracking number
-      // typed here is kept as the Tracking Number; anything else is skipped.
-      if (ed.url && v && !isUrl(v)) {
-        const asNumber = /^[A-Za-z0-9-]{4,40}$/.test(v) && !('trackingNumber' in values);
-        if (asNumber && v !== (order.trackingNumber || '')) {
-          set.trackingNumber = v;
-          diffs.push({ field: 'Tracking Number', from: String(order.trackingNumber || ''), to: v });
-          warnings.push({ row, orderId: id, field: col.header, message: `"${v}" is not a link, so it was saved as the Tracking Number.` });
-        } else if (!asNumber) {
-          warnings.push({ row, orderId: id, field: col.header, message: `"${v}" is not a link (links start with https://), so it was left out. This column is optional.` });
-        }
-        continue;
-      }
       const current = get(order, ed.path) ?? '';
       if (String(current) !== v) {
         set[ed.path] = v;
@@ -373,36 +359,17 @@ export async function planOrderImport(sheet) {
     }
     // The same rules as Admin → Orders: Razorpay owns the payment status of
     // online payments, reopening a cancelled order must reserve stock again,
-    // and a booked Delhivery shipment owns the courier, AWB and address.
+    // and a booked Delhivery shipment owns the address.
     if (rowOk) {
       const fail = (field, message) => { err(field, message); rowOk = false; };
       const keys = Object.keys(set);
       const booked = order.shipment?.awb && order.shipment.status !== 'cancelled';
       if ('paymentStatus' in set && order.payment?.providerPaymentId) fail('paymentStatus', 'This order was paid online, so its payment status follows Razorpay. To return money, use Refund in Admin → Orders.');
       if ('status' in set && order.status === 'Cancelled') fail('status', 'This order is cancelled. Reopen it in Admin → Orders, so its items are reserved from stock again.');
-      if (booked && keys.some((k) => ['carrier', 'trackingNumber', 'carrierUrl'].includes(k))) fail('trackingNumber', 'This order ships with Delhivery, so its courier and AWB are set automatically. Cancel the Delhivery shipment first to use another courier.');
       if (booked && keys.some((k) => k === 'customer.phone' || k.startsWith('customer.address'))) fail('line1', 'The parcel is already booked with Delhivery for the current address. Cancel the shipment in Admin → Shipping before changing it.');
     }
     if (!rowOk) continue;
 
-    // Couriers from the list are saved with their usual spelling, and their
-    // tracking link is built from the tracking number unless one was given.
-    if (set.carrier && courierByName(set.carrier)) {
-      const canonical = courierByName(set.carrier).name;
-      if (canonical !== set.carrier) diffs.find((d) => d.field === 'Courier').to = canonical;
-      set.carrier = canonical;
-      if (canonical === order.carrier) {
-        delete set.carrier;
-        diffs.splice(diffs.findIndex((d) => d.field === 'Courier'), 1);
-      }
-    }
-    if (('carrier' in set || 'trackingNumber' in set) && !('carrierUrl' in set)) {
-      const link = trackingUrl(set.carrier ?? order.carrier, set.trackingNumber ?? order.trackingNumber);
-      if (link && link !== order.carrierUrl) {
-        set.carrierUrl = link;
-        diffs.push({ field: 'Courier Tracking URL', from: String(order.carrierUrl || ''), to: link });
-      }
-    }
 
     const statusChange = set.status ? { status: set.status, note: note || 'Updated by the house.' } : null;
     if (note && !statusChange) warnings.push({ row, orderId: id, field: 'Status Note', message: 'The status note was ignored because the Order Status did not change.' });

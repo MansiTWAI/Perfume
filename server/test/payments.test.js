@@ -500,3 +500,71 @@ describe('customer view', () => {
     void customer;
   });
 });
+
+const { expireUnpaidOrders } = await import('../src/services/payments.js');
+const { default: Coupon } = await import('../src/models/Coupon.js');
+describe('online orders never paid', () => {
+  const later = () => Date.now() + 61 * 60000;
+
+  test('released after the hold: cancelled, stock and coupon given back; never marked paid', async () => {
+    const p = await makeProduct({ stock: 5 });
+    await Coupon.create({ code: 'HOLD10', type: 'percent', percent: 10, active: true });
+    const placed = await placeOnline([{ slug: p.slug, qty: 2 }], { extra: { couponCode: 'HOLD10' } });
+    assert.equal(placed.status, 201);
+    await startPay(placed.body.orderNumber); // window opened, then closed without paying
+    assert.equal((await Product.findById(p._id)).stock, 3);
+    assert.equal(await expireUnpaidOrders(), 0, 'not before the hold ends');
+    assert.equal(await expireUnpaidOrders(later()), 1);
+    const o = await load(placed.body.orderNumber);
+    assert.equal(o.status, 'Cancelled');
+    assert.equal(o.paymentStatus, 'pending');
+    assert.equal((await Product.findById(p._id)).stock, 5);
+    assert.equal((await Coupon.findOne({ code: 'HOLD10' })).usedCount, 0);
+    assert.equal(await expireUnpaidOrders(later()), 0, 'once only');
+  });
+
+  test('a payment Razorpay took meanwhile is applied instead of cancelling', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    const s = await startPay(placed.body.orderNumber);
+    pay(s.body.razorpayOrderId); // captured at Razorpay, browser never reported back
+    assert.equal(await expireUnpaidOrders(later()), 0);
+    const o = await load(placed.body.orderNumber);
+    assert.equal(o.paymentStatus, 'paid');
+    assert.equal(o.status, 'Confirmed');
+  });
+
+  test('Razorpay unreachable: the order is left alone for the next round', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    await startPay(placed.body.orderNumber);
+    rzp.down = true;
+    assert.equal(await expireUnpaidOrders(later()), 0);
+    rzp.down = false;
+    assert.equal((await load(placed.body.orderNumber)).status, 'Order Placed');
+  });
+
+  test('failed and cancelled payments never confirm the order', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    const s = await startPay(placed.body.orderNumber);
+    const { payment, response } = pay(s.body.razorpayOrderId, { status: 'failed' });
+    assert.equal((await verify(placed.body.orderNumber, response)).status, 402);
+    await webhook('payment.failed', { payment: { entity: payment } });
+    let o = await load(placed.body.orderNumber);
+    assert.equal(o.paymentStatus, 'pending');
+    assert.equal(o.status, 'Order Placed');
+    assert.equal(await expireUnpaidOrders(later()), 1);
+    o = await load(placed.body.orderNumber);
+    assert.equal(o.status, 'Cancelled');
+    assert.equal(o.paymentStatus, 'pending');
+  });
+
+  test('cash on delivery orders are never released by this', async () => {
+    const p = await makeProduct();
+    const r = await http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: customer() } });
+    assert.equal(r.status, 201);
+    assert.equal(await expireUnpaidOrders(later()), 0);
+    assert.equal((await load(r.body.orderNumber)).status, 'Order Placed');
+  });
+});

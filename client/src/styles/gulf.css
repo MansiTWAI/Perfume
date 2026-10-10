@@ -50,7 +50,7 @@ h3:lang(ar),
 .lang-btn:hover { color: var(--ivory); background: rgba(215, 195, 160, 0.12); }
 /* Small phones: the header is full; the switch lives in the menu instead. */
 .lang-btn-menu { display: none; }
-@media (max-width: 480px) {
+@media (max-width: 1199px) {
   .site-header .lang-btn { display: none; }
   .lang-btn-menu { display: inline-grid; place-items: center; border: 1px solid rgba(215, 195, 160, 0.3); }
 }

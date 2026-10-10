@@ -6,6 +6,7 @@ import { useLive } from '../hooks/useLive';
 import { api } from '../lib/api';
 import { formatDate, money, whatsappLink } from '../lib/format';
 import WhatsAppUpdates from '../components/WhatsAppUpdates';
+import TwoStepCode from '../components/TwoStepCode';
 
 export function AuthForm() {
   const { login, t } = useStore();
@@ -15,6 +16,7 @@ export function AuthForm() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState(null);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   async function submit(e) {
@@ -24,12 +26,23 @@ export function AuthForm() {
     try {
       const signIn = { email: f.email, password: f.password };
       const d = await api(`/auth/${mode === 'login' ? 'login' : 'register'}`, { method: 'POST', body: mode === 'login' ? signIn : f });
+      if (d.twoFactorRequired) return setChallenge(d);
       login(d.token, d.user);
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
+  }
+
+  if (challenge) {
+    return (
+      <TwoStepCode
+        challenge={challenge}
+        classes={{ form: 'form auth-form', lede: 'field-hint', error: 'form-error', note: 'field-hint', primary: 'btn btn-primary btn-block', row: 'auth-code-row', link: 'text-link' }}
+        onCancel={(msg) => { setChallenge(null); setError(msg || ''); }}
+      />
+    );
   }
 
   return (

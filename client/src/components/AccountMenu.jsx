@@ -4,7 +4,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import Icon from './Icon';
 
-// The profile icon in the header: a small menu with the account shortcuts.
+// The signed-in customer's monogram (first letter of the name, else the email).
+export function Monogram({ user, className = '' }) {
+  const letter = (user?.name || user?.email || '?').trim().charAt(0).toUpperCase();
+  return <span className={`avatar ${className}`} aria-hidden="true">{letter}</span>;
+}
+
+// The profile button in the header, on every screen size: a monogram when
+// signed in, the outline otherwise. Opens a small menu with the account
+// shortcuts (or sign in / create account).
 export default function AccountMenu() {
   const { user, logout, t } = useStore();
   const [open, setOpen] = useState(false);
@@ -39,19 +47,21 @@ export default function AccountMenu() {
     };
   }, [open]);
 
-  const first = user?.name?.split(' ')[0];
+  const first = user?.name?.split(' ')[0] || '';
+  const item = (to, icon, label) => (
+    <Link role="menuitem" to={to}><Icon name={icon} size={18} />{t(label)}</Link>
+  );
   return (
     <div className="acct-menu" ref={box}>
       <button
         ref={button}
-        className={`icon-btn ${user ? 'is-signed-in' : ''}`}
+        className={`icon-btn acct-btn${open ? ' is-open' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t(user ? 'Your account' : 'Sign in')}
         onClick={() => setOpen((o) => !o)}
       >
-        <Icon name="user" />
-        {user && <span className="acct-dot" aria-hidden="true" />}
+        {user ? <Monogram user={user} /> : <Icon name="user" />}
       </button>
       <AnimatePresence>
         {open && (
@@ -66,26 +76,33 @@ export default function AccountMenu() {
             {user ? (
               <>
                 <div className="acct-menu-head">
-                  <b>{t('Hello, {name}', { name: first })}</b>
-                  <small dir="ltr">{user.email}</small>
+                  <Monogram user={user} className="avatar-lg" />
+                  <span>
+                    <b>{first ? t('Hello, {name}', { name: first }) : t('Your account')}</b>
+                    <small dir="ltr">{user.email}</small>
+                  </span>
                 </div>
-                <Link role="menuitem" to="/profile/orders">{t('My orders')}</Link>
-                <Link role="menuitem" to="/profile/edit">{t('Edit profile')}</Link>
-                <Link role="menuitem" to="/profile">{t('Account overview')}</Link>
-                <Link role="menuitem" to="/track">{t('Track an order')}</Link>
-                {user.role === 'admin' && <Link role="menuitem" to="/admin">{t('Admin studio')}</Link>}
-                <button role="menuitem" type="button" className="acct-menu-out" onClick={() => { logout(); setOpen(false); navigate('/account'); }}>{t('Sign out')}</button>
+                <div className="acct-menu-list">
+                  {item('/profile/orders', 'package', 'My orders')}
+                  {item('/profile/edit', 'user', 'Edit profile')}
+                  {item('/profile', 'star', 'Account overview')}
+                  {item('/track', 'truck', 'Track an order')}
+                  {user.role === 'admin' && item('/admin', 'grid', 'Admin studio')}
+                </div>
+                <div className="acct-menu-list acct-menu-foot">
+                  <button role="menuitem" type="button" className="acct-menu-out" onClick={() => { logout(); setOpen(false); navigate('/account'); }}>
+                    <Icon name="sign-out" size={18} />{t('Sign out')}
+                  </button>
+                </div>
               </>
             ) : (
-              <>
-                <div className="acct-menu-head">
-                  <b>{t('Your account')}</b>
-                  <small>{t('See your orders and check out faster.')}</small>
-                </div>
+              <div className="acct-menu-guest">
+                <b>{t('Your account')}</b>
+                <small>{t('See your orders and check out faster.')}</small>
                 <Link role="menuitem" to="/account" className="acct-menu-cta">{t('Sign in')}</Link>
-                <Link role="menuitem" to="/account?new=1">{t('Create account')}</Link>
-                <Link role="menuitem" to="/track">{t('Track an order')}</Link>
-              </>
+                <Link role="menuitem" to="/account?new=1" className="acct-menu-line">{t('Create account')}</Link>
+                <Link role="menuitem" to="/track" className="acct-menu-track">{t('Track an order')}</Link>
+              </div>
             )}
           </motion.div>
         )}

@@ -16,31 +16,62 @@ import Shipping from './Shipping';
 import { CouponList, CouponEdit } from './Coupons';
 import WhatsApp from './WhatsApp';
 import Icon from '../../components/Icon';
+import TwoStepCode from '../../components/TwoStepCode';
 
-function AdminLogin() {
-  const { login } = useStore();
+const CODE_STYLE = { form: 'a-2fa-form', lede: 'a-muted', code: 'a-code-input', error: 'a-error', note: 'a-hint', primary: 'a-btn a-primary', row: 'a-code-row', link: 'a-link-btn' };
+
+// Step 1: email and password. Step 2: the code we email (TwoStepCode).
+function AdminLogin({ notice = '' }) {
+  const { logout } = useStore();
   const [f, setF] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(notice);
+  const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState(null);
   async function submit(e) {
     e.preventDefault();
     setError('');
+    setBusy(true);
     try {
       const d = await api('/auth/login', { method: 'POST', body: f });
-      if (d.user.role !== 'admin') throw new Error('This account does not have admin access.');
-      login(d.token, d.user);
+      if (d.twoFactorRequired) {
+        setChallenge(d);
+        setF((x) => ({ ...x, password: '' }));
+      } else {
+        throw new Error('This account does not have admin access.');
+      }
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusy(false);
     }
+  }
+  const brand = <><img src="/media/emblem.webp" alt="" width="110" className="emblem-tile" /><h1>Admin studio</h1></>;
+  if (challenge) {
+    return (
+      <div className="admin-login">
+        <div className="admin-card admin-card-2fa">
+          {brand}
+          <p className="a-step">Step 2 of 2 · Check your email</p>
+          <TwoStepCode
+            challenge={challenge}
+            classes={CODE_STYLE}
+            onDone={(u) => { if (u.role !== 'admin') { logout(); setChallenge(null); setError('This account does not have admin access.'); } }}
+            onCancel={(msg) => { setChallenge(null); setError(msg || ''); }}
+          />
+        </div>
+      </div>
+    );
   }
   return (
     <div className="admin-login">
       <form onSubmit={submit} className="admin-card">
-        <img src="/media/emblem.webp" alt="" width="110" className="emblem-tile" />
-        <h1>Admin studio</h1>
+        {brand}
+        <p className="a-step">Step 1 of 2 · Password</p>
         <label>Email<input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="username" /></label>
         <label>Password<input type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="current-password" /></label>
-        {error && <p className="a-error">{error}</p>}
-        <button className="a-btn a-primary">Sign in</button>
+        {error && <p className="a-error" role="alert">{error}</p>}
+        <button className="a-btn a-primary" disabled={busy}>{busy ? 'One moment…' : 'Continue'}</button>
+        <p className="a-muted a-hint">For your security, we email you a code after your password.</p>
         <Link to="/" className="a-link"><Icon name="arrow-left" size={16} className="flip-rtl" /> Back to the store</Link>
       </form>
     </div>
@@ -58,11 +89,18 @@ export default function Admin() {
   const { user, logout } = useStore();
   const nav = useRef(null);
   const { pathname } = useLocation();
+  const [notice, setNotice] = useState('');
+  // A session from before two-step sign-in: sign out and ask for the code.
+  useEffect(() => {
+    const onMfa = () => { logout(); setNotice('For your security, please sign in again. We will email you a code.'); };
+    addEventListener('ab:mfa-required', onMfa);
+    return () => removeEventListener('ab:mfa-required', onMfa);
+  }, [logout]);
   // On narrow screens the menu scrolls sideways: keep the current page in view.
   useEffect(() => {
     nav.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [pathname]);
-  if (!user || user.role !== 'admin') return <AdminLogin />;
+  if (!user || user.role !== 'admin') return <AdminLogin notice={notice} />;
   return (
     <div className="admin">
       <Helmet><title>Admin studio | AL BARAKAH LIFESTYLE</title><meta name="robots" content="noindex" /></Helmet>

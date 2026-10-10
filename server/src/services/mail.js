@@ -1,4 +1,4 @@
-// Outgoing email (password reset). Configure SMTP in the server environment:
+// Outgoing email (sign-in codes, password reset, shipping updates). Configure SMTP in the server environment:
 // SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS, MAIL_FROM, and
 // SMTP_SECURE=true for port 465. Works with Gmail (app password), Zoho,
 // Brevo, Amazon SES and others. MAIL_TRANSPORT=memory keeps messages in
@@ -43,6 +43,36 @@ export function resetEmail({ name, link }) {
 <p>Use the button below to choose a new password. The link works once and expires in one hour.</p>
 <p style="margin:28px 0"><a href="${esc(link)}" style="background:#4b0e14;color:#f6efe3;padding:14px 26px;text-decoration:none;letter-spacing:.12em;font-size:13px">CHOOSE A NEW PASSWORD</a></p>
 <p style="color:#6b5f57;font-size:13px">If you did not ask for this, you can ignore this email; your password stays the same.</p>
+</div>`,
+  };
+}
+
+// A one-time code: customer sign-in ('login') or the staff two-step code ('staff').
+export function codeEmail({ code, minutes, kind = 'login' }) {
+  const staff = kind === 'staff';
+  const subject = staff ? `${code} is your AL BARAKAH admin sign-in code` : `${code} is your AL BARAKAH LIFESTYLE sign-in code`;
+  const lead = staff ? 'Use this code to finish signing in to the admin studio.' : 'Use this code to sign in to your account.';
+  const warn = staff
+    ? 'If you did not just sign in, someone has your password: change it now and tell the team.'
+    : 'If you did not ask for this code, you can ignore this email.';
+  return {
+    subject,
+    text: `${lead}
+
+${code}
+
+It expires in ${minutes} minutes and works once. Never share it: we will never ask you for it.
+
+${warn}
+
+AL BARAKAH LIFESTYLE`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#2a1a17">
+<p style="letter-spacing:.2em;color:#8a6424;font-size:12px">AL BARAKAH LIFESTYLE</p>
+<h1 style="font-family:Georgia,serif;font-weight:400;color:#4b0e14">${staff ? 'Admin sign-in code' : 'Your sign-in code'}</h1>
+<p>${esc(lead)}</p>
+<p style="margin:24px 0;font-size:32px;letter-spacing:.35em;font-weight:bold;color:#4b0e14">${esc(code)}</p>
+<p style="color:#6b5f57;font-size:13px">It expires in ${Number(minutes)} minutes and works once. Never share it: we will never ask you for it.</p>
+<p style="color:#6b5f57;font-size:13px">${esc(warn)}</p>
 </div>`,
   };
 }

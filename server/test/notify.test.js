@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import {
   http, reset, close, makeUser, makeProduct, customer, Order, Product, Lead, ChatSession, Coupon,
-  WhatsAppContact, WhatsAppMessage, WhatsAppCampaign, whatsapp, wa, waHook,
+  WhatsAppContact, WhatsAppMessage, WhatsAppCampaign, whatsapp, wa, waHook, outbox,
 } from './helpers.js';
 
 after(close);
@@ -116,16 +116,22 @@ describe('WhatsApp subscription without a code', () => {
     assert.equal(on.body.subscribed, true);
   });
 
-  test('sign-in by code still works after sharing the code helpers', async () => {
+  test('sign-in by code: the code goes to the account email, never by WhatsApp', async () => {
     const { user } = await makeUser('customer');
     user.phone = '9876543340';
     await user.save();
     await ageCodes();
+    const before = wa.sent.length;
     const sent = await http('POST', '/api/auth/send-otp', { body: { phone: '9876543340', purpose: 'login' } });
     assert.equal(sent.status, 200);
-    const wrong = String((Number(sent.body.devCode) + 1) % 1e6).padStart(6, '0');
+    assert.equal(sent.body.devCode, undefined);
+    assert.equal(wa.sent.length, before, 'no WhatsApp message');
+    const mail = outbox.filter((m) => m.to === user.email).at(-1);
+    assert.ok(mail, 'code emailed to the account');
+    const code = mail.subject.match(/\d{6}/)[0];
+    const wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
     assert.equal((await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: wrong } })).body.code, 'OTP_INVALID');
-    const ok = await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: sent.body.devCode } });
+    const ok = await http('POST', '/api/auth/verify-otp', { body: { phone: '9876543340', purpose: 'login', otp: code } });
     assert.equal(ok.status, 200);
     assert.ok(ok.body.token);
   });

@@ -265,3 +265,22 @@ describe('Excel import', () => {
     assert.match(JSON.stringify(b.preview.errors), /Razorpay|Delhivery/);
   });
 });
+
+describe('coupons listed in the bag', () => {
+  test('signed in: a coupon used as often as allowed is no longer listed; the server still decides', async () => {
+    const { default: Coupon } = await import('../src/models/Coupon.js');
+    await Coupon.create({ code: 'ONCE10', type: 'percent', percent: 10, active: true, showOnSite: true, perUserLimit: 1 });
+    await Coupon.create({ code: 'HIDDEN5', type: 'percent', percent: 5, active: true, showOnSite: false });
+    const p = await makeProduct();
+    const { user, token } = await makeUser('customer', 'coupon-user@example.test');
+    const codes = async (t) => (await http('GET', '/api/coupons?region=IN', { token: t })).body.items.map((c) => c.code);
+    assert.deepEqual(await codes(token), ['ONCE10']);
+    assert.deepEqual(await codes(), ['ONCE10']);
+    const placed = await http('POST', '/api/orders', { token, body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: customer(user.email), couponCode: 'ONCE10' } });
+    assert.equal(placed.status, 201);
+    assert.deepEqual(await codes(token), [], 'used up for this customer');
+    assert.deepEqual(await codes(), ['ONCE10'], 'still listed for others');
+    const again = await http('POST', '/api/coupons/check', { token, body: { code: 'ONCE10', region: 'IN', items: [{ slug: p.slug, qty: 1 }] } });
+    assert.equal(again.body.code, 'COUPON_ALREADY_USED');
+  });
+});

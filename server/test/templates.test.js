@@ -3,7 +3,6 @@
 // sending. WhatsApp and Gemini are faked.
 import { test, describe, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import mongoose from 'mongoose';
 import {
   http, reset, close, makeUser, makeProduct, Product, Coupon, Lead, WhatsAppContact, WhatsAppMessage, WhatsAppCampaign, whatsapp, wa, gemini,
 } from './helpers.js';
@@ -11,12 +10,7 @@ import {
 after(close);
 beforeEach(reset);
 
-const ageCodes = () => mongoose.connection.collection('otps').updateMany({}, { $set: { createdAt: new Date(Date.now() - 3600e3) } });
-async function sub(phone, name = 'Aisha Khan', extra = {}) {
-  await ageCodes();
-  const code = (await http('POST', '/api/whatsapp/subscribe/code', { body: { phone } })).body.devCode;
-  return http('POST', '/api/whatsapp/subscribe', { body: { phone, name, consent: true, code, ...extra } });
-}
+const sub = (phone, name = 'Aisha Khan', extra = {}) => http('POST', '/api/whatsapp/subscribe', { body: { phone, name, consent: true, ...extra } });
 const W = (token) => ({
   get: (p) => http('GET', `/api/admin/whatsapp${p}`, { token }),
   post: (p, body) => http('POST', `/api/admin/whatsapp${p}`, { token, body }),
@@ -221,5 +215,22 @@ describe('sending with templates', () => {
     assert.equal(opts.products[0].slug, 'zafreon');
     assert.deepEqual(opts.products[0].images.map((i) => i.ok), [false, true]);
     assert.equal(opts.coupons[0].code, 'WELCOME10');
+  });
+});
+
+describe('app API (/api/v1)', () => {
+  test("a template's own message stays in data, not taken as the status message", async () => {
+    const { token } = await setup();
+    const made = await http('POST', '/api/v1/admin/whatsapp/templates', { token, body: { name: 'Envelope', message: 'Hello {name}, {product} is back.', product: 'zafreon' } });
+    assert.equal(made.status, 201);
+    assert.equal(made.body.success, true);
+    assert.equal(made.body.message, 'Created successfully');
+    assert.equal(made.body.data.message, 'Hello {name}, {product} is back.');
+    const got = await http('GET', `/api/v1/admin/whatsapp/templates/${made.body.data.id}`, { token });
+    assert.equal(got.body.data.message, 'Hello {name}, {product} is back.');
+    // A plain status reply still uses its message.
+    const s = await http('POST', '/api/v1/whatsapp/subscribe', { body: { phone: '+919876500111', consent: true } });
+    assert.match(s.body.message, /WhatsApp/);
+    assert.equal(s.body.data.subscribed, true);
   });
 });

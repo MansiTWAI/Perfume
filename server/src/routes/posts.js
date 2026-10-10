@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Post from '../models/Post.js';
 import Product from '../models/Product.js';
-import { optionalAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
+import { optionalAuth, requireAdmin, asyncHandler, isAdminSession } from '../middleware/auth.js';
 import { slugify, escapeRegex } from '../utils.js';
 
 const r = Router();
@@ -10,7 +10,7 @@ r.get(
   '/',
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const isAdmin = req.user?.role === 'admin' && req.query.all === '1';
+    const isAdmin = isAdminSession(req) && req.query.all === '1';
     const filter = isAdmin ? {} : { status: 'published' };
     if (req.query.category && req.query.category !== 'All') filter.category = req.query.category;
     if (req.query.q) {
@@ -54,7 +54,7 @@ r.get(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const post = await Post.findOne({ slug: req.params.slug });
-    if (!post || (post.status !== 'published' && req.user?.role !== 'admin')) {
+    if (!post || (post.status !== 'published' && !isAdminSession(req))) {
       return res.status(404).json({ message: 'This article could not be found.' });
     }
     const base = { status: 'published', _id: { $ne: post._id } };

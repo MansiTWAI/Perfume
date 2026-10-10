@@ -7,10 +7,9 @@ import Product from '../models/Product.js';
 import User from '../models/User.js';
 import OrderImport from '../models/OrderImport.js';
 import Address from '../models/Address.js';
-import { optionalAuth, requireAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, requireAdmin, asyncHandler, isAdminSession } from '../middleware/auth.js';
 import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor, statusKey } from '../config/commerce.js';
 import { discountFor, releaseCoupon } from '../services/coupons.js';
-import { trackingUrl, isUrl } from '../../../shared/couriers.js';
 import { placeOrder } from '../services/placeOrder.js';
 import { reserve, release } from '../services/orderStock.js';
 import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
@@ -189,7 +188,7 @@ r.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res, next) => {
-    if (req.user.role === 'admin') return next();
+    if (isAdminSession(req)) return next();
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const filter = ownedBy(req.user);
@@ -527,8 +526,10 @@ r.get(
   })
 );
 
-// Admin: change an order's status, courier details, payment status, notes or
-// customer details. Also used by PATCH /admin/orders/:id/status.
+// Admin: change an order's status, expected delivery, payment status, notes
+// or customer details. Also used by PATCH /admin/orders/:id/status. The
+// courier and tracking come only from the Delhivery integration
+// (services/shipping.js); they cannot be typed in by hand.
 export const updateOrder = asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found.' });
@@ -574,29 +575,11 @@ export const updateOrder = asyncHandler(async (req, res) => {
       order.status = status;
       order.history.push({ status, note: text(note, 300) });
     }
-    // A live Delhivery shipment owns the courier fields.
-    const viaDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
-    if (viaDelhivery && ((carrier !== undefined && text(carrier, 80) !== order.carrier) || (trackingNumber !== undefined && text(trackingNumber, 80) !== order.trackingNumber))) {
-      problems.push('This order ships with Delhivery, so the courier and AWB are set automatically. Cancel the Delhivery shipment first to use another courier.');
-    }
-    if (carrier !== undefined && !viaDelhivery) order.carrier = text(carrier, 80);
-    if (trackingNumber !== undefined && !viaDelhivery) order.trackingNumber = text(trackingNumber, 80);
-    let typedLink = false;
-    if (carrierUrl !== undefined) {
-      const link = text(carrierUrl, 500);
-      if (link && !isUrl(link)) {
-        // A tracking number typed into the link field: keep it as the number.
-        if (/^[A-Za-z0-9-]{4,40}$/.test(link) && !order.trackingNumber) order.trackingNumber = link;
-        else problems.push('The courier tracking link must start with http:// or https://.');
-      } else {
-        order.carrierUrl = link;
-        typedLink = !!link;
-      }
-    }
-    // Known courier + tracking number: build the customer's tracking link.
-    const built = trackingUrl(order.carrier, order.trackingNumber);
-    if (built && !typedLink) order.carrierUrl = built;
-    if (order.carrierUrl && !isUrl(order.carrierUrl)) order.carrierUrl = '';
+    // Courier and tracking are Delhivery's (create the shipment from the
+    // order or Admin → Shipping). Sending the values already saved is fine.
+    const typedCourier = [['carrier', carrier, 80], ['trackingNumber', trackingNumber, 80], ['carrierUrl', carrierUrl, 500]]
+      .some(([k, v, max]) => v !== undefined && text(v, max) !== String(order[k] || ''));
+    if (typedCourier) problems.push('Courier and tracking are set by Delhivery. Create the Delhivery shipment for this order instead.');
     if (eta !== undefined) order.eta = text(eta, 60);
     // Online payments are settled by Razorpay (and refunded with the refund
     // action), so their status cannot be typed over by hand.
@@ -641,7 +624,7 @@ r.get(
   asyncHandler(async (req, res) => {
     const key = String(req.params.orderId).trim();
     const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
-    let o = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
+    let o = await Order.findOne({ $and: [match, isAdminSession(req) ? {} : ownedBy(req.user)] }).lean();
     if (!o) return res.status(404).json({ message: 'We could not find this order in your account.' });
     // Fresh from Delhivery when stale (the server asks, never the browser).
     o = await freshen(o);
@@ -673,7 +656,7 @@ r.get(
   asyncHandler(async (req, res) => {
     const key = String(req.params.orderId).trim();
     const match = mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() };
-    const order = await Order.findOne({ $and: [match, req.user.role === 'admin' ? {} : ownedBy(req.user)] }).lean();
+    const order = await Order.findOne({ $and: [match, isAdminSession(req) ? {} : ownedBy(req.user)] }).lean();
     if (!order) return res.status(404).json({ message: 'We could not find this order in your account.' });
     const fresh = await freshen(order);
     res.json({ ...customerView(fresh), trackingUnavailable: !!fresh.trackingUnavailable });

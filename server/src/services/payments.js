@@ -12,6 +12,8 @@ import {
   razorpayConfigured, toMinor, fetchPayment, fetchOrderPayments, capturePayment, createRefund, payLog,
 } from './razorpay.js';
 import { orderReady } from './shipping.js';
+import { release } from './orderStock.js';
+import { releaseCoupon } from './coupons.js';
 
 const fail = (status, message, code) => Object.assign(new Error(message), { status, ...(code && { code }) });
 
@@ -235,4 +237,61 @@ export async function applyRefund(rf) {
   payLog('refund_update', { orderNumber: order.orderNumber, razorpayPaymentId: rf.payment_id, razorpayRefundId: rf.id, amount: rf.amount, status, source: 'webhook' });
   await settleRefundState(order._id);
   return { outcome: status };
+}
+
+// ----- unpaid online orders -----
+// An order chosen for online payment holds its stock and coupon while the
+// customer pays. If nothing is paid within PAYMENT_HOLD_MINUTES (60 by
+// default) of the order and of its latest payment attempt, Razorpay is asked
+// one last time; only when every attempt is confirmed unpaid is the order
+// cancelled and the stock and coupon given back. If Razorpay cannot be
+// reached, the order is left for the next round. A payment that still arrives
+// later is recorded as "paid after cancel" for the team to refund.
+export const holdMinutes = () => Math.max(15, Number(process.env.PAYMENT_HOLD_MINUTES) || 60);
+const lastActivity = (o) => Math.max(new Date(o.createdAt).getTime(), ...(o.payment?.attempts || []).map((a) => new Date(a.createdAt || 0).getTime()));
+
+export async function expireUnpaidOrders(now = Date.now()) {
+  const cutoff = now - holdMinutes() * 60000;
+  const stale = await Order.find({ paymentMethod: 'online', paymentStatus: 'pending', status: 'Order Placed', createdAt: { $lt: new Date(cutoff) } }).limit(50);
+  let cancelled = 0;
+  for (const order of stale) {
+    if (lastActivity(order) > cutoff) continue;
+    let checked = true;
+    if (razorpayConfigured()) {
+      for (const id of attemptIds(order)) {
+        let payments;
+        try {
+          payments = await fetchOrderPayments(id);
+        } catch {
+          checked = false; // Razorpay unreachable: try again next round
+          break;
+        }
+        for (const p of payments.filter((x) => x.status === 'captured' || x.status === 'authorized')) await applyPayment(p, 'reconcile');
+      }
+    } else if (attemptIds(order).length) {
+      checked = false; // cannot ask Razorpay: never cancel blind
+    }
+    if (!checked) continue;
+    const done = await Order.findOneAndUpdate(
+      { _id: order._id, paymentStatus: 'pending', status: 'Order Placed' },
+      {
+        $set: { status: ORDER_CANCELLED },
+        $push: { history: { status: ORDER_CANCELLED, note: 'Payment was not completed, so the order was released. You are welcome to order again.' } },
+      },
+      { new: true }
+    );
+    if (!done) continue; // paid or changed meanwhile
+    await release(done.items.map((i) => ({ product: i.product, qty: i.qty })));
+    if (done.coupon?.code) await releaseCoupon(done.coupon.code);
+    payLog('unpaid_order_released', { orderNumber: done.orderNumber, outcome: 'cancelled' });
+    cancelled++;
+  }
+  return cancelled;
+}
+
+export function startPaymentJobs() {
+  const tick = () => expireUnpaidOrders().catch((e) => console.error('Unpaid order check failed:', e.message));
+  const t = setInterval(tick, 5 * 60 * 1000);
+  t.unref?.();
+  setTimeout(tick, 30000).unref?.();
 }

@@ -12,6 +12,7 @@ const refreshTokenSchema = new mongoose.Schema(
     revokedAt: Date,
     replacedBy: String,
     userAgent: String,
+    mfa: Boolean, // the sign-in passed the staff two-step code
   },
   { timestamps: true }
 );

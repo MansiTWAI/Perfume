@@ -239,9 +239,10 @@ html.lenis, html.lenis body { height: auto; }
 .header-left, .header-right { display: flex; align-items: center; gap: 6px; }
 .header-right { justify-content: flex-end; }
 .nav-desktop { display: flex; gap: 2px; }
-.nav-link { position: relative; padding: 12px 14px; font: 500 13px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #e6dccf; transition: color 0.3s; }
+.nav-link { position: relative; padding: 14px 14px; font: 500 12.5px/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; color: #e6dccf; transition: color 0.3s; }
 .nav-link::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1px; background: var(--gold-soft); transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease); }
-.nav-link:hover, .nav-link.active { color: var(--ivory); }
+.nav-link:hover { color: var(--gold-soft); }
+.nav-link.active { color: var(--gold-soft); }
 .nav-link:hover::after { transform: scaleX(1); }
 .nav-link.active::after { display: none; }
 .nav-trigger { background: none; border: 0; cursor: pointer; }
@@ -276,7 +277,7 @@ html.lenis, html.lenis body { height: auto; }
 .logo-word { display: grid; line-height: 1; white-space: nowrap; }
 .logo-word b { font: 400 18px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ivory); }
 .logo-word small { font: 500 10px/1 var(--body); letter-spacing: 0.44em; text-transform: uppercase; color: var(--gold-soft); margin-top: 7px; }
-.bag-count { position: absolute; top: 5px; inset-inline-end: 3px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--ivory); color: var(--black); font: 600 10px/17px var(--body); text-align: center; padding: 0 4px; }
+.bag-count { position: absolute; top: 5px; inset-inline-end: 3px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--gold-soft); color: var(--black); font: 600 10px/17px var(--body); text-align: center; padding: 0 4px; }
 .menu-btn { display: none; width: 44px; height: 44px; position: relative; }
 .menu-btn span { position: absolute; left: 12px; right: 12px; height: 1px; background: var(--ivory); transition: transform 0.5s var(--ease), top 0.5s var(--ease); }
 .menu-btn span:first-child { top: 18px; }
@@ -333,6 +334,47 @@ html.lenis, html.lenis body { height: auto; }
   .logo-word small { font-size: 8px; letter-spacing: 0.3em; margin-top: 5px; }
   .icon-btn, .menu-btn { width: 40px; height: 40px; }
   .menu-btn span { left: 10px; right: 10px; }
+}
+
+/* ---------- Header v3: utilities, icons, profile ---------- */
+.header-right { gap: 2px; }
+.icon-btn { color: var(--ivory); transition: background 0.25s, color 0.25s; }
+.site-header .icon-btn { width: 42px; height: 42px; }
+.site-header .icon-btn:hover, .site-header .icon-btn.is-open { background: rgba(210, 182, 132, 0.12); color: var(--gold-soft); }
+.hdr-utils { display: flex; align-items: center; gap: 2px; }
+/* Subscribe, the market and the language share one quiet text style. */
+.site-header .nav-sub,
+.hdr-locale .region-btn,
+.site-header .lang-btn.lang-inline {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px; min-width: 0; padding: 0 12px; margin: 0;
+  border: 0; border-radius: 40px; background: none;
+  font: 500 11.5px/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: rgba(243, 237, 227, 0.86);
+  transition: background 0.25s, color 0.25s;
+}
+.site-header .nav-sub { color: var(--gold-soft); }
+.site-header .nav-sub .icon { color: currentColor; }
+.site-header .nav-sub:hover, .hdr-locale .region-btn:hover, .site-header .lang-btn.lang-inline:hover { background: rgba(210, 182, 132, 0.1); color: var(--gold-soft); }
+.site-header .lang-btn.lang-inline[lang='ar'] { font: 400 15px/1 var(--arabic); letter-spacing: 0; text-transform: none; }
+.hdr-locale { display: flex; align-items: center; }
+.hdr-locale .region-btn i { color: currentColor; opacity: 0.55; }
+.hdr-sep { width: 1px; height: 22px; margin: 0 8px; background: rgba(215, 195, 160, 0.42); }
+/* Signed in: the monogram. */
+.avatar { width: 30px; height: 30px; flex: none; border-radius: 50%; display: inline-grid; place-items: center; background: var(--burg); color: var(--ivory); font: 500 14px/1 var(--display); box-shadow: 0 0 0 1px var(--gold-soft), 0 0 0 3px rgba(13, 10, 9, 0.9); }
+.avatar-lg { width: 42px; height: 42px; font-size: 18px; box-shadow: 0 0 0 1px var(--gold); }
+/* Phone menu: the account first. */
+.mm-acct { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid rgba(215, 195, 160, 0.16); border-radius: 4px; background: rgba(255, 255, 255, 0.03); }
+.mm-acct > span:not(.avatar) { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.mm-acct b { font: 400 var(--fs-lg)/1.2 var(--display); color: var(--ivory); }
+.mm-acct small { color: var(--s-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.mm-signin { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid rgba(215, 195, 160, 0.42); border-radius: 40px; font: 500 var(--fs-xs)/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold-soft); }
+.mm-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.mm-quick a { display: grid; justify-items: center; align-content: center; gap: 8px; min-height: 74px; padding: 12px 6px; border: 1px solid rgba(215, 195, 160, 0.16); border-radius: 4px; font: 500 11px/1.25 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(243, 237, 227, 0.86); text-align: center; }
+.mm-quick a .icon { color: var(--gold-soft); }
+.mm-quick a.active { border-color: var(--gold-soft); color: var(--gold-soft); }
+.mobile-menu .mm-out { color: #e3a28f; }
+@media (max-width: 600px) {
+  .hdr-search { display: none !important; }
+  .avatar { width: 26px; height: 26px; font-size: 12px; }
 }
 
 /* ============ Footer ============ */

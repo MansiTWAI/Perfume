@@ -4,7 +4,7 @@ import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import Order from '../models/Order.js';
 import Review from '../models/Review.js';
-import { optionalAuth, requireAuth, requireAdmin, asyncHandler } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, requireAdmin, asyncHandler, isAdminSession } from '../middleware/auth.js';
 import { slugify, escapeRegex } from '../utils.js';
 import { productKey, appProduct, appProducts, ratings, salesBySlug, currencyFrom } from '../services/catalog.js';
 import { ratingFor, publicReview, displayName } from './reviews.js';
@@ -61,7 +61,7 @@ r.get(
   '/',
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const includeHidden = req.user?.role === 'admin' && req.query.all === '1';
+    const includeHidden = isAdminSession(req) && req.query.all === '1';
     const { filter, sort, popular } = await productQuery(req.query, { includeHidden });
     // The website asks for the whole (small) catalogue as an array; the app
     // contract (/api/v1, or ?page=) is paginated with the app's product shape.
@@ -160,7 +160,7 @@ r.get(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const product = await Product.findOne(productKey(req.params.slug));
-    if (!product || (!product.published && req.user?.role !== 'admin')) {
+    if (!product || (!product.published && !isAdminSession(req))) {
       return res.status(404).json({ message: 'This fragrance could not be found.' });
     }
     const related = await Product.find({ published: true, _id: { $ne: product._id } })

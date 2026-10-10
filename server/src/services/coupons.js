@@ -84,6 +84,19 @@ export async function checkCoupon(rawCode, { subtotal, currency, user, email } =
   return { coupon: c, rule, discount: discountFor(rule, subtotal, currency) };
 }
 
+// Codes from `coupons` a signed-in customer has used as often as allowed
+// (orders by account or by their email; cancelled orders do not count).
+export async function usedUpBy(user, coupons) {
+  const limited = coupons.filter((c) => c.perUserLimit);
+  if (!limited.length) return new Set();
+  const counts = await Order.aggregate([
+    { $match: { 'coupon.code': { $in: limited.map((c) => c.code) }, status: { $ne: ORDER_CANCELLED }, $or: [{ user: user._id }, { 'customer.email': String(user.email || '').toLowerCase() }] } },
+    { $group: { _id: '$coupon.code', n: { $sum: 1 } } },
+  ]);
+  const used = new Map(counts.map((x) => [x._id, x.n]));
+  return new Set(limited.filter((c) => (used.get(c.code) || 0) >= c.perUserLimit).map((c) => c.code));
+}
+
 // Counts one use, unless the limit was reached in the meantime.
 export async function claimCoupon(code) {
   const c = await Coupon.findOne({ code });

@@ -5,9 +5,11 @@ import Order from '../models/Order.js';
 import crypto from 'crypto';
 import RefreshToken from '../models/RefreshToken.js';
 import Otp from '../models/Otp.js';
-import { signToken, requireAuth, optionalAuth, asyncHandler } from '../middleware/auth.js';
+import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff } from '../middleware/auth.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
-import { otpAvailable, issueOtp, consumeOtp, OTP_MINUTES } from '../services/otp.js';
+import {
+  otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
+} from '../services/otp.js';
 
 const r = Router();
 
@@ -20,21 +22,22 @@ const signInLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, message: 
 const REFRESH_DAYS = 60;
 const sha256 = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 
-async function issueRefresh(user, req, family = crypto.randomUUID()) {
+async function issueRefresh(user, req, family = crypto.randomUUID(), mfa = false) {
   const token = crypto.randomBytes(48).toString('base64url');
   await RefreshToken.create({
-    user: user._id, hash: sha256(token), family,
+    user: user._id, hash: sha256(token), family, ...(mfa && { mfa: true }),
     expiresAt: new Date(Date.now() + REFRESH_DAYS * 86400000),
     userAgent: String(req.get('user-agent') || '').slice(0, 200),
   });
   return token;
 }
 // `token` and `accessToken` are the same access token (the app contract calls
-// it accessToken; the website reads token).
-async function session(user, req, family) {
-  const token = signToken(user);
-  return { token, accessToken: token, refreshToken: await issueRefresh(user, req, family), user: user.toSafe() };
+// it accessToken; the website reads token). `mfa`: staff passed the emailed code.
+async function session(user, req, family, { mfa = false } = {}) {
+  const token = signToken(user, { mfa });
+  return { token, accessToken: token, refreshToken: await issueRefresh(user, req, family, mfa), user: user.toSafe() };
 }
+const maskEmail = (e) => String(e).replace(/^(.)(.*)(@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.min(Math.max(b.length, 2), 6)) + c);
 const revokeAll = (userId) => RefreshToken.updateMany({ user: userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
 const blocked = (res) => res.status(403).json({ code: 'ACCOUNT_BLOCKED', message: 'This account is blocked. Please contact us for help.' });
 
@@ -86,11 +89,65 @@ r.post(
       return res.status(401).json({ message: id.includes('@') || !id ? 'That email and password do not match.' : 'That phone number and password do not match.' });
     }
     if (user.status === 'blocked') return blocked(res);
+    // Staff: the password is only the first step; a code by email is the second.
+    if (isStaff(user)) {
+      let challenge;
+      try {
+        challenge = await startStaffChallenge(Otp, user);
+      } catch (e) {
+        return res.status(e.status || 502).json({ ...(e.code && { code: e.code }), message: e.message });
+      }
+      return res.json({
+        twoFactorRequired: true,
+        challengeToken: challenge.challengeToken,
+        sentTo: maskEmail(user.email),
+        expiresInSeconds: STAFF_MINUTES * 60,
+        resendInSeconds: RESEND_SECONDS,
+        message: 'We emailed you a 6-digit code to finish signing in.',
+        ...(challenge.devCode && { devCode: challenge.devCode }),
+      });
+    }
     res.json(await session(user, req));
   })
 );
 
-// ----- one-time codes by WhatsApp: sign in by phone, or verify a phone -----
+// ----- staff two-step sign-in: the emailed code -----
+const twoStepLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { message: 'Too many attempts. Please wait a few minutes and try again.' } });
+
+r.post(
+  '/2fa/verify',
+  twoStepLimiter,
+  asyncHandler(async (req, res) => {
+    const out = await verifyStaffCode(Otp, req.body?.challengeToken, req.body?.code ?? req.body?.otp);
+    if (out.error) return res.status(out.error.code === 'OTP_EXPIRED' ? 401 : 400).json(out.error);
+    const user = await User.findById(out.userId);
+    if (!user) return res.status(401).json({ code: 'OTP_EXPIRED', message: 'This sign-in has expired. Please sign in again.' });
+    if (user.status === 'blocked') return blocked(res);
+    res.json(await session(user, req, undefined, { mfa: isStaff(user) }));
+  })
+);
+
+r.post(
+  '/2fa/resend',
+  twoStepLimiter,
+  asyncHandler(async (req, res) => {
+    const userId = await staffChallengeUser(Otp, req.body?.challengeToken);
+    const user = userId && (await User.findById(userId).select('email status'));
+    if (!user || user.status === 'blocked') return res.status(401).json({ code: 'OTP_EXPIRED', message: 'This sign-in has expired. Please enter your password again.' });
+    try {
+      const sent = await resendStaffCode(Otp, req.body.challengeToken, user.email);
+      res.json({ ok: true, sentTo: maskEmail(user.email), expiresInSeconds: STAFF_MINUTES * 60, resendInSeconds: RESEND_SECONDS, ...(sent.devCode && { devCode: sent.devCode }) });
+    } catch (e) {
+      if (e.retryAfter) res.set('Retry-After', String(e.retryAfter));
+      res.status(e.status || 502).json({ ...(e.code && { code: e.code }), ...(e.retryAfter && { retryAfter: e.retryAfter }), message: e.message });
+    }
+  })
+);
+
+// ----- one-time codes by email: sign in with a code instead of the password -----
+// The code goes to the email on the account found by phone (or email); the
+// answer is the same whether or not an account exists. Verifying a phone
+// number needs WhatsApp, which is paused (services/otp.js).
 const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: { message: 'Too many code requests. Please wait a few minutes and try again.' } });
 const PURPOSES = ['login', 'verify_phone'];
 
@@ -99,23 +156,28 @@ r.post(
   otpLimiter,
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const phone = normalizePhone(req.body?.phone);
     const purpose = PURPOSES.includes(req.body?.purpose) ? req.body.purpose : 'login';
-    if (!phone || !validPhone(phone)) return res.status(400).json({ message: 'Please enter a valid phone number.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
+    if (purpose === 'verify_phone') return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Phone verification is not available right now.' });
+    const byEmail = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
+    if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(byEmail)) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
+    const phone = byEmail ? `email:${byEmail}` : normalizePhone(req.body?.phone);
+    if (!byEmail && (!phone || !validPhone(phone))) return res.status(400).json({ message: 'Please enter a valid phone number.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
     if (!otpAvailable()) return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Sign-in by code is not set up yet. Please sign in with your password.' });
-    if (purpose === 'verify_phone' && !req.user) return res.status(401).json({ message: 'Please sign in to continue.' });
     // At most one code every 30 seconds and five per 15 minutes for a number.
     const recent = await Otp.find({ phone, createdAt: { $gt: new Date(Date.now() - 15 * 60000) } }).sort({ createdAt: -1 }).limit(5);
     if (recent.length >= 5 || (recent[0] && Date.now() - recent[0].createdAt.getTime() < 30000)) {
       return res.status(429).json({ message: 'Too many codes requested for this number. Please wait a moment and try again.' });
     }
-    // The same answer whether or not an account uses the number.
-    const account = purpose === 'login' ? await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).select('_id status') : req.user;
-    const reply = { ok: true, message: 'If this number can sign in, a code is on its way by WhatsApp.', expiresInSeconds: OTP_MINUTES * 60 };
-    if (!account || account.status === 'blocked') return res.json(reply);
+    // The same answer whether or not an account matches. Staff accounts sign
+    // in with their password and the two-step code instead.
+    const account = byEmail
+      ? await User.findOne({ email: byEmail }).select('_id status email role')
+      : await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).sort({ createdAt: 1 }).select('_id status email role');
+    const reply = { ok: true, message: 'If an account matches, a code is on its way to its email address.', expiresInSeconds: OTP_MINUTES * 60 };
+    if (!account || account.status === 'blocked' || isStaff(account)) return res.json(reply);
     let sent;
     try {
-      sent = await issueOtp(Otp, phone, purpose);
+      sent = await issueOtp(Otp, phone, purpose, account.email);
     } catch (e) {
       return res.status(e.status || 502).json({ message: e.message });
     }
@@ -128,28 +190,19 @@ r.post(
   signInLimiter,
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const phone = normalizePhone(req.body?.phone);
     const purpose = PURPOSES.includes(req.body?.purpose) ? req.body.purpose : 'login';
+    if (purpose === 'verify_phone') return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Phone verification is not available right now.' });
+    const byEmail = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
+    const phone = byEmail ? `email:${byEmail}` : normalizePhone(req.body?.phone);
     const wrong = await consumeOtp(Otp, phone, purpose, req.body?.otp || req.body?.code);
     if (wrong) return res.status(400).json(wrong);
 
-    if (purpose === 'verify_phone') {
-      if (!req.user) return res.status(401).json({ message: 'Please sign in to continue.' });
-      if (!phoneKeys(phone).includes(req.user.phoneNormalized)) {
-        req.user.phone = req.body?.phone ? String(req.body.phone).trim().slice(0, 40) : phone;
-      }
-      await req.user.save(); // the pre-save hook normalises the number
-      req.user.phoneVerified = true;
-      await req.user.save();
-      return res.json({ ok: true, message: 'Your phone number is verified.', user: req.user.toSafe() });
-    }
-    const user = await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).sort({ createdAt: 1 });
-    if (!user) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'No account uses this phone number yet. Please create an account first.' });
+    // The code went to the account's email, so it proves the email, not the
+    // phone: phoneVerified stays as it is.
+    const user = byEmail ? await User.findOne({ email: byEmail }) : await User.findOne({ phoneNormalized: { $in: phoneKeys(phone) } }).sort({ createdAt: 1 });
+    if (!user) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'No account matches yet. Please create an account first.' });
     if (user.status === 'blocked') return blocked(res);
-    if (!user.phoneVerified) {
-      user.phoneVerified = true;
-      await user.save();
-    }
+    if (isStaff(user)) return res.status(403).json({ code: 'STAFF_PASSWORD_REQUIRED', message: 'Team accounts sign in with the password and the emailed code.' });
     res.json(await session(user, req));
   })
 );
@@ -172,7 +225,7 @@ r.post(
     const user = await User.findById(doc.user);
     if (!user) return res.status(401).json({ message: 'This refresh token is not valid. Please sign in again.' });
     if (user.status === 'blocked') return blocked(res);
-    const next = await session(user, req, doc.family);
+    const next = await session(user, req, doc.family, { mfa: !!doc.mfa && isStaff(user) });
     doc.revokedAt = new Date();
     doc.replacedBy = sha256(next.refreshToken);
     await doc.save();
@@ -254,6 +307,8 @@ r.post(
     user.tokenVersion = (user.tokenVersion || 0) + 1; // sign out everywhere else
     await user.save();
     await revokeAll(user._id);
+    // Staff still need the emailed code: they sign in again with the new password.
+    if (isStaff(user)) return res.json({ ok: true, signInRequired: true, message: 'Your password is changed. Please sign in.' });
     res.json(await session(user, req));
   })
 );
@@ -336,7 +391,7 @@ export const changePassword = asyncHandler(async (req, res) => {
   req.user.tokenVersion = (req.user.tokenVersion || 0) + 1;
   await req.user.save();
   await revokeAll(req.user._id);
-  res.json({ ok: true, ...(await session(req.user, req)) });
+  res.json({ ok: true, ...(await session(req.user, req, undefined, { mfa: !!req.authMfa })) });
 });
 r.post('/me/password', accountLimiter, requireAuth, changePassword);
 export { accountLimiter };

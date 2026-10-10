@@ -5,7 +5,7 @@ import { useStore } from '../context/StoreContext';
 import { cx, whatsappLink } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 import RegionSelect from './RegionSelect';
-import AccountMenu from './AccountMenu';
+import AccountMenu, { Monogram } from './AccountMenu';
 import { openWhatsAppSignup, useSubscribed } from './WhatsAppUpdates';
 import Icon from './Icon';
 
@@ -211,12 +211,20 @@ export default function Header() {
             </span>
           </Link>
 
+          {/* Desktop: Subscribe and the market / language in one quiet style,
+              a hairline, then three equal icons. Tablet and phone keep the
+              profile and the bag; the rest is in the menu. */}
           <div className="header-right">
-            <div className="nav-desktop-only"><SubscribeButton /></div>
-            <LangToggle />
-            <button className="icon-btn" onClick={() => setSearchOpen(true)} aria-label={t('Search')}><Icon name="search" /></button>
-            <div className="nav-desktop-only"><RegionSelect /></div>
-            <div className="nav-desktop-only"><AccountMenu /></div>
+            <div className="nav-desktop-only hdr-utils">
+              <SubscribeButton />
+              <div className="hdr-locale">
+                <RegionSelect />
+                <LangToggle className="lang-btn lang-inline" />
+              </div>
+              <span className="hdr-sep" aria-hidden="true" />
+            </div>
+            <button className="icon-btn hdr-search" onClick={() => setSearchOpen(true)} aria-label={t('Search')}><Icon name="search" /></button>
+            <AccountMenu />
             <button id="bag-button" className="icon-btn" onClick={() => setCartOpen(true)} aria-label={t(count === 1 ? 'Bag, 1 item' : 'Bag, {n} items', { n: count })}>
               <Icon name="bag" />
               <AnimatePresence>
@@ -241,6 +249,26 @@ export default function Header() {
             exit={{ clipPath: 'inset(0 0 100% 0)', transition: { duration: 0.5, ease: [0.76, 0, 0.24, 1] } }}
           >
             <nav aria-label={t('Menu')}>
+              <motion.div className="mm-account" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.2 } }}>
+                {user ? (
+                  <>
+                    <div className="mm-acct">
+                      <Monogram user={user} className="avatar-lg" />
+                      <span><b>{t('Hello, {name}', { name: user.name?.split(' ')[0] || '' })}</b><small dir="ltr">{user.email}</small></span>
+                    </div>
+                    <div className="mm-quick">
+                      <NavLink to="/profile/orders"><Icon name="package" />{t('My orders')}</NavLink>
+                      <NavLink to="/profile/edit"><Icon name="user" />{t('Edit profile')}</NavLink>
+                      <NavLink to="/track"><Icon name="truck" />{t('Track an order')}</NavLink>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mm-acct">
+                    <span><b>{t('Your account')}</b><small>{t('See your orders and check out faster.')}</small></span>
+                    <NavLink to="/account" className="mm-signin">{t('Sign in')}</NavLink>
+                  </div>
+                )}
+              </motion.div>
               <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 } }}>
                 <p className="mm-h">{t('Shop')}</p>
                 <div className="mm-big">
@@ -260,19 +288,10 @@ export default function Header() {
                 <div className="mm-two">
                   {HELP.slice(0, 3).map(([to, label]) => <NavLink key={to} to={to}>{t(label)}</NavLink>)}
                   <button type="button" onClick={finder}>{t('Find your signature')}</button>
-                </div>
-              </motion.div>
-              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.46 } }}>
-                <p className="mm-h">{t('Account')}</p>
-                <div className="mm-two">
-                  {user ? (
-                    <>
-                      <NavLink to="/profile/orders">{t('My orders')}</NavLink>
-                      <NavLink to="/profile/edit">{t('Edit profile')}</NavLink>
-                      <NavLink to="/profile" end>{t('Account overview')}</NavLink>
-                      <button type="button" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>
-                    </>
-                  ) : <NavLink to="/account">{t('Sign in')}</NavLink>}
+                  <button type="button" onClick={() => { setMenu(false); setSearchOpen(true); }}>{t('Search')}</button>
+                  {user && <NavLink to="/profile" end>{t('Account overview')}</NavLink>}
+                  {user?.role === 'admin' && <NavLink to="/admin">{t('Admin studio')}</NavLink>}
+                  {user && <button type="button" className="mm-out" onClick={() => { logout(); setMenu(false); }}>{t('Sign out')}</button>}
                 </div>
               </motion.div>
             </nav>

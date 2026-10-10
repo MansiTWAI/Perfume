@@ -5,8 +5,9 @@ One backend, one MongoDB database and one set of REST endpoints serve the websit
 - **Interactive reference (every endpoint, schema and example):** `GET /api/docs`
 - **PDF edition:** [docs/API-Reference.pdf](API-Reference.pdf) (guide, every endpoint with examples, data models)
 - **Machine-readable spec (OpenAPI 3.0):** `GET /api/openapi.json` — import it into Postman, Insomnia, or an OpenAPI code generator for the app.
+- **Postman collection:** [docs/postman/](postman/) — import `AL-BARAKAH-API.postman_collection.json` and an environment (Production or Local). Every route is in it, grouped like this guide; signing in saves the token, and creating an order, product, coupon, template or campaign saves its id for the next requests. Rebuild after API changes with `npm run postman`.
 
-The spec is checked against the Express routes: every route in the code is documented, and nothing documented is missing from the code.
+The spec is checked against the Express routes by `server/test/openapi.test.js`: every route in the code is documented, and nothing documented is missing from the code.
 
 ## Base URL
 

@@ -4,22 +4,25 @@ import { api } from '../lib/api';
 import Icon from './Icon';
 
 // The coupons the house lists on the website ("Show on website"), for this
-// market. Fetched once per market per visit; the bag and checkout share it.
+// market and shopper (signed in: without the ones they have used up).
+// Fetched once per market and account per visit; the bag and checkout share it.
 const cache = new Map();
 function useOffers(region) {
-  const [list, setList] = useState(() => cache.get(region) || null);
+  const { user } = useStore();
+  const key = `${region}:${user?.id || user?._id || ''}`;
+  const [list, setList] = useState(() => cache.get(key) || null);
   useEffect(() => {
     let live = true;
-    const hit = cache.get(region);
+    const hit = cache.get(key);
     if (hit) setList(hit);
     api(`/coupons?region=${region}`)
       .then((d) => {
-        cache.set(region, d.items || []);
+        cache.set(key, d.items || []);
         if (live) setList(d.items || []);
       })
       .catch(() => live && setList((x) => x || []));
     return () => { live = false; };
-  }, [region]);
+  }, [region, key]);
   return list || [];
 }
 

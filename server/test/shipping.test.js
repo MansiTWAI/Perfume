@@ -327,7 +327,7 @@ describe('tracking (polling) and the customer', () => {
     assert.equal(r.body.shipment.awb, '');
     assert.ok(!JSON.stringify(r.body).includes('Could not reach'));
   });
-  test('booked orders: address can no longer change; another courier cannot be typed over', async () => {
+  test('booked orders: address can no longer change; no courier can be typed in', async () => {
     const owner = await makeUser('customer', 'buyer@example.test');
     const n = await paidOrder({ token: owner.token });
     const r = await http('PATCH', `/api/orders/mine/${n}`, { token: owner.token, body: { customer: { address: { line1: 'New road' } } } });
@@ -336,7 +336,7 @@ describe('tracking (polling) and the customer', () => {
     const o = await load(n);
     const typed = await http('PATCH', `/api/orders/${o._id}`, { token, body: { carrier: 'Blue Dart', trackingNumber: '123' } });
     assert.equal(typed.status, 400);
-    assert.match(typed.body.message, /ships with Delhivery/);
+    assert.match(typed.body.message, /set by Delhivery/);
   });
 });
 

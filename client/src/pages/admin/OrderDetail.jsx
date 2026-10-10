@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
-import { COURIERS, courierByName, trackingUrl, isUrl, STATUS_NOTES } from '../../../../shared/couriers.js';
+import { trackingUrl, STATUS_NOTES } from '../../../../shared/couriers.js';
 import { ADMIN_STATUS, shipTone } from '../../lib/shipment';
 import Icon from '../../components/Icon';
 
 // The six steps of the customer's timeline, plus Cancelled (from any step;
 // the server returns the items to stock).
 export const STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
-const OTHER = '__other';
 const CUSTOM = '__custom';
 
 // "3 October 2026" <-> the yyyy-mm-dd a date input needs.
@@ -34,18 +33,11 @@ const plusDays = (n) => {
 function formFrom(order) {
   const c = order.customer || {};
   const a = c.address || {};
-  // Older orders may have a tracking number saved in the link field.
-  const legacyNumber = order.carrierUrl && !isUrl(order.carrierUrl) ? order.carrierUrl : '';
-  const known = courierByName(order.carrier);
   return {
     name: c.name || '', email: c.email || '', phone: c.phone || '',
     line1: a.line1 || '', line2: a.line2 || '', city: a.city || '', state: a.state || '', postalCode: a.postalCode || '',
     status: order.status,
     noteChoice: '', note: '',
-    courier: known ? known.name : order.carrier ? OTHER : '',
-    otherCourier: known ? '' : order.carrier || '',
-    trackingNumber: order.trackingNumber || legacyNumber,
-    otherUrl: !known && isUrl(order.carrierUrl) ? order.carrierUrl : '',
     etaIso: isoFromEta(order.eta),
     etaText: order.eta || '',
     paymentStatus: order.paymentStatus,
@@ -250,28 +242,17 @@ export function OrderRow({ order, onSaved }) {
   const c = order.customer;
   const country = c.address?.country || '';
 
-  const courierName = f.courier === OTHER ? f.otherCourier.trim() : f.courier;
-  const link = f.courier === OTHER ? f.otherUrl.trim() : trackingUrl(f.courier, f.trackingNumber);
-  const courierInfo = courierByName(f.courier);
-  const needsNumberInPage = courierInfo?.url && !courierInfo.url.includes('{n}');
+  // Courier and tracking come only from Delhivery (the shipment panel).
+  const courierName = order.carrier || '';
+  const link = order.carrierUrl || '';
   const statusChanged = f.status !== order.status;
   const presets = STATUS_NOTES[f.status] || [];
   const note = f.noteChoice === CUSTOM ? f.note : f.noteChoice;
   const eta = f.etaIso ? longDate(f.etaIso) : f.etaText;
   const viaDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
 
-  const suggestedCouriers = useMemo(() => {
-    const home = /Emirates/.test(country) ? 'AE' : 'IN';
-    return [
-      [home === 'IN' ? 'India' : 'UAE & international', COURIERS.filter((x) => x.region === home)],
-      [home === 'IN' ? 'UAE & international' : 'India', COURIERS.filter((x) => x.region && x.region !== home)],
-      ['Other', COURIERS.filter((x) => !x.region)],
-    ];
-  }, [country]);
-
   async function save() {
     setError('');
-    if (f.courier === OTHER && f.otherUrl.trim() && !isUrl(f.otherUrl)) return setError('The tracking link must start with https://');
     setBusy(true);
     try {
       const o = await api(`/orders/${order._id}`, {
@@ -280,9 +261,6 @@ export function OrderRow({ order, onSaved }) {
           customer: { name: f.name, email: f.email, phone: f.phone, address: { line1: f.line1, line2: f.line2, city: f.city, state: f.state, postalCode: f.postalCode } },
           status: f.status,
           note: statusChanged ? note : '',
-          carrier: courierName,
-          trackingNumber: f.trackingNumber,
-          carrierUrl: link,
           eta,
           ...(f.paymentStatus !== order.paymentStatus && { paymentStatus: f.paymentStatus }),
           notes: f.notes,
@@ -301,7 +279,7 @@ export function OrderRow({ order, onSaved }) {
   const waText = [
     `Hello ${f.name.split(' ')[0] || ''}, an update on your AL BARAKAH LIFESTYLE order ${order.orderNumber}: ${f.status}.`,
     note,
-    courierName && `Courier: ${courierName}${f.trackingNumber ? `, tracking number ${f.trackingNumber}` : ''}.`,
+    courierName && `Courier: ${courierName}${order.trackingNumber ? `, tracking number ${order.trackingNumber}` : ''}.`,
     link && `Courier tracking: ${link}`,
     eta && f.status !== 'Delivered' && `Expected delivery: ${eta}.`,
     `Track your order: ${trackPage}`,
@@ -368,31 +346,9 @@ export function OrderRow({ order, onSaved }) {
                 )}
                 {viaDelhivery ? (
                   <p className="a-hint">Ships with <b>Delhivery</b> · AWB <span dir="ltr">{order.shipment.awb}</span>. Courier and tracking are set automatically; see the shipment panel.</p>
-                ) : <>
-                <label>Courier
-                  <select value={f.courier} onChange={set('courier')}>
-                    <option value="">Not shipped yet</option>
-                    {suggestedCouriers.map(([group, list]) => (
-                      <optgroup key={group} label={group}>{list.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}</optgroup>
-                    ))}
-                    <option value={OTHER}>Other courier…</option>
-                  </select>
-                  {f.courier === OTHER && <input value={f.otherCourier} onChange={set('otherCourier')} placeholder="Courier name" />}
-                </label>
-                {f.courier && f.courier !== 'Hand delivery' && (
-                  <label>Tracking number (AWB)<input value={f.trackingNumber} onChange={set('trackingNumber')} placeholder="e.g. 26554968" /></label>
+                ) : (
+                  <p className="a-hint">Courier: <b>Delhivery</b>. Create the shipment in the Delhivery panel; the AWB and tracking appear here on their own.</p>
                 )}
-                {f.courier === OTHER ? (
-                  <label>Tracking link<input value={f.otherUrl} onChange={set('otherUrl')} placeholder="https://…" /></label>
-                ) : link ? (
-                  <p className="a-link-preview">
-                    Customer tracking link: <a href={link} target="_blank" rel="noreferrer" className="a-link">open <Icon name="external" size={14} /></a>
-                    {needsNumberInPage && <><br /><small className="a-muted">{f.courier} opens its tracking page; the customer enters the number there.</small></>}
-                  </p>
-                ) : f.courier && f.courier !== 'Hand delivery' ? (
-                  <p className="a-muted a-hint">Add the tracking number and the customer's tracking link is created automatically.</p>
-                ) : null}
-                </>}
                 <label>Expected delivery
                   <input type="date" value={f.etaIso} min={plusDays(-30)} onChange={(e) => setF((x) => ({ ...x, etaIso: e.target.value, etaText: '' }))} />
                 </label>

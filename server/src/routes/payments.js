@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import Order from '../models/Order.js';
 import PaymentEvent from '../models/PaymentEvent.js';
 import mongoose from 'mongoose';
-import { optionalAuth, requireAuth, asyncHandler } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, asyncHandler, isAdminSession } from '../middleware/auth.js';
 import {
   razorpayConfigured, ONLINE_CURRENCIES, ID, createRazorpayOrder, fetchPayment, verifyPaymentSignature, verifyWebhookSignature, payLog,
 } from '../services/razorpay.js';
@@ -237,7 +237,7 @@ r.get(
     const id = String(req.params.paymentId).trim();
     if (!ID.payment.test(id) && !ID.order.test(id)) return res.status(404).json({ message: 'Payment not found.' });
     const order = await Order.findOne({ $or: [{ 'payment.providerPaymentId': id }, { 'payment.providerOrderId': id }, { 'payment.attempts.providerOrderId': id }] }).lean();
-    const mine = order && (req.user.role === 'admin' || String(order.user) === String(req.user._id) || order.customer.email === req.user.email);
+    const mine = order && (isAdminSession(req) || String(order.user) === String(req.user._id) || order.customer.email === req.user.email);
     if (!mine) return res.status(404).json({ message: 'Payment not found.' });
     res.json({
       paymentId: order.payment?.providerPaymentId || null,

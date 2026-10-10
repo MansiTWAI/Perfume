@@ -50,7 +50,9 @@ export function envelope(req, res, next) {
     }
     if (body && typeof body === 'object') {
       // { ok: true, message, ...rest } → the message, and rest as the data.
-      if (typeof body.message === 'string') {
+      // A record whose own field is called message (a template, a campaign,
+      // an enquiry) has an id and stays whole in data.
+      if (typeof body.message === 'string' && (body.ok === true || !(body.id || body._id))) {
         const { ok: _ok, message, ...rest } = body;
         return json({ success: true, message, data: Object.keys(rest).length ? rest : null });
       }

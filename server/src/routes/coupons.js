@@ -1,5 +1,6 @@
 // Coupons for shoppers (website bag and checkout, signed in or not):
 //   GET  /api/coupons?region=IN        the coupons the team chose to list, usable now
+//                                      (by this customer, when signed in)
 //   POST /api/coupons/check            { code, region, items: [{ slug, qty }], email? }
 // The discount is always worked out here from catalogue prices; placing the
 // order checks the code again. Signed-in shoppers can also use
@@ -10,7 +11,7 @@ import Coupon from '../models/Coupon.js';
 import { optionalAuth, asyncHandler } from '../middleware/auth.js';
 import { REGIONS, regionByCode } from '../config/commerce.js';
 import { priced } from './cart.js';
-import { checkCoupon, offerView, usableIn } from '../services/coupons.js';
+import { checkCoupon, offerView, usableIn, usedUpBy } from '../services/coupons.js';
 
 const r = Router();
 // Enough for real shoppers, too few to guess codes.
@@ -20,12 +21,15 @@ const market = (code) => {
   return reg?.ships ? reg : REGIONS[0];
 };
 
+// Signed in: coupons this customer has already used up are left out.
 r.get(
   '/',
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const region = market(req.query.region);
-    const list = await Coupon.find({ active: true, showOnSite: true }).sort({ createdAt: -1 }).limit(50).lean();
-    const items = list.filter((c) => usableIn(c, region.currency)).map((c) => offerView(c, region.currency));
+    const list = (await Coupon.find({ active: true, showOnSite: true }).sort({ createdAt: -1 }).limit(50).lean()).filter((c) => usableIn(c, region.currency));
+    const usedUp = req.user ? await usedUpBy(req.user, list) : new Set();
+    const items = list.filter((c) => !usedUp.has(c.code)).map((c) => offerView(c, region.currency));
     res.set('Cache-Control', 'no-store').json({ currency: region.currency, items });
   })
 );

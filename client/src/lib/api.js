@@ -31,6 +31,8 @@ export async function api(path, { method = 'GET', body, form } = {}) {
     err.status = res.status;
     err.code = data.code;
     err.data = data;
+    // A team session without the emailed two-step code (admin studio signs out).
+    if (res.status === 401 && data.code === 'MFA_REQUIRED') dispatchEvent(new Event('ab:mfa-required'));
     throw err;
   }
   return data;

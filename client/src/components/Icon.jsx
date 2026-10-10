@@ -32,6 +32,9 @@ const P = {
   copy: <><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M5 15V6.5A1.5 1.5 0 0 1 6.5 5H15" /></>,
   star: <path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z" />,
   refresh: <path d="M19 12a7 7 0 1 1-2.1-5M19 4.5V8h-3.5" />,
+  grid: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16M10 10v10" /></>,
+  'sign-out': <path d="M14 5h5v14h-5M10 8l-4 4 4 4M6 12h10" />,
+  menu: <path d="M4 8h16M4 16h16" />,
 };
 
 export default function Icon({ name, size = 20, filled = false, className = '', ...rest }) {

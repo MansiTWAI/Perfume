@@ -34,7 +34,7 @@ process.env.MONGODB_URI = mem.getUri('albarakah-test');
 
 const { connectDB } = await import('../src/config/db.js');
 await connectDB();
-const { default: app } = await import('../src/app.js');
+export const { default: app } = await import('../src/app.js');
 export const { default: User } = await import('../src/models/User.js');
 export const { default: Product } = await import('../src/models/Product.js');
 export const { default: Order } = await import('../src/models/Order.js');
@@ -237,7 +237,7 @@ export function webhook(event, payload, { eventId = rid('evt'), secret } = {}) {
 // ----- data -----
 export async function makeUser(role = 'customer', email = `${rid('u')}@example.test`) {
   const u = await User.create({ name: `Test ${role}`, email, passwordHash: await User.hashPassword(crypto.randomBytes(9).toString('hex')), role });
-  return { user: u, token: signToken(u) };
+  return { user: u, token: signToken(u, { mfa: role !== 'customer' }) };
 }
 export async function makeProduct({ slug = rid('p'), inr = 2799, aed = 129, stock = 10 } = {}) {
   return Product.create({ name: slug.toUpperCase(), slug, price: { INR: inr, AED: aed }, stock, published: true });
