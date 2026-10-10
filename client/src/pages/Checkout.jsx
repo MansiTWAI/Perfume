@@ -7,7 +7,7 @@ import SignatureCard, { OCCASIONS } from '../components/SignatureCard';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
 import { api } from '../lib/api';
-import { payOnline } from '../lib/payments';
+import { payOnline, abandonPayment } from '../lib/payments';
 import { whatsappLink } from '../lib/format';
 import { seasonFor } from '../lib/seasons';
 import Icon from '../components/Icon';
@@ -121,21 +121,46 @@ export default function Checkout() {
         },
       });
       setPlaced({ cart, subtotal, shipping, discount });
-      if (coupon) removeCoupon();
-      clearCart();
-      // Online payment opens straight away; the order is already saved, so a
-      // closed or failed payment can be finished later from the order page.
-      let payment = null;
-      if (pay === 'online') {
-        setBusy('paying');
-        try {
-          payment = await payOnline({ orderNumber: res.orderNumber, email: f.email });
-        } catch (e) {
-          payment = { kind: e.kind || 'error', message: e.message };
-        }
+      // The order is placed: empty the bag and show its page.
+      const done = (payment = null) => {
+        if (coupon) removeCoupon();
+        clearCart();
+        navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email, payment } });
+      };
+      if (pay !== 'online') return done();
+
+      // Online: it becomes an order only when the payment succeeds. Until
+      // then the bag stays as it is.
+      setBusy('paying');
+      let payment;
+      try {
+        payment = await payOnline({ orderNumber: res.orderNumber, email: f.email });
+      } catch (e) {
+        payment = { kind: e.kind || 'error', message: e.message };
       }
-      // Leaving the page: keep it as it is while the next one comes in.
-      navigate(`/order/${res.orderNumber}`, { state: { ...res, email: f.email, payment } });
+      // Paid, or paid and still being confirmed / needing a refund review:
+      // money moved, so the order stands.
+      if (payment === 'paid' || ['confirming', 'review'].includes(payment?.kind)) return done(payment);
+      // Failed or closed: no order. The server checks with Razorpay first.
+      let released = null;
+      try {
+        released = await abandonPayment({ orderNumber: res.orderNumber, email: f.email });
+      } catch {
+        /* the unpaid order is released automatically later */
+      }
+      if (released?.paid) return done('paid');
+      if (released?.confirming) return done({ kind: 'confirming', message: released.message });
+      const why = payment?.kind === 'failed' && payment.message ? ` (${payment.message})` : '';
+      setError(
+        payment?.kind === 'dismissed'
+          ? t('Payment was cancelled. No order was placed, and your bag is still here.')
+          : payment?.kind === 'failed'
+            ? `${t('Payment failed. No order was placed and no money was taken.')}${why} ${t('Please try again or choose another payment method.')}`
+            : t('We could not open the payment window. No order was placed. Please try again.')
+      );
+      busyRef.current = false;
+      setBusy('');
+      setPlaced(null);
     } catch (err) {
       if (err.code === 'PRICE_CHANGED') refreshCart().catch(() => {});
       // The coupon stopped working since it was applied (expired, used up,
@@ -151,8 +176,8 @@ export default function Checkout() {
     }
   }
 
-  // The bag empties as soon as the order is saved; while the payment window
-  // is open the page behind it stays as it was.
+  // The bag empties once the order is placed (paid, for online payment);
+  // while the payment window is open the page behind it stays as it was.
   if (!cart.length && !busy) {
     return (
       <section className="section page-pad center checkout checkout-empty">

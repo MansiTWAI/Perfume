@@ -65,12 +65,16 @@ r.post(
         ({ customer, regionCode } = await checkoutTarget(req.user, { addressId: req.body?.addressId, customer, region: req.body?.region }));
       }
       const order = await placeOrder({ items, customer, regionCode, paymentMethod, giftNote, couponCode, expectedTotal, userId: req.user?._id });
-      if (fromCart) {
+      // Paid online: the bag empties once the payment is confirmed.
+      if (fromCart && order.paymentHold) {
+        await Order.updateOne({ _id: order._id }, { $set: { clearBagOnPay: true } });
+      } else if (fromCart) {
         req.user.cart = [];
         await req.user.save();
       }
       res.status(201).json({
         orderNumber: order.orderNumber, trackingId: order.trackingId, total: order.total, currency: order.currency,
+        ...(order.paymentHold && { paymentRequired: true }),
         ...(req.apiV1 && { order: customerView(order.toObject()) }),
       });
     } catch (e) {

@@ -21,7 +21,8 @@ const register = async (email, extra = {}) => {
 };
 const login = (email, password = 'flow-pass-123') => http('POST', '/api/auth/login', { body: { email, password } });
 const cod = (items, extra = {}) => http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items, customer: customer(), ...extra } });
-const load = (orderNumber) => Order.findOne({ orderNumber }).lean();
+// Test reads see every order, held (awaiting payment) ones too.
+const load = (orderNumber) => Order.findOne({ orderNumber }).setOptions({ withHeld: true }).lean();
 
 describe('sessions and tokens', () => {
   test('sign-up checks: long names, non-string fields', async () => {

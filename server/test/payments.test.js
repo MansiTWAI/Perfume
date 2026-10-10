@@ -13,7 +13,8 @@ beforeEach(reset);
 
 const startPay = (orderNumber, email = 'buyer@example.test', token) => http('POST', '/api/payments/razorpay/order', { token, body: { orderNumber, email } });
 const verify = (orderNumber, response, email = 'buyer@example.test') => http('POST', '/api/payments/razorpay/verify', { body: { orderNumber, email, ...response } });
-const load = (orderNumber) => Order.findOne({ orderNumber }).lean();
+// Test reads see every order, held (awaiting payment) ones too.
+const load = (orderNumber) => Order.findOne({ orderNumber }).setOptions({ withHeld: true }).lean();
 const confirmedNotes = (o) => o.history.filter((h) => h.status === 'Confirmed').length;
 
 async function paidOrder({ inr = 2799, qty = 1 } = {}) {
@@ -229,19 +230,14 @@ describe('verifying a payment', () => {
     const p = await makeProduct({ inr: 1000, stock: 10 });
     const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'edit@example.test', token: me.token });
     const s = await startPay(placed.body.orderNumber, 'edit@example.test'); // ₹1,099 window opened
+    // Not an order until paid, so there is nothing to edit yet.
     const edit = await http('PATCH', `/api/orders/mine/${placed.body.orderNumber}`, { token: me.token, body: { items: [{ slug: p.slug, qty: 5 }] } });
-    assert.equal(edit.status, 200);
-    assert.equal(edit.body.total, 5000);
-    const { response } = pay(s.body.razorpayOrderId); // pays the old ₹1,099
-    const r = await verify(placed.body.orderNumber, response, 'edit@example.test');
-    assert.equal(r.status, 409);
+    assert.equal(edit.status, 404);
+    const { response } = pay(s.body.razorpayOrderId);
+    assert.equal((await verify(placed.body.orderNumber, response, 'edit@example.test')).status, 200);
     const o = await load(placed.body.orderNumber);
-    assert.equal(o.paymentStatus, 'pending');
-    assert.equal(o.payment.issues[0].kind, 'amount_mismatch');
-    // Paying again opens a new Razorpay order for the new total.
-    const s2 = await startPay(placed.body.orderNumber, 'edit@example.test');
-    assert.notEqual(s2.body.razorpayOrderId, s.body.razorpayOrderId);
-    assert.equal(s2.body.amount, 500000);
+    assert.equal(o.paymentStatus, 'paid');
+    assert.equal(o.total, 1099);
   });
   test('items cannot change once the order is paid', async () => {
     const me = await makeUser('customer', 'locked@example.test');
@@ -448,12 +444,15 @@ describe('admin and refunds', () => {
     // Other edits still work.
     assert.equal((await http('PATCH', `/api/orders/${o._id}`, { token: admin.token, body: { status: 'Packed', paymentStatus: 'paid' } })).status, 200);
   });
-  test('admin "check with Razorpay" settles a stuck order', async () => {
+  test('a stuck payment is settled by the status check; the team sees the order only once it is paid', async () => {
     const p = await makeProduct();
     const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
     const s = await startPay(placed.body.orderNumber);
     pay(s.body.razorpayOrderId); // paid, but neither callback nor webhook arrived
     const support = await makeUser('support');
+    assert.equal((await http('POST', `/api/admin/orders/${placed.body.orderNumber}/payment-check`, { token: support.token })).status, 404);
+    const st = await http('POST', '/api/payments/razorpay/status', { body: { orderNumber: placed.body.orderNumber, email: 'buyer@example.test' } });
+    assert.equal(st.body.paid, true);
     const r = await http('POST', `/api/admin/orders/${placed.body.orderNumber}/payment-check`, { token: support.token });
     assert.equal(r.status, 200);
     assert.equal(r.body.paymentStatus, 'paid');
@@ -488,13 +487,19 @@ describe('abuse limits', () => {
 });
 
 describe('customer view', () => {
-  test('shows payment state but no internal payment details', async () => {
+  test('an unpaid online order is not an order yet; once paid it shows, without internal payment details', async () => {
     const owner = await makeUser('customer', 'view@example.test');
     const p = await makeProduct();
-    await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'view@example.test', token: owner.token });
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'view@example.test', token: owner.token });
+    assert.equal(placed.body.paymentRequired, true);
+    assert.equal((await http('GET', '/api/orders/mine', { token: owner.token })).body.length, 0);
+    assert.equal((await http('GET', `/api/orders/${placed.body.orderNumber}`, { token: owner.token })).status, 404);
+    assert.equal((await http('GET', `/api/orders/track/${placed.body.trackingId}?email=view@example.test`)).status, 404);
+    const s = await startPay(placed.body.orderNumber, 'view@example.test');
+    assert.equal((await verify(placed.body.orderNumber, pay(s.body.razorpayOrderId).response, 'view@example.test')).status, 200);
     const r = await http('GET', '/api/orders/mine', { token: owner.token });
-    assert.equal(r.body[0].statusKey, 'pending_payment');
-    assert.equal(r.body[0].canPayOnline, true);
+    assert.equal(r.body.length, 1);
+    assert.equal(r.body[0].paymentStatus, 'paid');
     assert.ok(!('payment' in r.body[0]));
     assert.ok(!('notes' in r.body[0]));
     void customer;
@@ -566,5 +571,85 @@ describe('online orders never paid', () => {
     assert.equal(r.status, 201);
     assert.equal(await expireUnpaidOrders(later()), 0);
     assert.equal((await load(r.body.orderNumber)).status, 'Order Placed');
+  });
+});
+
+describe('a failed or closed payment places no order', () => {
+  const abandon = (orderNumber, email = 'buyer@example.test') => http('POST', '/api/payments/razorpay/abandon', { body: { orderNumber, email } });
+  test('failed payment: released at once, stock and coupon back, never seen by anyone', async () => {
+    const p = await makeProduct({ stock: 4 });
+    await Coupon.create({ code: 'FAIL10', type: 'percent', percent: 10, active: true });
+    const owner = await makeUser('customer', 'buyer@example.test');
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { token: owner.token, extra: { couponCode: 'FAIL10' } });
+    const s = await startPay(placed.body.orderNumber);
+    const { response } = pay(s.body.razorpayOrderId, { status: 'failed' });
+    assert.equal((await verify(placed.body.orderNumber, response)).status, 402);
+    const r = await abandon(placed.body.orderNumber);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.released, true);
+    assert.equal((await Product.findById(p._id)).stock, 4);
+    assert.equal((await Coupon.findOne({ code: 'FAIL10' })).usedCount, 0);
+    const admin = await makeUser('admin');
+    assert.equal((await http('GET', '/api/orders?paged=1', { token: admin.token })).body.items.length, 0);
+    assert.equal((await http('GET', '/api/admin/orders?paged=1', { token: admin.token })).body.items.length, 0);
+    assert.equal((await http('GET', '/api/orders/mine', { token: owner.token })).body.length, 0);
+    const o = await load(placed.body.orderNumber);
+    assert.equal(o.status, 'Cancelled');
+    assert.equal(o.paymentStatus, 'pending');
+    assert.equal(o.paymentHold, true);
+  });
+
+  test('window closed without paying: released the same way', async () => {
+    const p = await makeProduct({ stock: 2 });
+    const placed = await placeOnline([{ slug: p.slug, qty: 2 }]);
+    await startPay(placed.body.orderNumber);
+    assert.equal((await abandon(placed.body.orderNumber)).body.released, true);
+    assert.equal((await Product.findById(p._id)).stock, 2);
+  });
+
+  test('if Razorpay did take the money, it is applied and becomes a real order', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    const s = await startPay(placed.body.orderNumber);
+    pay(s.body.razorpayOrderId); // captured, browser lost it
+    const r = await abandon(placed.body.orderNumber);
+    assert.equal(r.body.paid, true);
+    assert.equal(r.body.released, false);
+    const admin = await makeUser('admin');
+    assert.equal((await http('GET', '/api/admin/orders?paged=1', { token: admin.token })).body.items.length, 1);
+  });
+
+  test('Razorpay unreachable: nothing is released yet', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    await startPay(placed.body.orderNumber);
+    rzp.down = true;
+    const r = await abandon(placed.body.orderNumber);
+    rzp.down = false;
+    assert.equal(r.status, 202);
+    assert.equal((await load(placed.body.orderNumber)).status, 'Order Placed');
+  });
+
+  test('only the buyer can release it; cash on delivery orders are not touched', async () => {
+    const p = await makeProduct();
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }]);
+    assert.equal((await abandon(placed.body.orderNumber, 'someone@example.test')).status, 404);
+    const cod = await http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: customer() } });
+    assert.equal(cod.body.paymentRequired, undefined);
+    assert.equal((await abandon(cod.body.orderNumber)).body.released, false);
+    assert.equal((await load(cod.body.orderNumber)).status, 'Order Placed');
+  });
+
+  test('the app bag empties only when the payment succeeds', async () => {
+    const { default: User } = await import('../src/models/User.js');
+    const p = await makeProduct();
+    const owner = await makeUser('customer', 'bag@example.test');
+    await User.updateOne({ _id: owner.user._id }, { $set: { cart: [{ slug: p.slug, qty: 1 }], address: { line1: '1 Test Road', city: 'Mumbai', postalCode: '400001', region: 'IN' }, phone: '9876543210' } });
+    const placed = await http('POST', '/api/orders', { token: owner.token, body: { paymentMethod: 'online' } });
+    assert.equal(placed.status, 201, JSON.stringify(placed.body));
+    assert.equal((await User.findById(owner.user._id)).cart.length, 1, 'bag kept while paying');
+    const s = await startPay(placed.body.orderNumber, 'bag@example.test');
+    await verify(placed.body.orderNumber, pay(s.body.razorpayOrderId).response, 'bag@example.test');
+    assert.equal((await User.findById(owner.user._id)).cart.length, 0, 'bag emptied once paid');
   });
 });

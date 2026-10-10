@@ -143,6 +143,7 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
       shipping,
       total: subtotal - discount + shipping,
       paymentMethod: method,
+      ...(method === 'online' && { paymentHold: true }),
       giftNote: giftNote?.enabled
         ? {
             enabled: true,

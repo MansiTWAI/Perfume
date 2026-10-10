@@ -7,7 +7,7 @@ import { optionalAuth, requireAuth, asyncHandler, isAdminSession } from '../midd
 import {
   razorpayConfigured, ONLINE_CURRENCIES, ID, createRazorpayOrder, fetchPayment, verifyPaymentSignature, verifyWebhookSignature, payLog,
 } from '../services/razorpay.js';
-import { applyPayment, applyRefund, reconcile, attemptIds, amountDue } from '../services/payments.js';
+import { applyPayment, applyRefund, reconcile, attemptIds, amountDue, releaseUnpaid } from '../services/payments.js';
 
 // Online payment for an order that has already been placed (POST /orders).
 // The amount always comes from the saved order, never from the client, and an
@@ -25,7 +25,8 @@ const str = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : 
 async function findPayable(req) {
   const key = str(req.body?.orderNumber) || str(req.body?.orderId);
   const email = str(req.body?.email, 160).toLowerCase();
-  const order = key && (await Order.findOne(mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() }));
+  // Online orders waiting for payment are hidden everywhere else; here they count.
+  const order = key && (await Order.findOne(mongoose.isValidObjectId(key) ? { _id: key } : { orderNumber: key.toUpperCase() }).setOptions({ withHeld: true }));
   const mine = order && ((req.user && (String(order.user) === String(req.user._id) || order.customer.email === req.user.email)) || (email && order.customer.email === email));
   if (!mine) throw Object.assign(new Error('We could not find this order in your account.'), { status: 404 });
   return order;
@@ -88,7 +89,7 @@ const createPayment = asyncHandler(async (req, res) => {
       rpOrderId = rp.id;
       payLog('razorpay_order_created', { orderNumber: order.orderNumber, razorpayOrderId: rp.id, amount, currency: order.currency });
     } else {
-      const fresh = await Order.findById(order._id);
+      const fresh = await Order.findById(order._id).setOptions({ withHeld: true });
       const won = (fresh.payment?.attempts || []).at(-1);
       if (fresh.paymentStatus !== 'pending') return res.status(409).json({ code: 'ALREADY_PAID', message: 'This order is already paid.', ...paidReply(fresh) });
       if (!won || won.amount !== amountDue(fresh)) return res.status(409).json({ message: 'Your order changed while we were preparing the payment. Please try again.' });
@@ -184,6 +185,32 @@ r.post(
       status: order.status,
       lastError: order.paymentStatus === 'pending' ? last?.lastError || null : null,
     });
+  })
+);
+
+// The payment failed or the window was closed: no order is placed. The held
+// order is released (stock and coupon back) once Razorpay confirms nothing
+// was paid. Same proof as paying: signed in, or the checkout email.
+r.post(
+  '/razorpay/abandon',
+  statusLimiter,
+  optionalAuth,
+  asyncHandler(async (req, res) => {
+    let order;
+    try {
+      order = await findPayable(req);
+    } catch (e) {
+      return fail(res, e);
+    }
+    if (order.paymentStatus !== 'pending') return res.json({ ...paidReply(order), released: false });
+    if (!order.paymentHold) return res.json({ released: false, kept: true }); // a placed order from before: pay later from its page
+    const outcome = await releaseUnpaid(order, 'abandoned');
+    if (outcome === 'paid') {
+      const o = await Order.findById(order._id).setOptions({ withHeld: true });
+      return res.json({ ...paidReply(o), released: false });
+    }
+    if (outcome === 'unknown') return res.status(202).json({ released: false, confirming: true, message: 'We are checking the payment. Please do not pay again yet.' });
+    res.json({ released: true, message: 'Payment not completed. No order was placed.' });
   })
 );
 

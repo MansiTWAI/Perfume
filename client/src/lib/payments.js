@@ -31,6 +31,11 @@ function loadCheckout() {
 const problem = (kind, message) => Object.assign(new Error(message), { kind, dismissed: kind === 'dismissed' });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The payment failed or the window was closed: the server releases the held
+// order (no order is placed) once Razorpay confirms nothing was paid.
+// Answers { released } | { paid } | { confirming } (Razorpay unreachable).
+export const abandonPayment = ({ orderNumber, email }) => api('/payments/razorpay/abandon', { method: 'POST', body: { orderNumber, email } });
+
 // Where the order's payment stands (asks Razorpay on the server if needed).
 export const checkPayment = ({ orderNumber, email }) => api('/payments/razorpay/status', { method: 'POST', body: { orderNumber, email } });
 

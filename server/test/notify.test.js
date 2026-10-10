@@ -405,7 +405,7 @@ describe('coupons', () => {
 
     const first = await place(items, { couponCode: 'once15', email: 'repeat@example.test' });
     assert.equal(first.status, 201, JSON.stringify(first.body));
-    const o = await Order.findOne({ orderNumber: first.body.orderNumber }).lean();
+    const o = await Order.findOne({ orderNumber: first.body.orderNumber }).setOptions({ withHeld: true }).lean();
     assert.equal(o.discount, 450);
     assert.equal(o.coupon.code, 'ONCE15');
     assert.equal((await Coupon.findOne({ code: 'ONCE15' })).usedCount, 1);

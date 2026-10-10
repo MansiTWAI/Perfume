@@ -2,7 +2,7 @@
   "info": {
     "name": "AL BARAKAH LIFESTYLE API",
     "_postman_id": "a1b2c3d4-al-barakah-api-v1",
-    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (150 paths). Regenerate with `npm run postman`.",
+    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (151 paths). Regenerate with `npm run postman`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -3079,6 +3079,117 @@
                 "exec": [
                   "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
                   "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('verifyId', o.id || o._id);",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment failed or cancelled: place no order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/razorpay/abandon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "razorpay",
+                "abandon"
+              ]
+            },
+            "description": "Call when Razorpay Checkout reports a failure or is closed without paying. An online order is not an order until it is paid (POST /orders answers `paymentRequired: true` and the order stays hidden from lists, tracking and the team). This asks Razorpay first: if nothing was paid the held order is released (stock and coupon given back) → `{ released: true }`; if money arrived it becomes a real order → `{ paid: true }`; if Razorpay cannot be reached → 202 `{ confirming: true }` (do not offer to pay again yet). Unpaid held orders are also released automatically after PAYMENT_HOLD_MINUTES. Same proof of ownership as /payments/razorpay/order.\n\n**Responses:** `200` Released, or paid after all · `202` Razorpay not reachable: still checking · `404` Not found (also returned for other people’s orders). · `429` Too many requests from this connection; try again later.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderNumber\": \"{{orderNumber}}\",\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 Released, or paid after all",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/payments/razorpay/abandon",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "payments",
+                    "razorpay",
+                    "abandon"
+                  ]
+                },
+                "description": "Call when Razorpay Checkout reports a failure or is closed without paying. An online order is not an order until it is paid (POST /orders answers `paymentRequired: true` and the order stays hidden from lists, tracking and the team). This asks Razorpay first: if nothing was paid the held order is released (stock and coupon given back) → `{ released: true }`; if money arrived it becomes a real order → `{ paid: true }`; if Razorpay cannot be reached → 202 `{ confirming: true }` (do not offer to pay again yet). Unpaid held orders are also released automatically after PAYMENT_HOLD_MINUTES. Same proof of ownership as /payments/razorpay/order.\n\n**Responses:** `200` Released, or paid after all · `202` Razorpay not reachable: still checking · `404` Not found (also returned for other people’s orders). · `429` Too many requests from this connection; try again later.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"orderNumber\": \"{{orderNumber}}\",\n  \"email\": \"{{email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Released, or paid after all",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Released, or paid after all\",\n  \"data\": {\n    \"released\": true,\n    \"message\": \"Payment not completed. No order was placed.\"\n  }\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('abandonId', o.id || o._id);",
                   "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
                 ]
               }

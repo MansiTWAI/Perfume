@@ -12,7 +12,8 @@ after(close);
 beforeEach(reset);
 
 const { mapScan, courierTime, summarize, shippingTick, shippingIdle } = shipping;
-const load = (orderNumber) => Order.findOne({ orderNumber }).lean();
+// Test reads see every order, held (awaiting payment) ones too.
+const load = (orderNumber) => Order.findOne({ orderNumber }).setOptions({ withHeld: true }).lean();
 const creates = () => dlv.calls.filter((c) => c === 'POST /api/cmu/create.json').length;
 const mails = (orderNumber, word) => outbox.filter((m) => m.subject.includes(orderNumber) && (!word || m.subject.includes(word))).length;
 const push = (body, token = process.env.DELHIVERY_WEBHOOK_TOKEN) => http('POST', '/api/shipping/delhivery/webhook', { body, headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -108,9 +109,9 @@ describe('creating shipments', () => {
     assert.ok(!o.shipment?.awb);
     assert.equal(creates(), 0);
     const { token } = await makeUser('admin');
+    // Not an order until paid: the team cannot even see it.
     const r = await http('POST', `/api/admin/orders/${o.orderNumber}/shipment`, { token });
-    assert.equal(r.status, 409);
-    assert.match(r.body.message, /payment has not been received/);
+    assert.equal(r.status, 404);
   });
   test('cash on delivery waits for confirmation, then ships as COD', async () => {
     const n = await codOrder();

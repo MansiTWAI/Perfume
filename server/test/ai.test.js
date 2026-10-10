@@ -130,7 +130,7 @@ describe('customer chat', () => {
 
   test('order status needs the tracking ID plus the checkout email typed in chat', async () => {
     const p = await makeProduct({ slug: 'zafreon' });
-    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'owner@example.test' });
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'owner@example.test', extra: { paymentMethod: 'cod' } });
     const { trackingId } = placed.body;
     gemini.reply(gemini.call('getOrderStatus', { trackingId }), (body) => gemini.text(JSON.stringify(body.contents.at(-1).parts[0].functionResponse.response.result)));
     const anon = await say(`Where is ${trackingId}?`);
@@ -150,7 +150,7 @@ describe('customer chat', () => {
     const owner = await makeUser('customer', 'mine@example.test');
     const other = await makeUser('customer', 'other@example.test');
     const p = await makeProduct({ slug: 'zafreon' });
-    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'mine@example.test', token: owner.token });
+    const placed = await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'mine@example.test', token: owner.token, extra: { paymentMethod: 'cod' } });
     const ask = (token) => {
       gemini.reply(gemini.call('getOrderStatus', { orderNumber: placed.body.orderNumber }), (body) => gemini.text(JSON.stringify(body.contents.at(-1).parts[0].functionResponse.response.result)));
       return say(`Status of ${placed.body.orderNumber}?`, { token });
@@ -294,7 +294,7 @@ describe('lead details', () => {
     const p = await makeProduct({ slug: 'zafreon' });
     const buyer = await makeUser('customer', 'repeat@example.test');
     await buyer.user.updateOne({ name: 'Repeat Buyer', phone: '9876543210', address: { line1: '12 Banjara Hills', city: 'Hyderabad', postalCode: '500034' } });
-    await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'repeat@example.test', token: buyer.token });
+    await placeOnline([{ slug: p.slug, qty: 1 }], { email: 'repeat@example.test', token: buyer.token, extra: { paymentMethod: 'cod' } });
     gemini.reply(gemini.call('searchProducts', { query: 'zafreon' }), gemini.text('Here.'));
     await say('I want ZAFREON again as a gift', { token: buyer.token });
     const { token } = await makeUser('admin');
@@ -372,6 +372,6 @@ describe('existing store unaffected', () => {
     const p = await makeProduct();
     const r = await placeOnline([{ slug: p.slug, qty: 1 }]);
     assert.equal(r.status, 201);
-    assert.equal(await Order.countDocuments(), 1);
+    assert.equal(await Order.countDocuments().setOptions({ withHeld: true }), 1);
   });
 });

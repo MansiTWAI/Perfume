@@ -38,6 +38,13 @@ const orderSchema = new mongoose.Schema(
     shipping: Number,
     total: Number,
     paymentMethod: { type: String, default: 'pay-on-confirmation' },
+    // An online order waiting for its payment. It is not an order yet: hidden
+    // from the customer, the team, tracking, reports and emails, and it
+    // becomes one only when Razorpay confirms the payment (services/payments.js).
+    // A failed or abandoned payment releases it (stock and coupon given back).
+    paymentHold: Boolean,
+    // App orders placed from the account's bag: empty the bag once paid.
+    clearBagOnPay: Boolean,
     paymentStatus: { type: String, enum: ['pending', 'paid', 'partially_refunded', 'refunded'], default: 'pending' },
     // Online payment (Razorpay): the provider's ids, for reconciliation and
     // refunds. Amounts here are in paise. No card or bank details are stored.
@@ -110,6 +117,17 @@ const orderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Held orders (paymentHold) are left out of every read unless the query
+// asks for them with .setOptions({ withHeld: true }); only the payment code
+// does. Updates are not filtered.
+const HIDE_HELD = { paymentHold: { $ne: true } };
+orderSchema.pre(['find', 'findOne', 'countDocuments'], function hideHeld() {
+  if (!this.getOptions().withHeld) this.where(HIDE_HELD);
+});
+orderSchema.pre('aggregate', function hideHeldAggregate() {
+  if (!this.options?.withHeld) this.pipeline().unshift({ $match: HIDE_HELD });
+});
 
 // Admin lists, reports and "My orders" look orders up by these.
 orderSchema.index({ createdAt: -1 });

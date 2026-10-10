@@ -12,6 +12,7 @@ import {
   razorpayConfigured, toMinor, fetchPayment, fetchOrderPayments, capturePayment, createRefund, payLog,
 } from './razorpay.js';
 import { orderReady } from './shipping.js';
+import User from '../models/User.js';
 import { release } from './orderStock.js';
 import { releaseCoupon } from './coupons.js';
 
@@ -21,7 +22,7 @@ const fail = (status, message, code) => Object.assign(new Error(message), { stat
 export const attemptIds = (o) =>
   [...new Set([...(o.payment?.attempts || []).map((a) => a.providerOrderId), o.payment?.providerOrderId].filter(Boolean))];
 export const amountDue = (o) => toMinor(o.total);
-const byProviderOrder = (id) => Order.findOne({ $or: [{ 'payment.attempts.providerOrderId': id }, { 'payment.providerOrderId': id }] });
+const byProviderOrder = (id) => Order.findOne({ $or: [{ 'payment.attempts.providerOrderId': id }, { 'payment.providerOrderId': id }] }).setOptions({ withHeld: true });
 
 // Money is taken at capture. With auto-capture on (recommended) Razorpay does
 // it within seconds; otherwise capture here, but only for the right amount:
@@ -100,14 +101,17 @@ export async function applyPayment(p, source, round = 0) {
         'payment.paidAt': new Date(),
         'payment.verifiedBy': source,
       },
+      // Paid: from now on it is a real order, seen by the customer and the team.
+      $unset: { paymentHold: 1 },
     },
     { new: true }
   );
   if (!claimed) {
-    if (round > 1) return { outcome: 'already', order: await Order.findById(order._id) };
+    if (round > 1) return { outcome: 'already', order: await Order.findById(order._id).setOptions({ withHeld: true }) };
     return applyPayment(p, source, round + 1); // look again at what changed
   }
   await Order.updateOne({ _id: order._id, 'payment.attempts.providerOrderId': p.order_id }, { $set: { 'payment.attempts.$.status': 'paid' } });
+  if (claimed.clearBagOnPay && claimed.user) await User.updateOne({ _id: claimed.user }, { $set: { cart: [] } });
   if (claimed.status === 'Order Placed') {
     await Order.updateOne(
       { _id: order._id, status: 'Order Placed' },
@@ -137,7 +141,7 @@ export async function reconcile(order) {
     }
     for (const p of payments.filter((x) => x.status === 'captured' || x.status === 'authorized')) await applyPayment(p, 'reconcile');
   }
-  return Order.findById(order._id);
+  return Order.findById(order._id).setOptions({ withHeld: true });
 }
 
 // ----- refunds -----
@@ -250,41 +254,49 @@ export async function applyRefund(rf) {
 export const holdMinutes = () => Math.max(15, Number(process.env.PAYMENT_HOLD_MINUTES) || 60);
 const lastActivity = (o) => Math.max(new Date(o.createdAt).getTime(), ...(o.payment?.attempts || []).map((a) => new Date(a.createdAt || 0).getTime()));
 
+// Releases one unpaid online order: Razorpay is asked about every attempt
+// first (a captured payment is applied, never thrown away). Returns
+// 'released', 'paid' (money arrived, it is a real order now) or 'unknown'
+// (Razorpay could not be reached: nothing changed).
+export async function releaseUnpaid(order, reason = 'expired') {
+  if (razorpayConfigured()) {
+    for (const id of attemptIds(order)) {
+      let payments;
+      try {
+        payments = await fetchOrderPayments(id);
+      } catch {
+        return 'unknown'; // try again later
+      }
+      for (const p of payments.filter((x) => x.status === 'captured' || x.status === 'authorized')) await applyPayment(p, 'reconcile');
+    }
+  } else if (attemptIds(order).length) {
+    return 'unknown'; // cannot ask Razorpay: never cancel blind
+  }
+  const done = await Order.findOneAndUpdate(
+    { _id: order._id, paymentStatus: 'pending', status: 'Order Placed' },
+    {
+      $set: { status: ORDER_CANCELLED },
+      $push: { history: { status: ORDER_CANCELLED, note: 'Payment was not completed, so the order was released. You are welcome to order again.' } },
+    },
+    { new: true }
+  );
+  if (!done) {
+    const now = await Order.findById(order._id).setOptions({ withHeld: true });
+    return now?.paymentStatus && now.paymentStatus !== 'pending' ? 'paid' : 'released';
+  }
+  await release(done.items.map((i) => ({ product: i.product, qty: i.qty })));
+  if (done.coupon?.code) await releaseCoupon(done.coupon.code);
+  payLog('unpaid_order_released', { orderNumber: done.orderNumber, outcome: 'cancelled', source: reason });
+  return 'released';
+}
+
 export async function expireUnpaidOrders(now = Date.now()) {
   const cutoff = now - holdMinutes() * 60000;
-  const stale = await Order.find({ paymentMethod: 'online', paymentStatus: 'pending', status: 'Order Placed', createdAt: { $lt: new Date(cutoff) } }).limit(50);
+  const stale = await Order.find({ paymentMethod: 'online', paymentStatus: 'pending', status: 'Order Placed', createdAt: { $lt: new Date(cutoff) } }).setOptions({ withHeld: true }).limit(50);
   let cancelled = 0;
   for (const order of stale) {
     if (lastActivity(order) > cutoff) continue;
-    let checked = true;
-    if (razorpayConfigured()) {
-      for (const id of attemptIds(order)) {
-        let payments;
-        try {
-          payments = await fetchOrderPayments(id);
-        } catch {
-          checked = false; // Razorpay unreachable: try again next round
-          break;
-        }
-        for (const p of payments.filter((x) => x.status === 'captured' || x.status === 'authorized')) await applyPayment(p, 'reconcile');
-      }
-    } else if (attemptIds(order).length) {
-      checked = false; // cannot ask Razorpay: never cancel blind
-    }
-    if (!checked) continue;
-    const done = await Order.findOneAndUpdate(
-      { _id: order._id, paymentStatus: 'pending', status: 'Order Placed' },
-      {
-        $set: { status: ORDER_CANCELLED },
-        $push: { history: { status: ORDER_CANCELLED, note: 'Payment was not completed, so the order was released. You are welcome to order again.' } },
-      },
-      { new: true }
-    );
-    if (!done) continue; // paid or changed meanwhile
-    await release(done.items.map((i) => ({ product: i.product, qty: i.qty })));
-    if (done.coupon?.code) await releaseCoupon(done.coupon.code);
-    payLog('unpaid_order_released', { orderNumber: done.orderNumber, outcome: 'cancelled' });
-    cancelled++;
+    if ((await releaseUnpaid(order, 'expired')) === 'released') cancelled++;
   }
   return cancelled;
 }
