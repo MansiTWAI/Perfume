@@ -22,10 +22,13 @@ const couponSchema = new mongoose.Schema(
     // Listed on the website (bag and checkout) for anyone to apply. Codes
     // that are not listed still work for whoever has them.
     showOnSite: { type: Boolean, default: false },
+    // A scratch card from a print run (models/CouponBatch.js): one code, one use.
+    batch: { type: mongoose.Schema.Types.ObjectId, ref: 'CouponBatch' },
   },
   { timestamps: true }
 );
 
 couponSchema.index({ active: 1, showOnSite: 1 });
+couponSchema.index({ batch: 1 });
 
 export default mongoose.model('Coupon', couponSchema);

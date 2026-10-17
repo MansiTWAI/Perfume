@@ -259,14 +259,21 @@ export function StoreProvider({ children }) {
     return () => clearTimeout(id);
   }, [couponCode, checkCoupon, region.ships]); // eslint-disable-line react-hooks/exhaustive-deps
   const discount = coupon && region.ships && coupon.currency === currency ? Math.min(coupon.discount || 0, subtotal) : 0;
-  // A "Shop Now" link from a WhatsApp message can carry ?coupon=CODE: it is
-  // kept and applied once the bag has something in it.
+  // A "Shop Now" link from a WhatsApp message could carry ?coupon=CODE and
+  // apply it. Switched off: discounts only come from a code typed in the bag.
   useEffect(() => {
     const code = query('coupon');
-    if (code && /^[A-Za-z0-9_-]{3,30}$/.test(code)) write('ab_coupon_pending', code.toUpperCase());
+    // Switched off: a discount only comes from a code the shopper types
+    // (or the offer listed in the bag), never from a link.
+    // if (code && /^[A-Za-z0-9_-]{3,30}$/.test(code)) write('ab_coupon_pending', code.toUpperCase());
+    void code;
   }, []);
   useEffect(() => {
     const pending = read('ab_coupon_pending', null);
+    // A code saved from an old link is dropped, not applied.
+    if (pending) write('ab_coupon_pending', null);
+    return;
+    // eslint-disable-next-line no-unreachable
     if (!pending || !cart.length || !region.ships || coupon) return;
     write('ab_coupon_pending', null);
     applyCoupon(pending).then(() => toast(t('{code} applied to your bag', { code: pending })), (e) => setCouponNote(t('{code} was removed: {reason}', { code: pending, reason: e.message })));

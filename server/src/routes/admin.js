@@ -12,6 +12,9 @@ import Category from '../models/Category.js';
 import Order from '../models/Order.js';
 import User, { STAFF_ROLES, ROLES } from '../models/User.js';
 import Coupon from '../models/Coupon.js';
+import CouponBatch from '../models/CouponBatch.js';
+import crypto from 'crypto';
+import { newWorkbook, addTableSheet, sendWorkbook } from '../services/excel.js';
 import Review from '../models/Review.js';
 import Banner from '../models/Banner.js';
 import HomeContent from '../models/HomeContent.js';
@@ -585,6 +588,133 @@ function checkCouponRules(c) {
   if (c.startsAt && c.expiresAt && c.startsAt >= c.expiresAt) return [{ field: 'expiresAt', message: 'Must be after startsAt' }];
   return [];
 }
+// ----- scratch cards: print runs of unique, single-use codes -----
+// Codes look like AB-7K4Q-9XM2: 8 random characters from an alphabet without
+// look-alikes (no 0/O, 1/I/L), about a trillion combinations, so they cannot
+// be guessed within the coupon rate limits. Each code works once, is never
+// listed on the website, and gives the batch's percent.
+const CARD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MAX_CARDS = 5000;
+const cardCode = () => {
+  const b = crypto.randomBytes(8);
+  const s = [...b].map((x) => CARD_ALPHABET[x % CARD_ALPHABET.length]).join('');
+  return `AB-${s.slice(0, 4)}-${s.slice(4)}`;
+};
+const cardState = (c, now = new Date()) => (c.usedCount >= 1 ? 'Used' : !c.active ? 'Switched off' : c.expiresAt && c.expiresAt < now ? 'Expired' : 'Unused');
+async function batchView(b) {
+  const [total, used] = await Promise.all([Coupon.countDocuments({ batch: b._id }), Coupon.countDocuments({ batch: b._id, usedCount: { $gte: 1 } })]);
+  return { id: String(b._id), name: b.name, percent: b.percent, count: total, used, unused: total - used, maxDiscount: b.maxDiscount || null, minSubtotal: b.minSubtotal || null, expiresAt: b.expiresAt || null, active: b.active, createdAt: b.createdAt };
+}
+
+r.get(
+  '/coupon-batches',
+  requireRole(...MANAGE),
+  asyncHandler(async (_req, res) => {
+    const list = await CouponBatch.find().sort({ createdAt: -1 }).limit(200);
+    res.json(await Promise.all(list.map(batchView)));
+  })
+);
+
+// { name, percent, count, expiresAt?, maxDiscount? {INR, AED}, minSubtotal? {INR, AED} }
+r.post(
+  '/coupon-batches',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    const b = req.body || {};
+    const errors = [];
+    const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const percent = Number(b.percent);
+    const count = parseInt(b.count, 10);
+    if (!name) errors.push({ field: 'name', message: 'Give the print run a name, e.g. "Scratch cards 25% · Oct 2026".' });
+    if (!Number.isInteger(percent) || percent < 1 || percent > 100) errors.push({ field: 'percent', message: 'A whole percent from 1 to 100.' });
+    if (!Number.isInteger(count) || count < 1 || count > MAX_CARDS) errors.push({ field: 'count', message: `From 1 to ${MAX_CARDS} cards at a time.` });
+    let expiresAt = null;
+    if (b.expiresAt) {
+      expiresAt = new Date(b.expiresAt);
+      if (Number.isNaN(expiresAt.getTime())) errors.push({ field: 'expiresAt', message: 'Invalid date' });
+      else if (expiresAt < new Date()) errors.push({ field: 'expiresAt', message: 'The expiry must be in the future.' });
+    }
+    if (errors.length) return bad(res, 'Please check the scratch cards.', errors);
+    const batch = await CouponBatch.create({ name, percent, count, expiresAt, maxDiscount: money(b.maxDiscount) || undefined, minSubtotal: money(b.minSubtotal) || undefined, createdBy: req.user._id });
+    const base = {
+      type: 'percent', percent, usageLimit: 1, perUserLimit: 1, active: true, showOnSite: false, batch: batch._id,
+      description: `Scratch card · ${name}`.slice(0, 200),
+      ...(expiresAt && { expiresAt }),
+      ...(batch.maxDiscount && Object.keys(batch.maxDiscount.toObject?.() || batch.maxDiscount).length && { maxDiscount: batch.maxDiscount }),
+      ...(batch.minSubtotal && Object.keys(batch.minSubtotal.toObject?.() || batch.minSubtotal).length && { minSubtotal: batch.minSubtotal }),
+    };
+    // Unique codes: a clash with any existing code is simply drawn again.
+    let made = 0;
+    for (let round = 0; made < count && round < 6; round++) {
+      const want = new Set();
+      while (want.size < count - made) want.add(cardCode());
+      const taken = new Set((await Coupon.find({ code: { $in: [...want] } }).select('code').lean()).map((c) => c.code));
+      const docs = [...want].filter((c) => !taken.has(c)).map((code) => ({ ...base, code }));
+      try {
+        made += (await Coupon.insertMany(docs, { ordered: false })).length;
+      } catch (e) {
+        made += e?.insertedDocs?.length ?? e?.result?.insertedCount ?? 0; // duplicates from a parallel run: draw again
+      }
+    }
+    if (made < count) await CouponBatch.updateOne({ _id: batch._id }, { $set: { count: made } });
+    res.status(201).json(await batchView(await CouponBatch.findById(batch._id)));
+  })
+);
+
+// Switch a whole print run off (lost or leaked cards) or on again.
+r.patch(
+  '/coupon-batches/:id',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    const batch = validId(req.params.id) && (await CouponBatch.findById(req.params.id));
+    if (!batch) return res.status(404).json({ message: 'Print run not found.' });
+    if (req.body?.active !== undefined) {
+      batch.active = !!req.body.active;
+      await batch.save();
+      await Coupon.updateMany({ batch: batch._id }, { $set: { active: batch.active } });
+    }
+    res.json(await batchView(batch));
+  })
+);
+
+// Every code of a print run as a workbook: for the printer, and to see which
+// cards were used, on which order and when.
+r.get(
+  '/coupon-batches/:id/codes',
+  requireRole(...MANAGE),
+  asyncHandler(async (req, res) => {
+    const batch = validId(req.params.id) && (await CouponBatch.findById(req.params.id));
+    if (!batch) return res.status(404).json({ message: 'Print run not found.' });
+    const codes = await Coupon.find({ batch: batch._id }).sort({ createdAt: 1, code: 1 }).lean();
+    const orders = await Order.find({ 'coupon.code': { $in: codes.map((c) => c.code) }, status: { $ne: ORDER_CANCELLED } }).select('orderNumber coupon.code createdAt customer.email discount currency').lean();
+    const byCode = new Map(orders.map((o) => [o.coupon.code, o]));
+    const now = new Date();
+    const rows = codes.map((c, i) => {
+      const o = byCode.get(c.code);
+      return { n: i + 1, code: c.code, percent: `${c.percent}%`, expires: c.expiresAt || null, status: cardState(c, now), order: o?.orderNumber || '', usedAt: o?.createdAt || null, email: o?.customer?.email || '', discount: o ? o.discount : null, currency: o?.currency || 'INR' };
+    });
+    const wb = newWorkbook();
+    addTableSheet(wb, 'Scratch cards', {
+      title: `Scratch cards · ${batch.name}`,
+      meta: [['Discount', `${batch.percent}%${batch.maxDiscount?.INR ? ` (up to ₹${batch.maxDiscount.INR})` : ''}`], ['Cards', String(codes.length)], ['Expires', batch.expiresAt ? batch.expiresAt.toISOString().slice(0, 10) : 'No expiry'], ['Rules', 'One code, one use. Not shown on the website; typed in the bag or at checkout.']],
+      columns: [
+        { key: 'n', header: '#', type: 'int', width: 7 },
+        { key: 'code', header: 'Code', width: 18 },
+        { key: 'percent', header: 'Discount', width: 10 },
+        { key: 'expires', header: 'Expires', type: 'date', width: 14 },
+        { key: 'status', header: 'Status', width: 14 },
+        { key: 'order', header: 'Used on order', width: 16 },
+        { key: 'usedAt', header: 'Used at', type: 'datetime', width: 18 },
+        { key: 'email', header: 'Customer email', width: 28 },
+        { key: 'discount', header: 'Discount given', type: 'money', width: 14 },
+      ],
+      rows,
+    });
+    const slug = batch.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'cards';
+    await sendWorkbook(res, wb, `scratch_cards_${slug}.xlsx`);
+  })
+);
+
 // Orders that used each code (cancelled ones not counted): how many, the
 // discount given and the sales they brought, per currency.
 async function couponUsage(codes) {
@@ -606,7 +736,8 @@ r.get(
   '/coupons',
   requireRole(...MANAGE),
   asyncHandler(async (req, res) => {
-    const filter = {};
+    // Scratch cards have their own section (/admin/coupon-batches).
+    const filter = { batch: null };
     const now = new Date();
     if (req.query.active === 'true') filter.active = true;
     if (req.query.active === 'false') filter.active = false;

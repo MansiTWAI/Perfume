@@ -5,6 +5,7 @@ import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { Pager } from './Fields';
 import Icon from '../../components/Icon';
+import ScratchCards from './ScratchCards';
 
 // Coupons: what each one gives, its rules, how much it has been used and what
 // it brought in. Codes are always judged on the server (checkout, bag and
@@ -144,6 +145,7 @@ export function CouponList() {
         {data && <Pager page={data.page} pages={data.pages} total={data.total} noun="coupons" onPage={(p) => go({ page: String(p) })} />}
       </section>
       <p className="a-muted a-hint">Deleting a coupon that has been used keeps those orders and their discount as they are. To stop a coupon but keep its record, end it or switch it off.</p>
+      <ScratchCards />
     </div>
   );
 }

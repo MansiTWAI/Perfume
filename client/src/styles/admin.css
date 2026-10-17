@@ -603,3 +603,13 @@ button.a-link { background: none; border: 0; padding: 0; cursor: pointer; font: 
 @media (max-width: 600px) {
   .a-banner .a-grid3 { grid-template-columns: 1fr; }
 }
+
+/* Scratch cards (coupon print runs). */
+.a-scratch { margin-top: 26px; }
+.a-scratch-head h2 { margin: 0 0 6px; font: 500 22px/1.2 var(--display); }
+.a-scratch-head p { margin: 0 0 16px; max-width: 70ch; }
+.a-scratch-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 16px; align-items: start; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--a-line); }
+.a-scratch-form .a-error, .a-scratch-form .a-actions { grid-column: 1 / -1; }
+.a-scratch-form .a-quick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.a-scratch-form .a-scratch-pct { width: 80px; }
+@media (max-width: 900px) { .a-scratch-form { grid-template-columns: 1fr; } }

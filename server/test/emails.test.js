@@ -49,17 +49,19 @@ describe('customer emails', () => {
     }
     await settle();
     const n = r.body.orderNumber;
-    // Confirming also books Delhivery here (auto-create on), which has its own email.
-    assert.deepEqual(subjects(BUYER), [
+    // Confirming also books Delhivery here (auto-create on), which sends its
+    // own email in the background, so its place in the list can vary.
+    const dispatch = `Your order ${n} is being prepared for dispatch`;
+    assert.equal(subjects(BUYER).filter((x) => x === dispatch).length, 1);
+    assert.deepEqual(subjects(BUYER).filter((x) => x !== dispatch), [
       `We have received your order ${n}`,
       `Your order ${n} is confirmed`,
-      `Your order ${n} is being prepared for dispatch`,
       `Your order ${n} is packed`,
       `Your order ${n} is on its way`,
       `Your order ${n} arrives today`,
       `Your order ${n} has been delivered`,
     ]);
-    assert.match(to(BUYER)[3].text, /Gift wrapped as you asked\./);
+    assert.match(to(BUYER).find((m) => m.subject === `Your order ${n} is packed`).text, /Gift wrapped as you asked\./);
     // Saving again with the same status sends nothing new.
     await http('PATCH', `/api/orders/${id}`, { token, body: { status: 'Delivered' } });
     await settle();

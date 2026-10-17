@@ -2,7 +2,7 @@
   "info": {
     "name": "AL BARAKAH LIFESTYLE API",
     "_postman_id": "a1b2c3d4-al-barakah-api-v1",
-    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (151 paths). Regenerate with `npm run postman`.",
+    "description": "One REST API and one database for the website, the admin studio and the mobile app. Everything the admin changes (products, prices, stock, orders) is live for every client immediately.\n\n**Base path:** `/api/v1` is the app contract (website, Flutter app and admin panel). `/api` is the same API with plain response bodies, used by the website and admin studio.\n\n**Response format on /api/v1:** every body documented below is wrapped: `{ \"success\": true, \"message\": \"…\", \"data\": <body> }`. Lists with pages put the list in `data` and add `\"pagination\": { page, limit, total, totalPages }`. Errors: `{ \"success\": false, \"message\": \"…\", \"code\": \"OUT_OF_STOCK\", \"errors\": [{ field, message }] }` (`errors` on validation failures).\n\n**Products** can be addressed by id or slug everywhere (`/products/{id}`, cart, wishlist, reviews). On /api/v1 products come in the app shape: one `price` in the requested `currency` (`?currency=INR|AED|SAR…` or `?country=`), `compareAtPrice`, `fragrance { family, topNotes, heartNotes, baseNotes, longevity }`, `rating`, `reviewCount`, plus every stored field (all prices under `prices`).\n\n**Roles:** customer, admin, manager, support. Staff endpoints are under `/admin` and checked on the server.\n\n**Auth:** `POST /auth/login` (or `/register`) returns an access token (JWT, 7 days) and a refresh token (60 days, rotated). Send `Authorization: Bearer <token>`; on `401`, call `POST /auth/refresh`, and if that fails, sign in again.\n\n**Errors** are JSON: `{ \"code\": \"OUT_OF_STOCK\", \"message\": \"…\" }`. Branch on `code` (stable, listed in the Error model); show `message` to people. **Money** is in whole units of the order currency (INR or AED). Prices always come from the server.\n\nSee also docs/API.md in the repository for the token flow, conventions and mobile notes.\n\n## Getting started\n1. Pick the **AL BARAKAH Production** (or Local) environment.\n2. **Auth → Sign in** (customer) saves `token`; **Sign in as admin** saves `adminToken` (set `adminEmail` / `adminPassword` in the environment first — never commit them).\n3. Requests that create things (orders, products, coupons, templates, campaigns…) save their id, so the next request in the folder works without copying ids.\n\n`baseUrl` is `/api/v1`: every response is `{ success, message, data }`. Change it to `/api` for plain bodies (what the website uses).\nGenerated from /api/openapi.json (154 paths). Regenerate with `npm run postman`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -9082,6 +9082,216 @@
     {
       "name": "Admin API: coupons",
       "item": [
+        {
+          "name": "Scratch-card print runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/coupon-batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "coupon-batches"
+              ]
+            },
+            "description": "Each run with its cards: count, used, unused, percent, cap, minimum, expiry and whether it is on. Managers and admins.\n\n**Responses:** `200` Print runs",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create scratch-card codes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/coupon-batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "coupon-batches"
+              ]
+            },
+            "description": "Makes `count` (1–5000) unique codes like AB-7K4Q-9XM2 for physical scratch cards. Every code is its own coupon: one use only, never listed on the website, typed in the bag or at checkout. `percent` is a whole number 1–100; optional `maxDiscount` and `minSubtotal` ({ INR, AED }) and `expiresAt`. Download the codes for the printer from /admin/coupon-batches/{id}/codes.\n\n**Responses:** `201` Created · `400` Invalid input. `message` says what to fix. · `403` Signed in, but not an admin.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Scratch cards 25% · Oct 2026\",\n  \"percent\": 25,\n  \"count\": 500,\n  \"expiresAt\": \"2027-01-31T23:59:59Z\",\n  \"maxDiscount\": {\n    \"INR\": 1500\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "const o = d && ([d.order, d.product, d.coupon, d.template, d.campaign, d.address, d.item].find((x) => x && typeof x === 'object') || d); if (o && (o.id || o._id)) pm.collectionVariables.set('coupon-batcheId', o.id || o._id);",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Switch a print run off or on",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/coupon-batches/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "coupon-batches",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{coupon-batcheId}}",
+                  "description": "Print run id"
+                }
+              ]
+            },
+            "description": "`{ active: false }` stops every card of the run at once (lost or leaked cards); `true` turns them back on. Used cards stay used.\n\n**Responses:** `200` Updated · `404` Not found (also returned for other people’s orders).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download the codes (.xlsx)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/coupon-batches/:id/codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "coupon-batches",
+                ":id",
+                "codes"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{coupon-batcheId}}",
+                  "description": "Print run id"
+                }
+              ]
+            },
+            "description": "Every code of the run, for the printer, with its status (Unused, Used, Expired, Switched off) and, once used, the order, date, customer email and discount given.\n\n**Responses:** `200` Workbook · `404` Not found (also returned for other people’s orders).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const d = (j && j.data !== undefined) ? j.data : j;",
+                  "pm.test('status is 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Coupons",
           "request": {

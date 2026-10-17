@@ -67,7 +67,8 @@ export function appProduct(doc, { currency = 'INR', rating } = {}) {
     brand: BRAND,
     prices: p.price,
     price: price.amount,
-    compareAtPrice: price.compareAt,
+    // No crossed-out "was" prices: a coupon code is the only discount.
+    compareAtPrice: null,
     currency: price.currency,
     priceIsEstimate: price.estimate,
     volumeMl: p.sizeMl,
