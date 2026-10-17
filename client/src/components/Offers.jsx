@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { api } from '../lib/api';
 import Icon from './Icon';
+import ScratchCover, { isScratched } from './ScratchCover';
+
+// Offers of 25% or more show as a scratch card: scratched to see the code.
+export const SCRATCH_FROM = 25;
+const isScratchOffer = (o) => o.type === 'percent' && o.percent >= SCRATCH_FROM;
 
 // The coupons the house lists on the website ("Show on website"), for this
 // market and shopper (signed in: without the ones they have used up).
@@ -52,8 +57,13 @@ function OfferCard({ o, subtotal, best, busy, onApply }) {
   const { fmt, t } = useStore();
   const L = useLabels();
   const { short, saving } = estimate(o, subtotal);
+  const scratch = isScratchOffer(o);
+  const [hidden, setHidden] = useState(() => scratch && !isScratched(o.code));
   return (
-    <li className={`offer${best ? ' is-best' : ''}${short ? ' is-short' : ''}`}>
+    <li className={`offer${best && !hidden ? ' is-best' : ''}${short ? ' is-short' : ''}${scratch ? ' offer-scratch' : ''}`}>
+      {hidden && <ScratchCover code={o.code} onReveal={() => setHidden(false)} />}
+      <div className="offer-body" aria-hidden={hidden || undefined} inert={hidden ? '' : undefined}>
+      {scratch && !hidden && <span className="offer-tag offer-won">{t('You revealed a gift')}</span>}
       {best && <span className="offer-tag">{t('Best for this bag')}</span>}
       <span className="offer-what">{L.what(o)}</span>
       <span className="offer-terms"><b className="offer-code" dir="ltr">{o.code}</b>{L.terms(o).map((x) => ` · ${x}`).join('')}</span>
@@ -63,9 +73,10 @@ function OfferCard({ o, subtotal, best, busy, onApply }) {
         <span className="offer-save">{t('You save {amount}', { amount: fmt(saving) })}</span>
       ) : null}
       {o.description && <span className="offer-desc">{o.description}</span>}
-      <button type="button" className="offer-apply" disabled={!!short || busy} aria-label={t('Apply {code}', { code: o.code })} onClick={() => onApply(o.code)}>
+      <button type="button" className="offer-apply" disabled={!!short || busy || hidden} aria-label={t('Apply {code}', { code: o.code })} onClick={() => onApply(o.code)}>
         {busy === o.code ? t('Applying…') : t('Apply')}
       </button>
+      </div>
     </li>
   );
 }
@@ -105,7 +116,7 @@ export default function Offers({ compact = false }) {
   const ranked = others
     .map((o) => ({ o, ...estimate(o, subtotal) }))
     .sort((a, b) => (a.short ? 1 : 0) - (b.short ? 1 : 0) || b.saving - a.saving || a.short - b.short);
-  const bestCode = !coupon && ranked[0] && !ranked[0].short && ranked[0].saving > 0 ? ranked[0].o.code : null;
+  const bestCode = !coupon && ranked[0] && !ranked[0].short && ranked[0].saving > 0 && !(isScratchOffer(ranked[0].o) && !isScratched(ranked[0].o.code)) ? ranked[0].o.code : null;
   const shown = all ? ranked : ranked.slice(0, 2);
 
   const applied = coupon && (

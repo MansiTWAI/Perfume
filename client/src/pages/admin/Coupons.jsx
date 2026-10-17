@@ -118,7 +118,7 @@ export function CouponList() {
                   return (
                     <tr key={c.id}>
                       <td>
-                        <Link to={`/admin/coupons/${c.id}`} className="a-code">{c.code}</Link><br /><small>{c.showOnSite ? 'Shown on website' : 'Private code'}</small>
+                        <Link to={`/admin/coupons/${c.id}`} className="a-code">{c.code}</Link><br /><small>{c.showOnSite ? (c.type === 'percent' && c.percent >= 25 ? 'Scratch card on website' : 'Shown on website') : 'Private code'}</small>
                         <span className="a-row-acts">
                           <Link to={`/admin/coupons/${c.id}`} className="a-textbtn" aria-label={`Edit ${c.code}`}>Edit</Link>
                           {['active', 'scheduled', 'used_up'].includes(c.state) && <button type="button" className="a-textbtn" disabled={!!busy} onClick={() => act(c, 'expire')} aria-label={`End ${c.code} now`}>End now</button>}
@@ -272,6 +272,7 @@ export function CouponEdit() {
             </div>
             <label className="a-check"><input type="checkbox" checked={f.active} onChange={set('active')} /> Active</label>
             <label className="a-check"><input type="checkbox" checked={f.showOnSite} onChange={set('showOnSite')} /> Show on website (bag and checkout)</label>
+            {f.showOnSite && f.type === 'percent' && Number(f.percent) >= 25 && <p className="a-hint">25% or more: shown in the bag as a scratch card. Shoppers scratch it to see the code.</p>}
             {error && <p className="a-error" role="alert">{error}</p>}
             <div className="a-actions">
               <button className="a-btn a-primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Create coupon' : 'Save coupon'}</button>
