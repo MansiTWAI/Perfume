@@ -3,12 +3,13 @@ import { useStore } from '../context/StoreContext';
 
 // A gold foil over an offer: the shopper scratches it (finger, pen or mouse)
 // to see the code underneath. Once about half is cleared, the rest falls away.
-// "Reveal" does the same for keyboard and screen-reader users. Revealed codes
-// are remembered on this device, so the card stays open.
+// "Reveal" does the same for keyboard and screen-reader users. A revealed
+// card stays open for the rest of this visit only; the next visit starts
+// covered again.
 const KEY = 'ab_scratched';
 const read = () => {
   try {
-    return new Set(JSON.parse(localStorage.getItem(KEY) || '[]'));
+    return new Set(JSON.parse(sessionStorage.getItem(KEY) || '[]'));
   } catch {
     return new Set();
   }
@@ -18,7 +19,7 @@ function remember(code) {
   try {
     const s = read();
     s.add(code);
-    localStorage.setItem(KEY, JSON.stringify([...s].slice(-50)));
+    sessionStorage.setItem(KEY, JSON.stringify([...s].slice(-50)));
   } catch {
     /* storage unavailable: it opens for this visit only */
   }
