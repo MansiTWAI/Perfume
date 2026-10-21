@@ -8,6 +8,7 @@
 // the API says whether one is set, never what it is.
 import crypto from 'crypto';
 import mongoose from 'mongoose';
+import { looksLikeUrl } from './delhivery.js';
 
 export const GROUPS = {
   whatsapp: {
@@ -28,7 +29,7 @@ export const GROUPS = {
     keys: [
       { env: 'DELHIVERY_API_TOKEN', label: 'API token', secret: true, max: 200, pattern: /^\S+$/ },
       { env: 'DELHIVERY_ENV', label: 'Mode', options: ['staging', 'production'] },
-      { env: 'DELHIVERY_PICKUP_LOCATION', label: 'Pickup location (warehouse name)', max: 120, pattern: /^[^\r\n]+$/ },
+      { env: 'DELHIVERY_PICKUP_LOCATION', label: 'Pickup location (warehouse name)', max: 120, pattern: /^[^\r\n]+$/, notUrl: true },
       { env: 'DELHIVERY_WEBHOOK_TOKEN', label: 'Scan-push (webhook) token', secret: true, max: 200, min: 16, pattern: /^\S+$/ },
     ],
   },
@@ -131,6 +132,7 @@ export async function saveGroup(group, { values = {}, clear = [] } = {}, by = ''
     else if (k.min && v.length < k.min) errors.push({ field: k.env, message: `${k.label} must be at least ${k.min} characters.` });
     else if (k.options && !k.options.includes(v)) errors.push({ field: k.env, message: `${k.label} must be one of: ${k.options.join(', ')}.` });
     else if (k.pattern && !k.pattern.test(v)) errors.push({ field: k.env, message: `${k.label} does not look right.` });
+    else if (k.notUrl && looksLikeUrl(v)) errors.push({ field: k.env, message: `${k.label} must be the warehouse name as registered in Delhivery, not a web address.` });
     else next[k.env] = v;
   }
   if (errors.length) return { errors };

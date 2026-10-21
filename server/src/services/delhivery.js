@@ -15,6 +15,13 @@
 import crypto from 'crypto';
 
 export const delhiveryConfigured = () => !!(process.env.DELHIVERY_API_TOKEN && process.env.DELHIVERY_PICKUP_LOCATION);
+export const looksLikeUrl = (v) => /^\s*(https?:\/\/|www\.)|\.(com|in|net|org)(\/|\s*$)/i.test(String(v || ''));
+// A set-up mistake that makes every booking fail ('' when none).
+export function setupProblem() {
+  const pickup = String(process.env.DELHIVERY_PICKUP_LOCATION || '').trim();
+  if (looksLikeUrl(pickup)) return `The Delhivery pickup location is set to "${clean(pickup, 60)}", which is a web address, not a warehouse name. In Admin → Settings, enter the warehouse name exactly as it appears in Delhivery One → Settings → Pickup locations.`;
+  return '';
+}
 export const delhiveryMode = () => (process.env.DELHIVERY_ENV === 'production' ? 'production' : 'staging');
 const base = () => (delhiveryMode() === 'production' ? 'https://track.delhivery.com' : 'https://staging-express.delhivery.com');
 
@@ -133,7 +140,9 @@ export function shippingConfig() {
 export function explainRemarks(remarks, order) {
   const r = String(remarks || '');
   const pin = digits(order?.customer?.address?.postalCode).slice(0, 6);
-  if (/clientwarehouse|warehouse|pickup/i.test(r)) {
+  // "'NoneType' object has no attribute 'end_date'" is what Delhivery answers
+  // when the pickup location name matches no warehouse of the account.
+  if (/clientwarehouse|warehouse|pickup|end_date|nonetype/i.test(r)) {
     return `Delhivery does not recognise the pickup location "${clean(process.env.DELHIVERY_PICKUP_LOCATION, 60)}". In Admin → Shipping → Settings, enter the warehouse name exactly as it appears in your Delhivery account (capitals and spaces count), and use the token from the same account (test or live).`;
   }
   if (/non.?serviceable|not serviceable|serviceab|embargo|pin ?code|exception pin|invalid pin/i.test(r)) return `Delhivery does not deliver to PIN code ${pin || '(missing)'}. Check the PIN with the customer.`;

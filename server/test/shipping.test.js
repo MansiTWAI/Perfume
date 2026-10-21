@@ -256,6 +256,26 @@ describe('creating shipments', () => {
       dlv.unserviceable.clear();
     }
   });
+  test('a web address saved as the pickup location is caught; Delhivery\'s end_date error is explained', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    const before = process.env.DELHIVERY_PICKUP_LOCATION;
+    process.env.DELHIVERY_PICKUP_LOCATION = 'https://track.delhivery.com/fm/request/new/';
+    try {
+      const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+      assert.equal(r.status, 409);
+      assert.match(r.body.message, /web address, not a warehouse name/);
+      const saved = await http('PUT', '/api/admin/settings/integrations/delhivery', { token, body: { values: { DELHIVERY_PICKUP_LOCATION: 'www.delhivery.com' } } });
+      assert.equal(saved.status, 400);
+      assert.match(saved.body.message, /not a web address/);
+    } finally {
+      process.env.DELHIVERY_PICKUP_LOCATION = before;
+    }
+    dlv.rejectNext = "Package creation API error.Package might be saved. Error message is 'NoneType' object has no attribute 'end_date'";
+    const r2 = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+    assert.equal(r2.status, 422);
+    assert.match(r2.body.message, /does not recognise the pickup location "Test Warehouse"/);
+  });
   test('an Indian street named after a foreign city is fine', async () => {
     const p = await makeProduct();
     const r = await http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: { ...customer(), address: { line1: '4 Dubai Main Road, near Oman Bank', city: 'Hyderabad', state: 'telangana', postalCode: '500001' } } } });

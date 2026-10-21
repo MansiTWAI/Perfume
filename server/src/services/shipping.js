@@ -8,7 +8,7 @@ import Order from '../models/Order.js';
 import { ORDER_STAGES, ORDER_CANCELLED, SHIPMENT_LABELS, SHIPMENT_FINAL } from '../config/commerce.js';
 import { trackingUrl } from '../../../shared/couriers.js';
 import {
-  delhiveryConfigured, createShipment, trackShipments, cancelShipment, checkPin, shipLog, clean, AWB_RX,
+  delhiveryConfigured, setupProblem, createShipment, trackShipments, cancelShipment, checkPin, shipLog, clean, AWB_RX,
 } from './delhivery.js';
 import { foreignPlace, indianState, indianPin, indianMobile } from '../../../shared/india.js';
 import { mailConfigured, sendMail, shippingEmail } from './mail.js';
@@ -27,6 +27,7 @@ const pollMinutes = () => Math.max(Number(process.env.DELHIVERY_POLL_MINUTES) ||
 // tracking number are left alone.
 export function notReady(o, { manual = false } = {}) {
   if (!delhiveryConfigured()) return 'Delhivery is not set up on the server yet.';
+  if (setupProblem()) return setupProblem();
   if (!o) return 'Order not found.';
   if (o.currency !== 'INR') return 'Delhivery ships within India only. Use another courier for this order.';
   if (o.status === ORDER_CANCELLED) return 'This order is cancelled.';
