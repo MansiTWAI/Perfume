@@ -6,7 +6,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/commerce.js';
 import { code } from '../utils.js';
-import { validPhone } from '../models/User.js';
+import { validPhone, formatPhone } from '../models/User.js';
 import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.js';
 import { foreignPlace, indianState, indianPin } from '../../../shared/india.js';
 
@@ -36,6 +36,7 @@ function cleanCustomer(customer, region) {
   const digits = out.phone.replace(/\D/g, '');
   const phoneOk = region.code === 'IN' ? validPhone(out.phone) : digits.length >= 8 && digits.length <= 15;
   if (!phoneOk) throw fail(400, 'Please enter a valid phone number.');
+  out.phone = formatPhone(out.phone); // one readable form (unchanged if it is not a standard number)
   if (region.code === 'IN') {
     if (!indianPin(out.address.postalCode)) throw fail(400, 'Please enter a valid 6-digit PIN code.');
     // Rupee orders ship with Delhivery, within India only.

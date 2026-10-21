@@ -20,7 +20,7 @@ describe('sign-up', () => {
     const ok = await register({ email: 'a@example.test', phone: '98765 43210' });
     assert.equal(ok.status, 201);
     const u = await User.findOne({ email: 'a@example.test' }).lean();
-    assert.equal(u.phone, '98765 43210');
+    assert.equal(u.phone, '+91 98765 43210'); // stored in one readable form
     assert.equal(u.phoneNormalized, '+919876543210'); // +91 by default
   });
   test('one account per number, whatever the format', async () => {
@@ -61,6 +61,29 @@ describe('contact form', () => {
     assert.equal((await send({ phone: '123' })).status, 400);
     assert.equal((await send({ phone: '+91 98765 43210' })).status, 201);
     assert.equal((await send({}, '/api/v1/enquiries')).status, 201);
+  });
+});
+
+describe('one phone format', () => {
+  test('accounts and orders store valid numbers as "+91 98765 43210"; older accounts are tidied', async () => {
+    const { tidyPhones, formatPhone } = await import('../src/models/User.js');
+    assert.equal(formatPhone('09876543210'), '+91 98765 43210');
+    assert.equal(formatPhone('0091-98765-43210'), '+91 98765 43210');
+    assert.equal(formatPhone('+971501234567'), '+971 50 123 4567');
+    assert.equal(formatPhone('12345'), '12345');
+    await User.collection.insertMany([
+      { name: 'Old A', email: 'olda@example.test', phone: '9876543210', phoneNormalized: '+919876543210', role: 'customer', passwordHash: 'x' },
+      { name: 'Old B', email: 'oldb@example.test', phone: '+91-98765-43211', phoneNormalized: '+919876543211', role: 'customer', passwordHash: 'x' },
+      { name: 'Odd', email: 'odd@example.test', phone: 'call me', role: 'customer', passwordHash: 'x' },
+    ]);
+    assert.equal(await tidyPhones(User), 2);
+    assert.equal(await tidyPhones(User), 0);
+    const all = await User.find({}).select('email phone phoneNormalized').lean();
+    const by = Object.fromEntries(all.map((u) => [u.email, u]));
+    assert.equal(by['olda@example.test'].phone, '+91 98765 43210');
+    assert.equal(by['olda@example.test'].phoneNormalized, '+919876543210');
+    assert.equal(by['oldb@example.test'].phone, '+91 98765 43211');
+    assert.equal(by['odd@example.test'].phone, 'call me');
   });
 });
 

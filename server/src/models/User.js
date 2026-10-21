@@ -26,6 +26,16 @@ export function validPhone(v) {
   return n.startsWith('+91') ? /^\+91[6-9]\d{9}$/.test(n) : true;
 }
 
+// One readable form for a valid number: "+91 98765 43210", "+971 50 123 4567",
+// otherwise "+<digits>". Invalid input is returned as it was typed.
+export function formatPhone(v) {
+  if (!validPhone(v)) return String(v || '').trim();
+  const n = normalizePhone(v);
+  if (/^\+91\d{10}$/.test(n)) return `+91 ${n.slice(3, 8)} ${n.slice(8)}`;
+  if (/^\+971\d{9}$/.test(n)) return `+971 ${n.slice(4, 6)} ${n.slice(6, 9)} ${n.slice(9)}`;
+  return n;
+}
+
 // Every form a number may be stored in: older accounts kept numbers without
 // a country code as plain digits, so lookups match those too.
 export function phoneKeys(v) {
@@ -35,6 +45,18 @@ export function phoneKeys(v) {
   if (n.startsWith('+')) keys.push(n.slice(1));
   if (/^\+91\d{10}$/.test(n)) keys.push(n.slice(3));
   return [...new Set(keys)];
+}
+
+// Existing accounts: rewrites valid numbers in the one readable form (the
+// comparable phoneNormalized is unchanged). Safe to run any number of times.
+export async function tidyPhones(User) {
+  const users = await User.find({ phone: { $nin: [null, ''] } }).select('phone').lean();
+  const ops = users
+    .map((u) => ({ id: u._id, phone: formatPhone(u.phone) }))
+    .filter((x, i) => x.phone !== users[i].phone)
+    .map((x) => ({ updateOne: { filter: { _id: x.id }, update: { $set: { phone: x.phone } } } }));
+  if (ops.length) await User.bulkWrite(ops, { ordered: false });
+  return ops.length;
 }
 
 const userSchema = new mongoose.Schema(
@@ -78,6 +100,8 @@ const userSchema = new mongoose.Schema(
 
 userSchema.pre('save', function (next) {
   if (this.isModified('phone')) {
+    // Stored in one readable form; the comparable form goes in phoneNormalized.
+    if (this.phone) this.phone = formatPhone(this.phone);
     const n = normalizePhone(this.phone);
     if (n !== this.phoneNormalized) this.phoneVerified = false;
     this.phoneNormalized = n || undefined;

@@ -6,6 +6,7 @@ import { startWhatsAppJobs } from './services/whatsapp.js';
 import { startPaymentJobs } from './services/payments.js';
 import { mailConfigured } from './services/mail.js';
 import { loadSettings } from './services/settings.js';
+import User, { tidyPhones } from './models/User.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -25,6 +26,8 @@ connectDB()
     startWhatsAppJobs();
     // Online orders never paid: checked with Razorpay, then released.
     startPaymentJobs();
+    // Account phone numbers in one format (does nothing once they are).
+    if (process.env.TIDY_PHONES !== 'off') tidyPhones(User).then((n) => n && console.log(`Phone numbers tidied: ${n}`)).catch((e) => console.error('Phone tidy failed:', e.message));
     if (process.env.NODE_ENV === 'production' && !mailConfigured()) {
       console.error('Email (SMTP_HOST, MAIL_FROM) is not set: staff cannot receive their sign-in code. See server/.env.example.');
     }
