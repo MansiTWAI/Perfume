@@ -71,6 +71,8 @@ const orderSchema = new mongoose.Schema(
     giftNote: { enabled: Boolean, name: String, occasion: String, message: String },
     status: { type: String, enum: ORDER_STATUSES, default: ORDER_STAGES[0] },
     history: [{ status: String, at: { type: Date, default: Date.now }, note: String, _id: false }],
+    // Set when the order is cancelled (CANCEL_REASONS key, the team's note, who).
+    cancellation: { reason: String, note: String, by: String, at: Date },
     carrier: String,
     carrierUrl: String,
     trackingNumber: String, // courier AWB / consignment number

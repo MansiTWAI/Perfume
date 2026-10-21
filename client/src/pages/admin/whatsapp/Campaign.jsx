@@ -5,6 +5,7 @@ import { useStore } from '../../../context/StoreContext';
 import Icon from '../../../components/Icon';
 import { ContentForm, AiPanel, PhonePreview, Picker, EMPTY_CONTENT, contentOf, fieldErrors, people, AUDIENCE, when } from './shared';
 import { CampaignResults } from './History';
+import { confirm } from '../ui';
 
 // A new campaign in five steps: 1 Audience → 2 Message → 3 Preview →
 // 4 Send (now or later) → 5 Results. Only the current step's choices show;
@@ -64,7 +65,7 @@ export default function Campaign({ status }) {
     const q = scheduled
       ? `Schedule this WhatsApp message to ${people(recipients)} for ${when(scheduled)}? You can cancel it until then.`
       : `Send this WhatsApp message to ${people(recipients)} now? This cannot be undone.`;
-    if (!window.confirm(q)) return;
+    if (!(await confirm({ title: scheduled ? 'Schedule this campaign?' : 'Send this campaign now?', message: q, confirmLabel: scheduled ? 'Schedule' : 'Send now', icon: 'send' }))) return;
     setBusy(true);
     setError('');
     try {

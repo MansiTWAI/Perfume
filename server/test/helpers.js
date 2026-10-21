@@ -21,6 +21,7 @@ process.env.DELHIVERY_PICKUP_LOCATION = 'Test Warehouse';
 process.env.DELHIVERY_WEBHOOK_TOKEN = crypto.randomBytes(20).toString('hex');
 process.env.DELHIVERY_AUTO_CREATE = 'true';
 process.env.MAIL_TRANSPORT = 'memory';
+process.env.SETTINGS_FROM_DB = 'on'; // the in-memory test database, never the live one
 process.env.WHATSAPP_ACCESS_TOKEN = `wa-${crypto.randomBytes(12).toString('hex')}`;
 process.env.WHATSAPP_PHONE_NUMBER_ID = '100200300400';
 process.env.WHATSAPP_NOTIFY_TEMPLATE = 'house_update';
@@ -66,7 +67,7 @@ export const gemini = {
 // Shipments by waybill. Switches: down (network error), timeoutAfterCreate
 // (creates the shipment, then the reply is lost), rejectNext (a remark),
 // trackDown. Every call is kept in dlv.calls ("POST /api/cmu/create.json").
-export const dlv = { shipments: new Map(), calls: [], bodies: [], trackQueries: [], down: false, trackDown: false, timeoutAfterCreate: false, rejectNext: null, cancelled: [] };
+export const dlv = { shipments: new Map(), calls: [], bodies: [], trackQueries: [], down: false, trackDown: false, timeoutAfterCreate: false, rejectNext: null, cancelled: [], unserviceable: new Set() };
 const dlvBase = /^https:\/\/(staging-express|track)\.delhivery\.com/;
 const awbNo = () => String(1000000000000 + crypto.randomInt(1e9) * 1000 + crypto.randomInt(1000));
 // Adds a scan to a fake shipment (what Delhivery's tracking API returns).
@@ -111,6 +112,11 @@ async function fakeDelhivery(u, opts) {
       return { Shipment: { AWB: w, ReferenceNo: x.ref, Status: { Status: last.Scan, StatusType: last.ScanType, StatusDateTime: last.StatusDateTime, StatusLocation: last.ScannedLocation, Instructions: last.Instructions }, Scans: x.scans, ExpectedDeliveryDate: x.edd || null, Consignee: { Name: 'should-not-be-stored' } } };
     }) });
   }
+  if (method === 'GET' && url.pathname === '/c/api/pin-codes/json/') {
+    const pin = url.searchParams.get('filter_codes');
+    if (dlv.unserviceable.has(pin)) return reply(200, { delivery_codes: [] });
+    return reply(200, { delivery_codes: [{ postal_code: { pin: Number(pin), district: 'Test District', state_code: 'MH', cod: 'Y', pre_paid: 'Y', pickup: 'Y', remarks: '' } }] });
+  }
   if (method === 'POST' && url.pathname === '/api/p/edit') {
     const b = JSON.parse(opts.body);
     if (b.cancellation !== 'true' || !dlv.shipments.has(b.waybill)) return reply(200, { status: false, remark: 'Invalid waybill' });
@@ -128,6 +134,8 @@ export const wa = { sent: [], fail: [], down: false };
 async function fakeWhatsApp(u, opts) {
   if (wa.down) throw new TypeError('fetch failed');
   if (opts.headers?.Authorization !== `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`) return reply(401, { error: { code: 190, message: 'Invalid OAuth access token.' } });
+  // The phone number's details (Admin → Settings → Test connection).
+  if ((opts.method || 'GET') === 'GET' && new URL(u).pathname.endsWith(`/${process.env.WHATSAPP_PHONE_NUMBER_ID}`)) return reply(200, { verified_name: 'Al Barakah Lifestyle', display_phone_number: '+91 90000 00000', quality_rating: 'GREEN', id: process.env.WHATSAPP_PHONE_NUMBER_ID });
   if (!u.endsWith(`/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`)) return reply(404, { error: { code: 100, message: 'Unknown path' } });
   const body = JSON.parse(opts.body);
   const f = wa.fail.shift();
@@ -260,6 +268,7 @@ export async function reset() {
   rzp.down = false;
   rzp.calls.length = 0;
   dlv.shipments.clear();
+  dlv.unserviceable.clear();
   dlv.calls.length = 0;
   dlv.bodies.length = 0;
   dlv.trackQueries.length = 0;

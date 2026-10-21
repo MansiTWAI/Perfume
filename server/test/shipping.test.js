@@ -186,11 +186,87 @@ describe('creating shipments', () => {
     const { token } = await makeUser('admin');
     dlv.rejectNext = 'Non serviceable pincode';
     const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
-    assert.equal(r.status, 502);
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'SHIPMENT_REJECTED');
     const o = await load(n);
     assert.equal(o.shipment.nextAttemptAt, null);
     const list = await http('GET', '/api/admin/shipments?status=errors', { token });
-    assert.equal(list.body.items[0].shipment.error, 'Non serviceable pincode');
+    assert.match(list.body.items[0].shipment.error, /does not deliver to PIN code 400001/);
+  });
+  test('a wrong pickup location is explained, not passed on as Delhivery\'s raw error', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    dlv.rejectNext = 'ClientWarehouse matching query does not exist.';
+    const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+    assert.equal(r.status, 422);
+    assert.match(r.body.message, /does not recognise the pickup location "Test Warehouse"/);
+    assert.equal((await load(n)).shipment.nextAttemptAt, null);
+  });
+  test('a foreign address (Cairo) on a rupee order never reaches Delhivery', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    await Order.updateOne({ orderNumber: n }, { 'customer.address.city': 'Cairo', 'customer.address.state': 'Cairo Governorate' });
+    const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'SHIPMENT_DETAILS_INVALID');
+    assert.match(r.body.message, /outside India \(Cairo\)/);
+    assert.equal(creates(), 0);
+  });
+  test('incomplete details and a non-Indian state are caught before Delhivery', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    await Order.updateOne({ orderNumber: n }, { 'customer.address.line1': ' ', 'customer.address.city': '' });
+    let r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+    assert.equal(r.status, 422);
+    assert.match(r.body.message, /incomplete: add the customer's address line 1 and city/);
+    await Order.updateOne({ orderNumber: n }, { 'customer.address.line1': '1 Test Road', 'customer.address.city': 'Mumbai', 'customer.address.state': 'Atlantis' });
+    r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+    assert.match(r.body.message, /"Atlantis" is not an Indian state/);
+    assert.equal(creates(), 0);
+  });
+  test('a PIN Delhivery does not serve is refused before booking', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    dlv.unserviceable.add('400001');
+    try {
+      const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
+      assert.equal(r.status, 422);
+      assert.match(r.body.message, /does not deliver to PIN code 400001/);
+      assert.equal(creates(), 0);
+      assert.equal((await load(n)).shipment?.status, undefined); // nothing booked, nothing marked failed
+    } finally {
+      dlv.unserviceable.clear();
+    }
+  });
+  test('automatic booking to a PIN Delhivery does not serve goes to Problems once, without retries', async () => {
+    const n = await codOrder();
+    const { token } = await makeUser('admin');
+    dlv.unserviceable.add('400001');
+    try {
+      await http('PATCH', `/api/admin/orders/${n}/status`, { token, body: { status: 'confirmed' } });
+      await shippingIdle();
+      const o = await load(n);
+      assert.equal(o.shipment.status, 'failed');
+      assert.equal(o.shipment.nextAttemptAt, null);
+      assert.match(o.shipment.error, /does not deliver to PIN code 400001/);
+      const tick = await shippingTick();
+      assert.equal(tick.retried, 0);
+      assert.equal(creates(), 0);
+    } finally {
+      dlv.unserviceable.clear();
+    }
+  });
+  test('an Indian street named after a foreign city is fine', async () => {
+    const p = await makeProduct();
+    const r = await http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: { ...customer(), address: { line1: '4 Dubai Main Road, near Oman Bank', city: 'Hyderabad', state: 'telangana', postalCode: '500001' } } } });
+    assert.equal(r.status, 201);
+    assert.equal((await load(r.body.orderNumber)).customer.address.state, 'Telangana');
+  });
+  test('checkout refuses a foreign address for the India market', async () => {
+    const p = await makeProduct();
+    const r = await http('POST', '/api/orders', { body: { region: 'IN', paymentMethod: 'cod', items: [{ slug: p.slug, qty: 1 }], customer: { ...customer(), address: { line1: '5 Tahrir Square', city: 'Cairo', postalCode: '110001' } } } });
+    assert.equal(r.status, 400);
+    assert.match(r.body.message, /within India only, and this address is in Cairo/);
   });
 });
 

@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import User from '../models/User.js';
+import User, { USER_TAGS } from '../models/User.js';
+import Address from '../models/Address.js';
+import RefreshToken from '../models/RefreshToken.js';
+import DeviceToken from '../models/DeviceToken.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { requireAdmin, asyncHandler } from '../middleware/auth.js';
@@ -31,6 +34,9 @@ export function usersPipeline(q, period) {
   const match = {};
   if (['customer', 'admin', 'manager', 'support'].includes(q.role)) match.role = q.role;
   if (['active', 'blocked'].includes(q.status)) match.status = q.status === 'active' ? { $ne: 'blocked' } : 'blocked';
+  // tag: one of USER_TAGS, or 'real' for everyone not tagged as a test account.
+  if (USER_TAGS.includes(q.tag)) match.tags = q.tag;
+  if (q.tag === 'real') match.tags = { $ne: 'test' };
   const text = String(q.q || '').trim().slice(0, 80);
   if (text) {
     const rx = new RegExp(escapeRegex(text), 'i');
@@ -79,6 +85,7 @@ export const shape = (u) => ({
   role: u.role,
   status: u.lifetime?.orders ? 'Customer (has ordered)' : 'Registered (no orders yet)',
   createdAt: u.createdAt,
+  tags: u.tags || [],
   phone: u.phone || u.latest?.customer?.phone || '',
   address: u.latest?.customer?.address || null,
   lifetime: u.lifetime,
@@ -251,6 +258,35 @@ r.get(
       'Passwords, password hashes and sign-in tokens are never included.',
     ]);
     await sendWorkbook(res, wb, fileName('users', period));
+  })
+);
+
+// Tags: { tags: ['vip', 'test', 'wholesale'] } (replaces the list).
+r.patch(
+  '/:id/tags',
+  asyncHandler(async (req, res) => {
+    const tags = Array.isArray(req.body?.tags) ? [...new Set(req.body.tags.map(String))] : null;
+    if (!tags || tags.some((t) => !USER_TAGS.includes(t))) return res.status(400).json({ message: `Tags must be from: ${USER_TAGS.join(', ')}.` });
+    const u = mongoose.isValidObjectId(req.params.id) && (await User.findByIdAndUpdate(req.params.id, { $set: { tags } }, { new: true }).select('tags'));
+    if (!u) return res.status(404).json({ message: 'User not found.' });
+    res.json({ id: u._id, tags: u.tags });
+  })
+);
+
+// Deletes a customer account that never ordered (e.g. a test sign-up).
+// Accounts with orders are kept for the order records: block them instead.
+r.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const u = mongoose.isValidObjectId(req.params.id) && (await User.findById(req.params.id).select('email role'));
+    if (!u) return res.status(404).json({ message: 'User not found.' });
+    if (String(u._id) === String(req.user._id)) return res.status(409).json({ message: 'You cannot delete your own account.' });
+    if (u.role !== 'customer') return res.status(409).json({ message: 'Staff accounts cannot be deleted here. Change the role to customer first.' });
+    const orders = await Order.countDocuments({ $or: [{ user: u._id }, { 'customer.email': u.email }] }).setOptions({ withHeld: true });
+    if (orders) return res.status(409).json({ code: 'USER_HAS_ORDERS', message: `This account has ${orders} order${orders === 1 ? '' : 's'}, so it is kept for the records. Block it instead, or tag it as a test account.` });
+    await Promise.all([Address.deleteMany({ user: u._id }), RefreshToken.deleteMany({ user: u._id }), DeviceToken.deleteMany({ user: u._id })]);
+    await u.deleteOne();
+    res.json({ ok: true, message: `${u.email} deleted.` });
   })
 );
 

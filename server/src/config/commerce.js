@@ -44,6 +44,20 @@ export const ORDER_STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', '
 // Not a step on the timeline: an order can be cancelled from any stage.
 export const ORDER_CANCELLED = 'Cancelled';
 export const ORDER_STATUSES = [...ORDER_STAGES, ORDER_CANCELLED];
+// Why an order was cancelled, so the team can see where orders are lost.
+// The admin picks one when cancelling; the system sets its own.
+export const CANCEL_REASONS = {
+  customer_request: 'Customer asked to cancel',
+  payment_not_completed: 'Online payment not completed',
+  no_response: 'Customer not reachable (COD not confirmed)',
+  out_of_stock: 'Out of stock',
+  address_issue: 'Address or delivery problem',
+  outside_service_area: 'Outside our delivery area',
+  duplicate: 'Duplicate order',
+  test: 'Test order',
+  fraud: 'Suspicious or fake order',
+  other: 'Other',
+};
 
 // Machine-readable order statuses for apps. The stored status stays the
 // readable label the website and admin studio show.

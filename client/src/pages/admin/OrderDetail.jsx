@@ -1,15 +1,38 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { money, formatDate } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { trackingUrl, STATUS_NOTES } from '../../../../shared/couriers.js';
 import { ADMIN_STATUS, shipTone } from '../../lib/shipment';
 import Icon from '../../components/Icon';
+import { ContactIcons, formatPhone } from './ui';
 
 // The six steps of the customer's timeline, plus Cancelled (from any step;
 // the server returns the items to stock).
 export const STAGES = ['Order Placed', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 const CUSTOM = '__custom';
+
+// Why an order is cancelled (the server keeps the same list, CANCEL_REASONS).
+export const CANCEL_REASONS = [
+  ['customer_request', 'Customer asked to cancel'],
+  ['no_response', 'Customer not reachable (COD not confirmed)'],
+  ['payment_not_completed', 'Online payment not completed'],
+  ['out_of_stock', 'Out of stock'],
+  ['address_issue', 'Address or delivery problem'],
+  ['outside_service_area', 'Outside our delivery area'],
+  ['duplicate', 'Duplicate order'],
+  ['test', 'Test order'],
+  ['fraud', 'Suspicious or fake order'],
+  ['other', 'Other'],
+];
+export const cancelLabel = (o) => {
+  const c = o.cancellation;
+  if (c?.reason) return CANCEL_REASONS.find(([k]) => k === c.reason)?.[1] || c.reason;
+  // Older orders: the note written when they were cancelled.
+  const h = [...(o.history || [])].reverse().find((x) => x.status === 'Cancelled');
+  return h?.note ? h.note.replace(/^Cancelled[:.]?\s*/i, '').slice(0, 80) || 'Reason not recorded' : 'Reason not recorded';
+};
 
 // "3 October 2026" <-> the yyyy-mm-dd a date input needs.
 const longDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -40,6 +63,7 @@ function formFrom(order) {
     noteChoice: '', note: '',
     etaIso: isoFromEta(order.eta),
     etaText: order.eta || '',
+    cancelReason: '',
     paymentStatus: order.paymentStatus,
     notes: order.notes || '',
   };
@@ -230,9 +254,9 @@ function waNumber(phone, country) {
   return d;
 }
 
-export function OrderRow({ order, onSaved }) {
+export function OrderRow({ order, onSaved, selected, onSelect, defaultOpen = false }) {
   const { toast } = useStore();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [f, setF] = useState(() => formFrom(order));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -251,8 +275,10 @@ export function OrderRow({ order, onSaved }) {
   const eta = f.etaIso ? longDate(f.etaIso) : f.etaText;
   const viaDelhivery = !!(order.shipment?.awb && order.shipment.status !== 'cancelled');
 
+  const cancelling = statusChanged && f.status === 'Cancelled';
   async function save() {
     setError('');
+    if (cancelling && !f.cancelReason) return setError('Choose why the order is cancelled.');
     setBusy(true);
     try {
       const o = await api(`/orders/${order._id}`, {
@@ -260,6 +286,7 @@ export function OrderRow({ order, onSaved }) {
         body: {
           customer: { name: f.name, email: f.email, phone: f.phone, address: { line1: f.line1, line2: f.line2, city: f.city, state: f.state, postalCode: f.postalCode } },
           status: f.status,
+          ...(cancelling && { cancelReason: f.cancelReason }),
           note: statusChanged ? note : '',
           eta,
           ...(f.paymentStatus !== order.paymentStatus && { paymentStatus: f.paymentStatus }),
@@ -288,20 +315,21 @@ export function OrderRow({ order, onSaved }) {
 
   return (
     <>
-      <tr className={open ? 'is-open' : ''} onClick={() => setOpen(!open)}>
+      <tr className={`${open ? 'is-open' : ''}${selected ? ' is-selected' : ''}`} onClick={() => setOpen(!open)}>
+        {onSelect && <td className="a-sel" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={!!selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${order.orderNumber}`} /></td>}
         <td><b>{order.orderNumber}</b><br /><small>{formatDate(order.createdAt)}</small></td>
-        <td>{c.name}<br /><small dir="ltr">{c.phone}</small><br /><small>{c.address.city}, {c.address.country}</small></td>
+        <td>{c.name}<br /><small dir="ltr">{formatPhone(c.phone, c.address?.country) || c.phone}</small> <ContactIcons phone={c.phone} country={c.address?.country} /><br /><small>{c.address.city}, {c.address.country}</small></td>
         <td>{order.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}{order.giftNote?.enabled && <><br /><small className="a-gold">Signature Card</small></>}</td>
         <td>
           {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
           {order.discount > 0 && <><br /><small className="a-gold">{order.coupon?.code || 'Discount'} −{money(order.discount, order.currency)}</small></>}
           {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn a-ico-line"><Icon name="alert" size={14} /> refund due</small></>}
         </td>
-        <td><span className="a-pill">{order.status}</span></td>
+        <td><span className={`a-pill ${order.status === 'Cancelled' ? 'bad' : order.status === 'Delivered' ? 'ok' : ''}`}>{order.status}</span>{order.status === 'Cancelled' && <><br /><small className="a-why" title={order.cancellation?.note || ''}>{cancelLabel(order)}</small></>}</td>
       </tr>
       {open && (
         <tr className="a-detail">
-          <td colSpan={5}>
+          <td colSpan={onSelect ? 6 : 5}>
             <div className="a-detail-grid">
               <div className="a-form">
                 <h3>Customer</h3>
@@ -334,6 +362,15 @@ export function OrderRow({ order, onSaved }) {
                     {STAGES.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
+                {cancelling && (
+                  <label>Why is it cancelled? <small className="a-muted">(for the team; required)</small>
+                    <select value={f.cancelReason} onChange={set('cancelReason')} required aria-invalid={!f.cancelReason}>
+                      <option value="">Choose a reason…</option>
+                      {CANCEL_REASONS.filter(([k]) => k !== 'payment_not_completed').map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </select>
+                  </label>
+                )}
+                {!statusChanged && order.status === 'Cancelled' && <p className="a-hint">Cancelled: <b>{cancelLabel(order)}</b>{order.cancellation?.note && ` · ${order.cancellation.note}`}{order.cancellation?.by && <small className="a-muted"> · {order.cancellation.by}</small>}</p>}
                 {statusChanged && (
                   <label>Message for the customer's tracking page
                     <select value={f.noteChoice} onChange={set('noteChoice')}>
@@ -378,6 +415,7 @@ export function OrderRow({ order, onSaved }) {
                       Send on WhatsApp
                     </a>
                   )}
+                  <Link className="a-btn" to={`/admin/orders/${order._id}/invoice`} target="_blank" title="Opens a printable invoice; choose Save as PDF in the print window"><Icon name="printer" size={16} /> Invoice PDF</Link>
                 </div>
               </div>
 

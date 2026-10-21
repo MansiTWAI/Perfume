@@ -12,6 +12,7 @@ import { whatsappLink } from '../lib/format';
 import { seasonFor } from '../lib/seasons';
 import Icon from '../components/Icon';
 import Offers from '../components/Offers';
+import { INDIAN_STATES, indianState } from '../../../shared/india.js';
 
 const PAY_LABEL = {
   cod: ['Cash on delivery', 'Pay when your order arrives.'],
@@ -253,7 +254,14 @@ export default function Checkout() {
             <label>{t('Address line 2 (optional)')}<input value={f.line2} onChange={set('line2')} autoComplete="address-line2" /></label>
             <div className="form-row three">
               <label>{t('City')}<input required value={f.city} onChange={set('city')} autoComplete="address-level2" /></label>
-              <label>{t(isIndia ? 'State' : 'Emirate')}<input value={f.state} onChange={set('state')} autoComplete="address-level1" /></label>
+              {isIndia ? (
+                <label>{t('State')}
+                  <select required value={indianState(f.state)} onChange={set('state')} autoComplete="address-level1">
+                    <option value="">{t('Choose your state')}</option>
+                    {INDIAN_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
+                  </select>
+                </label>
+              ) : <label>{t('Emirate')}<input value={f.state} onChange={set('state')} autoComplete="address-level1" /></label>}
               <label>{t(isIndia ? 'PIN code' : 'Postal code / P.O. Box')}<input required value={f.postalCode} onChange={set('postalCode')} autoComplete="postal-code" inputMode={isIndia ? 'numeric' : undefined} /></label>
             </div>
           </fieldset>

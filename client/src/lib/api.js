@@ -15,16 +15,26 @@ export const setToken = (t) => {
   }
 };
 
-export async function api(path, { method = 'GET', body, form } = {}) {
+// A request that gets no answer fails after `timeout` ms instead of leaving
+// the page on "Loading…" for ever.
+const TIMEOUT = 45000;
+export async function api(path, { method = 'GET', body, form, timeout = form ? 180000 : TIMEOUT } = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body && !form) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: form || (body ? JSON.stringify(body) : undefined),
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: form || (body ? JSON.stringify(body) : undefined),
+      ...(typeof AbortSignal !== 'undefined' && AbortSignal.timeout && { signal: AbortSignal.timeout(timeout) }),
+    });
+  } catch (e) {
+    const slow = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+    throw Object.assign(new Error(slow ? 'The server is taking too long to answer. Please try again.' : 'Could not reach the server. Check your connection and try again.'), { status: 0, code: slow ? 'TIMEOUT' : 'NETWORK' });
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data.message || `Request failed (${res.status})`);

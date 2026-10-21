@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { api, toQuery } from '../../lib/api';
 import { useStore } from '../../context/StoreContext';
 import { Pager } from './Fields';
+import { confirm, EmptyState, LoadError, formatPhone } from './ui';
 import Icon from '../../components/Icon';
 import { LEAD_TONE, when, people } from './whatsapp/shared';
 import { TemplateList, TemplateEdit } from './whatsapp/Templates';
@@ -24,7 +25,11 @@ function Overview({ status }) {
   return (
     <div>
       {!status.configured && (
-        <p className="a-note"><Icon name="alert" size={16} /><span>WhatsApp sending is not set up yet, so campaigns cannot go out. Customers can still subscribe. <Link to="/admin/whatsapp/settings" className="a-textbtn">See what’s missing</Link></span></p>
+        <section className="a-panel a-connect">
+          <EmptyState icon="chat" title="Connect WhatsApp to send campaigns" action="Connect WhatsApp" to="/admin/settings">
+            Paste your Meta WhatsApp Business (Cloud API) token, phone number ID and approved template in Settings. Until then customers can still subscribe, and you can prepare campaigns.
+          </EmptyState>
+        </section>
       )}
       <div className="a-tiles a-wa-tiles">
         <div className="a-tile"><span>Subscribers</span><b>{status.subscribed}</b><small className="a-ok">{m.joined ? `+${m.joined} this month` : 'No new ones this month'}</small></div>
@@ -66,7 +71,7 @@ function Subscribers({ onChanged }) {
     return () => clearTimeout(id);
   }, [f, page, reload]);
   async function stop(c) {
-    if (!window.confirm(`Unsubscribe ${c.name || c.phone}? They will get no more WhatsApp updates unless they subscribe again themselves.`)) return;
+    if (!(await confirm({ title: `Unsubscribe ${c.name || formatPhone(c.phone)}?`, message: 'They will get no more WhatsApp updates unless they subscribe again themselves.', confirmLabel: 'Unsubscribe', danger: true }))) return;
     try {
       await api(`/admin/whatsapp/contacts/${c.id}`, { method: 'PATCH', body: { subscribed: false } });
       toast('Unsubscribed');
@@ -86,14 +91,18 @@ function Subscribers({ onChanged }) {
           <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Status"><option value="subscribed">Subscribed</option><option value="unsubscribed">Unsubscribed</option><option value="all">All</option></select>
           <label className="a-check"><input type="checkbox" checked={f.leads} onChange={(e) => setF({ ...f, leads: e.target.checked })} /> AI leads only</label>
         </div>
-        {!data ? <p>Loading…</p> : data.items.length === 0 ? <p className="a-muted">{f.q || f.leads ? 'Nobody matches.' : 'Nobody here yet.'}</p> : (
+        {!data ? <p className="a-muted">Loading…</p> : data.items.length === 0 ? (
+          f.q || f.leads || f.status !== 'subscribed'
+            ? <EmptyState icon="search" title="Nobody matches">Try another search or status.</EmptyState>
+            : <EmptyState icon="chat" title="No subscribers yet">Customers subscribe with one tap and a consent tick, from the homepage, their account or the AI concierge. They appear here straight away.</EmptyState>
+        ) : (
           <div className="a-table-wrap">
             <table className="a-table">
               <thead><tr><th>Customer</th><th>Came from</th><th>Status</th><th>Last message</th><th><span className="sr-only">Action</span></th></tr></thead>
               <tbody>
                 {data.items.map((c) => (
                   <tr key={c.id}>
-                    <td>{c.name || '—'}<br /><small dir="ltr">{c.phone}</small>{c.email && <><br /><small>{c.email}</small></>}</td>
+                    <td>{c.name || '—'}<br /><small dir="ltr">{formatPhone(c.phone) || c.phone}</small>{c.email && <><br /><small>{c.email}</small></>}</td>
                     <td>{c.lead ? <span className={`a-pill ${LEAD_TONE(c.lead.score)}`}>AI lead · score {c.lead.score}</span> : { account: 'Account page', concierge: 'Concierge', website: 'Website' }[c.source] || 'Website'}</td>
                     <td>{c.subscribed ? <><span className="a-pill ok">Subscribed</span><br /><small>{when(c.subscribedAt)}</small></> : <><span className="a-pill off">Unsubscribed</span><br /><small>{REASON[c.unsubscribeReason] || ''} · {when(c.unsubscribedAt)}</small></>}</td>
                     <td>{when(c.lastMessageAt)}</td>
@@ -133,19 +142,30 @@ function Settings({ status }) {
           </li>
         ))}
       </ul>
-      <p className="a-muted a-hint">These are set by whoever manages the server, in its settings file. Nothing here can be changed from the admin panel, so tokens stay private.</p>
+      <div className="a-actions" style={{ marginTop: 14 }}>
+        <Link to="/admin/settings" className="a-btn a-primary">{status.account ? 'Change WhatsApp settings' : 'Connect WhatsApp'}</Link>
+      </div>
+      <p className="a-muted a-hint" style={{ marginTop: 10 }}>Keys are pasted in Admin → Settings, stored encrypted and never shown again.</p>
     </section>
   );
 }
 
+const NO_STATUS = { configured: false, subscribed: 0, unsubscribed: 0, leads: 0, month: {}, loading: true };
+
 export default function WhatsApp() {
   const [status, setStatus] = useState(null);
+  const [statusError, setStatusError] = useState('');
   const [reload, setReload] = useState(0);
   const { pathname } = useLocation();
   const bump = useCallback(() => setReload((n) => n + 1), []);
   useEffect(() => {
-    api('/admin/whatsapp/status').then(setStatus).catch(() => setStatus({ configured: false, subscribed: 0, unsubscribed: 0, leads: 0, month: {} }));
+    api('/admin/whatsapp/status', { timeout: 20000 })
+      .then((s) => { setStatus(s); setStatusError(''); })
+      .catch((e) => setStatusError(e.message));
   }, [reload, pathname]);
+  // The sections that list things work on their own; only the overview,
+  // the campaign flow and the set-up checklist need the status.
+  const st = status || NO_STATUS;
   const inFlow = pathname.startsWith('/admin/whatsapp/campaigns');
 
   return (
@@ -157,18 +177,17 @@ export default function WhatsApp() {
       <nav className="a-subnav" aria-label="WhatsApp sections">
         {TABS.map(([to, label, end]) => <NavLink key={label} to={`/admin/whatsapp${to ? `/${to}` : ''}`} end={end} className={({ isActive }) => (isActive || (!to && /^\/admin\/whatsapp\/?$/.test(pathname)) ? 'active' : '')}>{label}</NavLink>)}
       </nav>
-      {!status ? <p>Loading…</p> : (
-        <Routes>
-          <Route index element={<Overview status={status} />} />
-          <Route path="subscribers" element={<Subscribers onChanged={bump} />} />
-          <Route path="templates" element={<TemplateList />} />
-          <Route path="templates/:id" element={<TemplateEdit />} />
-          <Route path="campaigns" element={<Campaign status={status} />} />
-          <Route path="history" element={<History />} />
-          <Route path="history/:id" element={<CampaignResults />} />
-          <Route path="settings" element={<Settings status={status} />} />
-        </Routes>
-      )}
+      {statusError && !status && <LoadError message={`The WhatsApp summary did not load: ${statusError}`} onRetry={bump} />}
+      <Routes>
+        <Route index element={status ? <Overview status={status} /> : !statusError && <p className="a-muted">Loading…</p>} />
+        <Route path="subscribers" element={<Subscribers onChanged={bump} />} />
+        <Route path="templates" element={<TemplateList />} />
+        <Route path="templates/:id" element={<TemplateEdit />} />
+        <Route path="campaigns" element={<Campaign status={st} />} />
+        <Route path="history" element={<History />} />
+        <Route path="history/:id" element={<CampaignResults />} />
+        <Route path="settings" element={<Settings status={st} />} />
+      </Routes>
     </div>
   );
 }

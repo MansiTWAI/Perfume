@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, downloadFile } from '../../lib/api';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import { confirm } from './ui';
 
 // Scratch cards: print runs of unique codes for the physical cards packed
 // with every order. Each code works once, is never listed on the website and
@@ -52,7 +53,7 @@ export default function ScratchCards() {
   }
 
   async function toggle(b) {
-    if (b.active && !window.confirm(`Switch off all ${b.unused} unused cards of "${b.name}"? Customers holding them will no longer get the discount.`)) return;
+    if (b.active && !(await confirm({ title: `Switch off “${b.name}”?`, message: `All ${b.unused} unused cards stop working. Customers holding them will no longer get the discount.`, confirmLabel: 'Switch off', danger: true }))) return;
     setBusy(b.id);
     try {
       const nb = await api(`/admin/coupon-batches/${b.id}`, { method: 'PATCH', body: { active: !b.active } });

@@ -16,6 +16,8 @@ const postSchema = new mongoose.Schema(
     publishedAt: Date,
     relatedProducts: [String], // product slugs
     seo: { title: String, description: String },
+    // Times the article was opened on the website (the team's own visits not counted).
+    views: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

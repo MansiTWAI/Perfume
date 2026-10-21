@@ -4,6 +4,7 @@ import { api, toQuery } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { Pager } from './Fields';
+import { confirm, CopyButton, EmptyState, LoadError } from './ui';
 import Icon from '../../components/Icon';
 import ScratchCards from './ScratchCards';
 
@@ -30,7 +31,7 @@ function discountText(c) {
 function rulesText(c) {
   const now = Date.now();
   const main = both(c.minSubtotal) ? `Min ${both(c.minSubtotal)}` : c.startsAt && new Date(c.startsAt) > now ? `starts ${day(c.startsAt)}` : '—';
-  const sub = [c.perUserLimit && `${c.perUserLimit} per customer`, c.expiresAt ? `${new Date(c.expiresAt) < now ? 'ended' : 'ends'} ${day(c.expiresAt)}` : 'no end date'].filter(Boolean).join(' · ');
+  const sub = [c.startsAt && new Date(c.startsAt) > now && `starts ${day(c.startsAt)}`, c.perUserLimit && `${c.perUserLimit} per customer`, c.expiresAt ? `${new Date(c.expiresAt) < now ? 'ended' : 'ends'} ${day(c.expiresAt)}` : 'no end date'].filter(Boolean).join(' · ');
   return [main, sub];
 }
 
@@ -69,8 +70,16 @@ export function CouponList() {
   });
 
   async function act(c, kind) {
-    if (kind === 'delete' && !window.confirm(c.usage?.orders ? `Delete ${c.code}? ${c.usage.orders} order(s) used it; they keep their discount. To keep the record, end it or switch it off instead.` : `Delete ${c.code}? This cannot be undone.`)) return;
-    if (kind === 'expire' && !window.confirm(`End ${c.code} now? Customers will no longer be able to use it.`)) return;
+    if (kind === 'delete' && !(await confirm({
+      title: `Delete ${c.code}?`,
+      message: c.usage?.orders
+        ? `${c.usage.orders} order${c.usage.orders === 1 ? '' : 's'} used this code; they keep their discount, but the coupon and its figures are gone for good. To keep the record, end it or switch it off instead.`
+        : 'This cannot be undone. Customers who have the code can no longer use it.',
+      confirmLabel: 'Delete coupon',
+      cancelLabel: 'Keep it',
+      danger: true,
+    }))) return;
+    if (kind === 'expire' && !(await confirm({ title: `End ${c.code} now?`, message: 'Customers will no longer be able to use it. Its figures are kept.', confirmLabel: 'End now', danger: true }))) return;
     setBusy(`${c.id}:${kind}`);
     try {
       if (kind === 'toggle') await api(`/admin/coupons/${c.id}`, { method: 'PUT', body: { active: !c.active } });
@@ -102,23 +111,25 @@ export function CouponList() {
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search code" aria-label="Search code" />
       </section>
       <section className="a-panel">
-        {error && <p className="a-error" role="alert">{error}</p>}
-        {!data ? <p>Loading…</p> : data.items.length === 0 ? (
-          <p className="a-muted">{state === 'active' ? 'No coupons are running. Create one to show it in the bag and at checkout.' : 'No coupons here.'}</p>
+        {error && <LoadError message={error} onRetry={() => setReload((n) => n + 1)} />}
+        {!data ? <p className="a-muted">Loading…</p> : data.items.length === 0 ? (
+          !error && (state === 'active'
+            ? <EmptyState icon="tag" title="No coupons are running" action="New coupon" to="/admin/coupons/new">Create one to show it in the bag and at checkout, or keep it private for people you send the code to.</EmptyState>
+            : <EmptyState icon="tag" title="No coupons here">Try another tab.</EmptyState>)
         ) : (
-          <div className="a-table-wrap">
+          <div className="a-table-wrap a-sticky-head">
             <table className="a-table a-coupons">
-              <thead><tr><th>Code</th><th>Discount</th><th>Rules</th><th>Used</th><th>Results</th><th>Status</th></tr></thead>
+              <thead><tr><th>Code</th><th>Discount</th><th>Min. cart · dates</th><th>Used</th><th>Revenue</th><th>Status</th></tr></thead>
               <tbody>
                 {data.items.map((c) => {
                   const [d1, d2] = discountText(c);
-                  const [r1, r2] = rulesText(c);
+                  const [, r2] = rulesText(c);
                   const left = c.usageLimit ? Math.max(0, c.usageLimit - c.usedCount) : null;
                   const sales = both(c.usage?.sales);
                   return (
                     <tr key={c.id}>
                       <td>
-                        <Link to={`/admin/coupons/${c.id}`} className="a-code">{c.code}</Link><br /><small>{c.showOnSite ? (c.type === 'percent' && c.percent >= 25 ? 'Scratch card on website' : 'Shown on website') : 'Private code'}</small>
+                        <Link to={`/admin/coupons/${c.id}`} className="a-code">{c.code}</Link> <CopyButton text={c.code} label="Copy" className="a-textbtn a-copy" /><br /><small>{c.showOnSite ? (c.type === 'percent' && c.percent >= 25 ? 'Scratch card on website' : 'Shown on website') : 'Private code'}</small>
                         <span className="a-row-acts">
                           <Link to={`/admin/coupons/${c.id}`} className="a-textbtn" aria-label={`Edit ${c.code}`}>Edit</Link>
                           {['active', 'scheduled', 'used_up'].includes(c.state) && <button type="button" className="a-textbtn" disabled={!!busy} onClick={() => act(c, 'expire')} aria-label={`End ${c.code} now`}>End now</button>}
@@ -126,9 +137,12 @@ export function CouponList() {
                         </span>
                       </td>
                       <td>{d1}{d2 && <><br /><small>{d2}</small></>}</td>
-                      <td>{r1}<br /><small>{r2}</small></td>
-                      <td>{c.usedCount}{c.usageLimit ? ` / ${c.usageLimit}` : ''}<br /><small>{left === null ? 'no limit' : `${left} left`}</small></td>
-                      <td>{sales ? <>{sales} sales<br /><small>{both(c.usage.discount)} discount · {c.usage.orders} order{c.usage.orders === 1 ? '' : 's'}</small></> : <small>—</small>}</td>
+                      <td>{both(c.minSubtotal) ? <span className="a-pill a-min" title="Minimum bag value">Min {both(c.minSubtotal)}</span> : <span className="a-pill off">No minimum</span>}<br /><small>{r2}</small></td>
+                      <td>
+                        <b>{c.usage?.orders ?? c.usedCount}</b>{c.usageLimit ? ` / ${c.usageLimit}` : ''} order{(c.usage?.orders ?? c.usedCount) === 1 ? '' : 's'}
+                        <br /><small>{[left === null ? 'no limit' : `${left} left`, c.usage?.cancelled ? `${c.usage.cancelled} cancelled, given back` : ''].filter(Boolean).join(' · ')}</small>
+                      </td>
+                      <td>{sales ? <><b>{sales}</b><br /><small>{both(c.usage.discount)} given as discount</small></> : <small className="a-muted">No sales yet</small>}</td>
                       <td>
                         <span className="a-coupon-state">
                           <button type="button" role="switch" aria-checked={c.active} aria-label={`${c.code}: ${c.active ? 'on' : 'off'}`} title={c.active ? 'Switch off' : 'Switch on'} className={`a-switch${c.active ? ' is-on' : ''}`} disabled={!!busy} onClick={() => act(c, 'toggle')} />

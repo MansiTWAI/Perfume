@@ -33,6 +33,14 @@ export function Stars({ value = 0, size = 14, label }) {
 }
 
 // Summary shown under the product name, only when real reviews exist.
+// "3 verified reviews" only when every review comes from a delivered order;
+// reviews the house added from elsewhere make it plain "3 reviews".
+const countLabel = (t, s) => {
+  const verified = s.verified ?? s.count;
+  if (verified === s.count) return t(s.count === 1 ? '{n} verified review' : '{n} verified reviews', { n: s.count });
+  return t(s.count === 1 ? '{n} review' : '{n} reviews', { n: s.count });
+};
+
 export function RatingSummary({ summary }) {
   const { t } = useStore();
   if (!summary?.count) return null;
@@ -40,7 +48,7 @@ export function RatingSummary({ summary }) {
     <a href="#reviews" className="rating-summary">
       <Stars value={summary.average} />
       <span>{summary.average.toFixed(1)}</span>
-      <span className="rating-count">{t(summary.count === 1 ? '{n} verified review' : '{n} verified reviews', { n: summary.count })}</span>
+      <span className="rating-count">{countLabel(t, summary)}</span>
     </a>
   );
 }
@@ -55,14 +63,14 @@ export default function Reviews({ data, name }) {
       <div className="container">
         <div className="reviews-head">
           <div>
-            <p className="eyebrow">{t('Verified reviews')}</p>
+            <p className="eyebrow">{t(data?.count && (data.verified ?? data.count) !== data.count ? 'Reviews' : 'Verified reviews')}</p>
             <SplitHeading as="h2" text={t('In their words')} className="display-l" />
           </div>
           {data?.count > 0 && (
             <div className="reviews-score">
               <b>{data.average.toFixed(1)}</b>
               <Stars value={data.average} size={18} />
-              <span>{t(data.count === 1 ? '{n} verified review' : '{n} verified reviews', { n: data.count })}</span>
+              <span>{countLabel(t, data)}</span>
             </div>
           )}
         </div>
@@ -77,7 +85,7 @@ export default function Reviews({ data, name }) {
                 <p className="review-by">
                   <b>{r.name}</b>
                   {r.city && <span>{r.city}</span>}
-                  <span className="review-verified">{t('Verified buyer')}</span>
+                  {r.verified !== false ? <span className="review-verified">{t('Verified buyer')}</span> : <span>{t('Shared with the house')}</span>}
                   <time dateTime={r.createdAt}>{formatDate(r.createdAt)}</time>
                 </p>
                 {r.reply && (

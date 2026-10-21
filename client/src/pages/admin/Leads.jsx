@@ -4,6 +4,57 @@ import { money, formatDate } from '../../lib/format';
 import { Link } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import { Modal } from './Fields';
+import { EmptyState, LoadError, phoneDigits, formatPhone } from './ui';
+
+// "Send offer": a WhatsApp message to the lead with a coupon, written for
+// them and opened in WhatsApp (nothing is sent until the team presses send).
+function OfferModal({ lead, onClose, onSent }) {
+  const c = lead.customer || {};
+  const first = (c.name || '').split(' ')[0];
+  const [coupons, setCoupons] = useState(null);
+  const [code, setCode] = useState('');
+  const [text, setText] = useState('');
+  useEffect(() => {
+    api('/admin/coupons?state=active&limit=50').then((d) => { setCoupons(d.items); setCode(d.items.find((x) => x.showOnSite)?.code || d.items[0]?.code || ''); }).catch(() => setCoupons([]));
+  }, []);
+  const coupon = coupons?.find((x) => x.code === code);
+  const products = (lead.interestedProducts || []).map((p) => p.toUpperCase()).join(' and ');
+  const cur = lead.budget?.currency || (lead.region === 'AE' ? 'AED' : 'INR');
+  const site = window.location.origin.includes('localhost') ? 'https://albarakah.me' : window.location.origin;
+  useEffect(() => {
+    const off = !coupon ? '' : coupon.type === 'percent' ? `${coupon.percent}% off` : `${money(coupon.amount?.[cur] || 0, cur)} off`;
+    const min = coupon?.minSubtotal?.[cur] ? ` on orders over ${money(coupon.minSubtotal[cur], cur)}` : '';
+    const link = lead.interestedProducts?.length === 1 ? `${site}/fragrances/${lead.interestedProducts[0].toLowerCase()}` : `${site}/fragrances`;
+    setText([
+      `Hello${first ? ` ${first}` : ''}, this is AL BARAKAH LIFESTYLE.`,
+      products ? `Thank you for your interest in ${products}.` : 'Thank you for chatting with our concierge.',
+      coupon ? `As a welcome, here is ${off}${min} with the code *${coupon.code}*: type it in your bag at checkout.` : '',
+      `Shop here: ${link}`,
+      'Reply here if you have any questions. We are happy to help.',
+    ].filter(Boolean).join('\n'));
+  }, [code, coupons]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wa = phoneDigits(c.phone);
+  return (
+    <Modal title={`Send an offer to ${c.name || formatPhone(c.phone)}`} onClose={onClose}>
+      <div className="a-form">
+        <label>Coupon
+          <select value={code} onChange={(e) => setCode(e.target.value)}>
+            <option value="">No coupon</option>
+            {(coupons || []).map((x) => <option key={x.id} value={x.code}>{x.code} · {x.type === 'percent' ? `${x.percent}% off` : 'fixed amount'}{x.showOnSite ? '' : ' · private'}</option>)}
+          </select>
+          {coupons && !coupons.length && <span className="a-hint">No active coupons. <Link to="/admin/coupons/new" className="a-textbtn">Create one</Link>.</span>}
+        </label>
+        <label>Message<textarea rows="7" value={text} onChange={(e) => setText(e.target.value)} /></label>
+        <p className="a-muted a-hint">Opens WhatsApp with this message for {formatPhone(c.phone)}; press send there. The lead is marked Contacted.</p>
+        <footer className="a-modal-foot">
+          <button type="button" className="a-btn" onClick={onClose}>Cancel</button>
+          <a className="a-btn a-primary" href={`https://wa.me/${wa}?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer" onClick={() => onSent(code)}><Icon name="chat" size={16} /> Open in WhatsApp</a>
+        </footer>
+      </div>
+    </Modal>
+  );
+}
 
 // Leads from the website's AI concierge: ask in plain words, filter, open a
 // lead to read the conversation, add notes and move its status on.
@@ -17,6 +68,7 @@ function LeadDetail({ id, onChanged, onClose }) {
   const [lead, setLead] = useState(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [offer, setOffer] = useState(false);
   useEffect(() => {
     setLead(null);
     api(`/admin/leads/${id}`).then(setLead).catch(() => setLead(false));
@@ -63,10 +115,13 @@ function LeadDetail({ id, onChanged, onClose }) {
       </header>
       {(wa || c.email) && (
         <div className="a-actions">
-          {wa && <a className="a-btn" href={`https://wa.me/${wa.length === 10 ? `91${wa}` : wa}`} target="_blank" rel="noreferrer">WhatsApp</a>}
-          {c.email && <a className="a-btn" href={`mailto:${c.email}`}>Email</a>}
+          {wa && <button type="button" className="a-btn a-primary" onClick={() => setOffer(true)}><Icon name="gift" size={16} /> Send offer</button>}
+          {wa && <a className="a-btn" href={`https://wa.me/${phoneDigits(c.phone)}`} target="_blank" rel="noreferrer"><Icon name="chat" size={16} /> WhatsApp</a>}
+          {wa && <a className="a-btn" href={`tel:+${phoneDigits(c.phone)}`}><Icon name="phone" size={16} /> Call</a>}
+          {c.email && <a className="a-btn" href={`mailto:${c.email}`}><Icon name="mail" size={16} /> Email</a>}
         </div>
       )}
+      {offer && <OfferModal lead={lead} onClose={() => setOffer(false)} onSent={(code) => { setOffer(false); save({ ...(lead.status === 'NEW' && { status: 'CONTACTED' }), note: `Offer sent on WhatsApp${code ? ` with ${code}` : ''}.` }); }} />}
 
       <div className="a-lead-wa">
         {lead.whatsapp?.subscribed ? (
@@ -85,7 +140,7 @@ function LeadDetail({ id, onChanged, onClose }) {
       <h3>Customer details</h3>
       <dl className="a-lead-table">
         <dt>Email</dt><dd>{c.email || '—'}</dd>
-        <dt>Phone</dt><dd>{c.phone || '—'}</dd>
+        <dt>Phone</dt><dd>{c.phone ? <span dir="ltr">{formatPhone(c.phone)}</span> : '—'}</dd>
         <dt>Address</dt><dd>{c.address || '—'}</dd>
         <dt>Past orders</dt>
         <dd>{c.orders?.count ? <>{c.orders.count} order{c.orders.count === 1 ? '' : 's'}{spent && ` · ${spent} spent`}{c.orders.last && <> · last <b>{c.orders.last.orderNumber}</b> ({c.orders.last.status}, {formatDate(c.orders.last.at)})</>}</> : 'None yet'}</dd>
@@ -215,8 +270,8 @@ export default function Leads() {
               <label key={k} className="a-check"><input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} /> {label}</label>
             ))}
           </div>
-          {error ? <p className="a-error">{error}</p> : !data ? <p>Loading…</p> : data.items.length === 0 ? (
-            <p className="a-muted">No leads match. Leads appear when shoppers show buying interest in the AI concierge.</p>
+          {error ? <LoadError message={error} onRetry={load} /> : !data ? <p className="a-muted">Loading…</p> : data.items.length === 0 ? (
+            <EmptyState icon="chat" title={f.q || f.status || f.hot || f.callback || f.needsFollowUp ? 'No leads match' : 'No leads yet'}>Leads appear when shoppers show buying interest in the AI concierge on the website.</EmptyState>
           ) : rows(data.items)}
           {data && <p className="a-muted a-hint">Updated {formatDate(new Date())}</p>}
         </section>

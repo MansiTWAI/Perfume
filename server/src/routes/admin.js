@@ -26,7 +26,11 @@ import { productQuery, createProduct, updateProduct, deleteProduct } from './pro
 import { listOrders, updateOrder } from './orders.js';
 import { refundOrder, reconcile } from '../services/payments.js';
 import { ensureShipment, refreshTracking, cancelShipmentFor, notReady, autoCreateOn } from '../services/shipping.js';
-import { delhiveryConfigured, delhiveryMode } from '../services/delhivery.js';
+import { delhiveryConfigured, delhiveryMode, checkPin } from '../services/delhivery.js';
+import { GROUPS, describe as describeSettings, saveGroup } from '../services/settings.js';
+import { startWhatsAppJobs, whatsappNotifyConfigured } from '../services/whatsapp.js';
+import { startShippingJobs } from '../services/shipping.js';
+import { Enquiry } from '../models/Enquiry.js';
 import { SHIPMENT_STATUSES, SHIPMENT_LABELS } from '../config/commerce.js';
 import Lead, { LEAD_STATUSES } from '../models/Lead.js';
 import ChatSession from '../models/ChatSession.js';
@@ -219,7 +223,8 @@ r.post(
     if (!(await resolveOrder(req, res))) return;
     const o = await Order.findById(req.params.id).select('status');
     if (o.status === ORDER_CANCELLED) return res.status(409).json({ message: 'This order is already cancelled.' });
-    req.body = { status: ORDER_CANCELLED, note: String(req.body?.reason || req.body?.note || 'Cancelled by the house.').slice(0, 300) };
+    // reason: free text for the customer (as before); cancelReason: one of CANCEL_REASONS.
+    req.body = { status: ORDER_CANCELLED, cancelReason: req.body?.cancelReason, note: String(req.body?.reason || req.body?.note || 'Cancelled by the house.').slice(0, 300) };
     updateOrder(req, res, next);
   })
 );
@@ -336,8 +341,11 @@ r.post(
     if (!(await resolveOrder(req, res))) return;
     const out = await ensureShipment(req.params.id, { manual: true, by: req.user.email });
     if (!out.ok) {
-      const status = out.busy ? 409 : out.order?.shipment?.status === 'failed' ? 502 : 409;
-      return res.status(status).json({ code: out.busy ? 'SHIPMENT_IN_PROGRESS' : 'SHIPMENT_NOT_CREATED', message: out.reason, order: out.order && { ...(out.order.toObject?.() || out.order), id: String(out.order._id) } });
+      // 422: the order's details (or Delhivery's answer about them) need a
+      // fix by the team; 502: Delhivery is unreachable or failing, try later.
+      const status = out.busy ? 409 : out.invalid || out.rejected ? 422 : out.retryable ? 502 : 409;
+      const code = out.busy ? 'SHIPMENT_IN_PROGRESS' : out.invalid ? 'SHIPMENT_DETAILS_INVALID' : out.rejected ? 'SHIPMENT_REJECTED' : 'SHIPMENT_NOT_CREATED';
+      return res.status(status).json({ code, message: out.reason, order: out.order && { ...(out.order.toObject?.() || out.order), id: String(out.order._id) } });
     }
     const o = out.order.toObject();
     res.status(201).json({ ...o, id: String(o._id), statusKey: statusKey(o) });
@@ -719,17 +727,23 @@ r.get(
 // discount given and the sales they brought, per currency.
 async function couponUsage(codes) {
   if (!codes.length) return {};
-  const rows = await Order.aggregate([
-    { $match: { 'coupon.code': { $in: codes }, status: { $ne: ORDER_CANCELLED } } },
-    { $group: { _id: { code: '$coupon.code', cur: '$currency' }, orders: { $sum: 1 }, discount: { $sum: '$discount' }, sales: { $sum: '$total' } } },
+  const [rows, cancelled] = await Promise.all([
+    Order.aggregate([
+      { $match: { 'coupon.code': { $in: codes }, status: { $ne: ORDER_CANCELLED } } },
+      { $group: { _id: { code: '$coupon.code', cur: '$currency' }, orders: { $sum: 1 }, discount: { $sum: '$discount' }, sales: { $sum: '$total' } } },
+    ]),
+    // Uses that were given back because the order was cancelled.
+    Order.aggregate([{ $match: { 'coupon.code': { $in: codes }, status: ORDER_CANCELLED } }, { $group: { _id: '$coupon.code', n: { $sum: 1 } } }]),
   ]);
   const out = {};
+  const blank = () => ({ orders: 0, cancelled: 0, discount: {}, sales: {} });
   for (const x of rows) {
-    const u = (out[x._id.code] ||= { orders: 0, discount: {}, sales: {} });
+    const u = (out[x._id.code] ||= blank());
     u.orders += x.orders;
     u.discount[x._id.cur] = x.discount;
     u.sales[x._id.cur] = x.sales;
   }
+  for (const x of cancelled) (out[x._id] ||= blank()).cancelled = x.n;
   return out;
 }
 r.get(
@@ -1001,6 +1015,79 @@ r.delete(
     const b = validId(req.params.id) && (await Banner.findByIdAndDelete(req.params.id));
     if (!b) return res.status(404).json({ message: 'Banner not found.' });
     res.json({ ok: true, message: 'Banner deleted' });
+  })
+);
+
+// ----- alerts for the menu -----
+// What is waiting for the team: new orders, unread enquiries, reviews to
+// read and shipments with a problem.
+r.get(
+  '/counts',
+  requireRole(...SERVE),
+  asyncHandler(async (_req, res) => {
+    const [orders, enquiries, reviews, shipping] = await Promise.all([
+      Order.countDocuments({ status: 'Order Placed' }),
+      Enquiry.countDocuments({ status: 'new' }),
+      Review.countDocuments({ status: 'pending' }),
+      Order.countDocuments({ status: { $ne: ORDER_CANCELLED }, $or: [{ 'shipment.status': 'failed' }, { 'shipment.status': 'exception' }] }),
+    ]);
+    res.json({ orders, enquiries, reviews, shipping });
+  })
+);
+
+// ----- integration settings (admins) -----
+// WhatsApp and Delhivery keys, saved encrypted (services/settings.js).
+// Secrets are never sent back; only whether they are set.
+const settingsView = () => ({
+  whatsapp: { label: GROUPS.whatsapp.label, keys: describeSettings('whatsapp'), ready: whatsappNotifyConfigured() },
+  delhivery: { label: GROUPS.delhivery.label, keys: describeSettings('delhivery'), ready: delhiveryConfigured(), mode: delhiveryMode() },
+});
+r.get('/settings/integrations', requireRole(), asyncHandler(async (_req, res) => res.json(settingsView())));
+r.put(
+  '/settings/integrations/:group',
+  requireRole(),
+  asyncHandler(async (req, res) => {
+    if (!GROUPS[req.params.group]) return res.status(404).json({ message: 'Unknown settings group.' });
+    const out = await saveGroup(req.params.group, { values: req.body?.values || {}, clear: Array.isArray(req.body?.clear) ? req.body.clear : [] }, req.user.email);
+    if (out.errors) return res.status(400).json({ message: out.errors.map((e) => e.message).join(' '), errors: out.errors.map((e) => ({ field: e.field, message: e.message })) });
+    // Start the background work now if it was waiting for these keys.
+    startWhatsAppJobs();
+    startShippingJobs();
+    res.json(settingsView());
+  })
+);
+// Checks the saved keys against the service, without sending anything.
+r.post(
+  '/settings/integrations/:group/test',
+  requireRole(),
+  asyncHandler(async (req, res) => {
+    const group = req.params.group;
+    if (group === 'whatsapp') {
+      const { WHATSAPP_ACCESS_TOKEN: token, WHATSAPP_PHONE_NUMBER_ID: id } = process.env;
+      if (!token || !id) return res.status(409).json({ ok: false, message: 'Add the access token and the phone number ID first.' });
+      try {
+        const r2 = await fetch(`https://graph.facebook.com/v20.0/${encodeURIComponent(id)}?fields=display_phone_number,verified_name,quality_rating`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) });
+        const d = await r2.json().catch(() => ({}));
+        if (!r2.ok) return res.status(422).json({ ok: false, message: `Meta refused: ${String(d?.error?.message || `HTTP ${r2.status}`).slice(0, 200)}. Check the token (it must be a permanent System User token) and the phone number ID.` });
+        const missing = whatsappNotifyConfigured() ? '' : ' Add the campaign template name to start sending.';
+        return res.json({ ok: true, message: `Connected: ${d.verified_name || 'WhatsApp Business'} (${d.display_phone_number || id})${d.quality_rating ? `, quality ${d.quality_rating}` : ''}.${missing}` });
+      } catch {
+        return res.status(502).json({ ok: false, message: 'Could not reach Meta. Try again in a minute.' });
+      }
+    }
+    if (group === 'delhivery') {
+      if (!process.env.DELHIVERY_API_TOKEN) return res.status(409).json({ ok: false, message: 'Add the API token first.' });
+      try {
+        const pin = await checkPin('110001');
+        if (!pin) return res.status(502).json({ ok: false, message: 'Could not reach Delhivery. Try again in a minute.' });
+        const where = delhiveryMode() === 'production' ? 'live (production)' : 'test (staging)';
+        const pickup = process.env.DELHIVERY_PICKUP_LOCATION ? '' : ' Add the pickup location (warehouse name) before creating shipments.';
+        return res.json({ ok: true, message: `Connected to Delhivery ${where}. The token works.${pickup}` });
+      } catch (e) {
+        return res.status(422).json({ ok: false, message: `${e.message} A test token works only in test mode, a live token only in live mode.` });
+      }
+    }
+    res.status(404).json({ message: 'Unknown settings group.' });
   })
 );
 

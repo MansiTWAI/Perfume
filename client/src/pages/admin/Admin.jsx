@@ -16,6 +16,9 @@ import Shipping from './Shipping';
 import { CouponList, CouponEdit } from './Coupons';
 import WhatsApp from './WhatsApp';
 import Banners from './Banners';
+import Settings from './Settings';
+import { InvoicePage } from './Invoice';
+import { ConfirmHost } from './ui';
 import Icon from '../../components/Icon';
 import TwoStepCode from '../../components/TwoStepCode';
 
@@ -28,6 +31,7 @@ function AdminLogin({ notice = '' }) {
   const [f, setF] = useState({ email: '', password: '' });
   const [error, setError] = useState(notice);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
   const [challenge, setChallenge] = useState(null);
   async function submit(e) {
     e.preventDefault();
@@ -70,28 +74,46 @@ function AdminLogin({ notice = '' }) {
     <div className="admin-login">
       <form onSubmit={submit} className="admin-card">
         {brand}
-        <label>Email<input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="username" /></label>
-        <label>Password<input type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="current-password" /></label>
+        <label>Email<input type="email" required autoFocus value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="username" /></label>
+        <label>Password
+          <span className="a-pass">
+            <input type={show ? 'text' : 'password'} required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="current-password" />
+            <button type="button" className="a-pass-toggle" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} title={show ? 'Hide password' : 'Show password'}><Icon name={show ? 'eye-off' : 'eye'} size={18} /></button>
+          </span>
+        </label>
+        <Link to="/forgot-password" className="a-forgot">Forgot password?</Link>
         {error && <p className="a-error" role="alert">{error}</p>}
-        <button className="a-btn a-primary" disabled={busy}>{busy ? 'One moment…' : 'Sign in'}</button>
+        <button className="a-btn a-primary" disabled={busy} aria-busy={busy}>{busy ? <><span className="a-spinner" aria-hidden="true" /> Signing in…</> : 'Sign in'}</button>
         <Link to="/" className="a-link"><Icon name="arrow-left" size={16} className="flip-rtl" /> Back to the store</Link>
       </form>
     </div>
   );
 }
 
-// The menu in three groups, most-used first.
+// The menu in groups, most-used first. The fourth item names the alert count
+// shown beside the link (GET /admin/counts).
 const NAV = [
-  ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders'], ['/admin/shipping', 'Shipping'], ['/admin/coupons', 'Coupons']]],
-  ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews'], ['/admin/journal', 'Journal']]],
-  ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries'], ['/admin/subscribers', 'Newsletter']]],
+  ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders', false, 'orders'], ['/admin/shipping', 'Shipping', false, 'shipping'], ['/admin/coupons', 'Coupons']]],
+  ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews', false, 'reviews'], ['/admin/journal', 'Journal']]],
+  ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries', false, 'enquiries'], ['/admin/subscribers', 'Newsletter']]],
+  ['Setup', [['/admin/settings', 'Settings']]],
 ];
+const COUNT_TITLE = { orders: 'new orders to confirm', shipping: 'shipments with a problem', reviews: 'reviews waiting', enquiries: 'unread enquiries' };
 
 export default function Admin() {
   const { user, logout } = useStore();
   const nav = useRef(null);
   const { pathname } = useLocation();
   const [notice, setNotice] = useState('');
+  const [counts, setCounts] = useState({});
+  // Menu alerts, refreshed on every page change and every two minutes.
+  useEffect(() => {
+    if (user?.role !== 'admin') return undefined;
+    const load = () => api('/admin/counts', { timeout: 15000 }).then(setCounts).catch(() => {});
+    load();
+    const t = setInterval(load, 120000);
+    return () => clearInterval(t);
+  }, [user, pathname]);
   // A session from before two-step sign-in: sign out and ask for the code.
   useEffect(() => {
     const onMfa = () => { logout(); setNotice('For your security, please sign in again. We will email you a code.'); };
@@ -112,7 +134,12 @@ export default function Admin() {
           {NAV.map(([group, links]) => (
             <div key={group} className="a-nav-group" role="group" aria-label={group}>
               <span className="a-nav-label" aria-hidden="true">{group}</span>
-              {links.map(([to, label, end]) => <NavLink key={to} to={to} end={end}>{label}</NavLink>)}
+              {links.map(([to, label, end, count]) => (
+                <NavLink key={to} to={to} end={end}>
+                  {label}
+                  {count && counts[count] > 0 && <span className="a-nav-count" title={`${counts[count]} ${COUNT_TITLE[count]}`}>{counts[count] > 99 ? '99+' : counts[count]}<span className="sr-only"> {COUNT_TITLE[count]}</span></span>}
+                </NavLink>
+              ))}
             </div>
           ))}
         </nav>
@@ -125,6 +152,7 @@ export default function Admin() {
         <Routes>
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="orders/:id/invoice" element={<InvoicePage />} />
           <Route path="orders/imports" element={<ImportHistory />} />
           <Route path="shipping" element={<Shipping />} />
           <Route path="users" element={<UserList />} />
@@ -141,8 +169,10 @@ export default function Admin() {
           <Route path="whatsapp/*" element={<WhatsApp />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
+          <Route path="settings" element={<Settings />} />
         </Routes>
       </main>
+      <ConfirmHost />
     </div>
   );
 }

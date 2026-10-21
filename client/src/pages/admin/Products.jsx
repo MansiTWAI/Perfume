@@ -1,11 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
 import { ImageField, PhotoGallery, RowList, csv, fromCsv } from './Fields';
 import Icon from '../../components/Icon';
+import { confirm, EmptyState, LoadError } from './ui';
+
+// Rupees per dirham the two prices should roughly follow (the server checks too).
+const AED_RATE = 23;
+export function aedHint(inr, aed) {
+  if (!inr || !aed) return '';
+  const rate = inr / aed;
+  if (rate >= 15 && rate <= 35) return '';
+  return `Expected about AED ${Math.round(inr / AED_RATE)} for ₹${inr}.${rate < 5 || rate > 80 ? ' This will not save: check each price is in its own box.' : ''}`;
+}
+
+const stockState = (p) => (p.stock <= 0 ? ['Out of stock', 'bad'] : p.stock <= 5 ? [`Low · ${p.stock} left`, 'warn'] : [`${p.stock} in stock`, '']);
 
 const EMPTY = {
   name: '', slug: '', subtitle: 'Eau de Parfum', tagline: '', family: '', description: '', story: '',
@@ -19,29 +31,83 @@ const EMPTY = {
 };
 
 export function ProductList() {
+  const { toast } = useStore();
+  const [params, setParams] = useSearchParams();
   const [list, setList] = useState(null);
+  const [error, setError] = useState('');
+  const [q, setQ] = useState(params.get('q') || '');
+  const [tick, setTick] = useState(0);
+  const stock = params.get('stock') || '';
+  const status = params.get('status') || '';
   useEffect(() => {
-    api('/products?all=1').then(setList).catch(() => setList([]));
-  }, []);
+    setError('');
+    api('/products?all=1').then(setList).catch((e) => { setError(e.message); setList([]); });
+  }, [tick]);
+  const go = (k, v) => setParams((prev) => { const n = new URLSearchParams(prev); if (v) n.set(k, v); else n.delete(k); return n; });
+  const shown = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    return (list || []).filter((p) => (!text || [p.name, p.slug, p.family, p.category].some((x) => String(x || '').toLowerCase().includes(text)))
+      && (!stock || (stock === 'out' ? p.stock <= 0 : stock === 'low' ? p.stock > 0 && p.stock <= 5 : p.stock > 5))
+      && (!status || (status === 'live') === !!p.published));
+  }, [list, q, stock, status]);
+  const outLive = (list || []).filter((p) => p.published && p.stock <= 0).length;
+
+  async function remove(p) {
+    if (!(await confirm({ title: `Delete ${p.name}?`, message: 'The product and its page are removed for good. Orders that included it keep their copy of the item.', confirmLabel: 'Delete product', cancelLabel: 'Keep it', danger: true }))) return;
+    try {
+      await api(`/products/${p._id}`, { method: 'DELETE' });
+      clearApiCache();
+      setList((l) => l.filter((x) => x._id !== p._id));
+      toast(`${p.name} deleted`);
+    } catch (e) {
+      toast(e.message, 'warn');
+    }
+  }
+
   return (
     <div>
-      <header className="a-head"><h1>Products</h1><Link to="/admin/products/new" className="a-btn a-primary">+ New product</Link></header>
+      <header className="a-head"><h1>Products</h1><Link to="/admin/products/new" className="a-btn a-primary"><Icon name="plus" size={16} /> New product</Link></header>
+      {outLive > 0 && !stock && (
+        <p className="a-note"><Icon name="alert" size={16} /><span>{outLive} live product{outLive === 1 ? ' is' : 's are'} out of stock: shoppers see it but cannot buy. <button type="button" className="a-textbtn" onClick={() => go('stock', 'out')}>Show {outLive === 1 ? 'it' : 'them'}</button></span></p>
+      )}
+      <section className="a-filters">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, family or category" aria-label="Search products" />
+        <select value={stock} onChange={(e) => go('stock', e.target.value)} aria-label="Stock">
+          <option value="">All stock</option><option value="out">Out of stock</option><option value="low">Low stock (1–5)</option><option value="in">In stock</option>
+        </select>
+        <select value={status} onChange={(e) => go('status', e.target.value)} aria-label="Visibility">
+          <option value="">Live and hidden</option><option value="live">Live only</option><option value="hidden">Hidden only</option>
+        </select>
+        {(q || stock || status) && <button type="button" className="a-link" onClick={() => { setQ(''); setParams({}); }}>Clear filters</button>}
+      </section>
       <section className="a-panel">
-        {!list ? <p>Loading…</p> : (
-          <div className="a-table-wrap"><table className="a-table">
-            <thead><tr><th /><th>Name</th><th>Price</th><th>Stock</th><th>Notes</th><th>Status</th><th /></tr></thead>
+        {error && <LoadError message={error} onRetry={() => setTick((n) => n + 1)} />}
+        {!list ? <p className="a-muted">Loading…</p> : shown.length === 0 ? (
+          !error && (list.length
+            ? <EmptyState icon="search" title="No products match">Try another search or filter.</EmptyState>
+            : <EmptyState icon="package" title="No products yet" action="Add the first product" to="/admin/products/new">Add photos, a name, the price and the notes; everything else is optional.</EmptyState>)
+        ) : (
+          <div className="a-table-wrap a-sticky-head"><table className="a-table">
+            <thead><tr><th /><th>Name</th><th>Price</th><th>Stock</th><th>Notes</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
-              {list.map((p) => (
-                <tr key={p._id}>
-                  <td>{p.images?.[0]?.src ? <img src={p.images[0].src} alt="" className="a-thumb" /> : <span className="a-thumb a-thumb-empty" aria-hidden="true" />}</td>
-                  <td><b>{p.name}</b><br /><small>/fragrances/{p.slug}</small></td>
-                  <td>{money(p.price?.INR, 'INR')}<br /><small>{money(p.price?.AED, 'AED')}</small></td>
-                  <td className={p.stock <= 5 ? 'a-warn' : ''}>{p.stock}</td>
-                  <td>{p.notes?.top?.length ? (p.notes.approved ? <span className="a-pill ok">Approved</span> : <span className="a-pill warn">Awaiting approval</span>) : '—'}</td>
-                  <td>{p.published ? 'Live' : 'Hidden'}</td>
-                  <td><Link to={`/admin/products/${p._id}`} className="a-link">Edit</Link></td>
-                </tr>
-              ))}
+              {shown.map((p) => {
+                const [stockLabel, tone] = stockState(p);
+                const hint = aedHint(p.price?.INR, p.price?.AED);
+                return (
+                  <tr key={p._id}>
+                    <td>{p.images?.[0]?.src ? <img src={p.images[0].src} alt="" className="a-thumb" /> : <span className="a-thumb a-thumb-empty" aria-hidden="true" />}</td>
+                    <td><Link to={`/admin/products/${p._id}`} className="a-row-link">{p.name}</Link><small>/fragrances/{p.slug}</small></td>
+                    <td>{money(p.price?.INR, 'INR')}<br /><small>{p.price?.AED ? money(p.price.AED, 'AED') : 'No AED price'}</small>{hint && <><br /><small className="a-warn" title={hint}>Check AED price</small></>}</td>
+                    <td><span className={`a-pill ${tone}`}>{stockLabel}</span></td>
+                    <td>{p.notes?.top?.length ? (p.notes.approved ? <span className="a-pill ok">Approved</span> : <span className="a-pill warn">Awaiting approval</span>) : '—'}</td>
+                    <td>{p.published ? <span className="a-pill ok">Live</span> : <span className="a-pill off">Hidden</span>}{p.published && p.stock <= 0 && <><br /><small className="a-warn">cannot be bought</small></>}</td>
+                    <td className="a-cell-action">
+                      <Link to={`/admin/products/${p._id}`} className="a-btn a-quiet">Edit</Link>
+                      <button type="button" className="a-btn a-quiet a-danger-text" onClick={() => remove(p)} aria-label={`Delete ${p.name}`}><Icon name="trash" size={16} /></button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table></div>
         )}
@@ -99,9 +165,9 @@ export function ProductEdit() {
     try {
       const saved = await api(isNew ? '/products' : `/products/${id}`, { method: isNew ? 'POST' : 'PUT', body });
       clearApiCache();
-      toast('Product saved');
+      toast(saved.warnings?.length ? `Saved. ${saved.warnings[0]}` : 'Product saved', saved.warnings?.length ? 'warn' : undefined);
       if (isNew) navigate(`/admin/products/${saved._id}`, { replace: true });
-      else setP({ ...EMPTY, ...saved });
+      else setP({ ...EMPTY, ...saved, warnings: undefined });
     } catch (err) {
       toast(/duplicate|E11000|slug/i.test(err.message) ? 'A product with this name already exists. Change the name, or the web address under More details.' : err.message, 'warn');
     } finally {
@@ -141,7 +207,7 @@ export function ProductEdit() {
             <label>Name *<input required value={p.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. ZAFREON" /></label>
             <div className="a-grid3">
               <label>Price ₹ (incl. GST) *<input type="number" min="0" required value={p.price?.INR || ''} onChange={(e) => setIn('price', 'INR', +e.target.value)} /></label>
-              <label>Price AED (incl. VAT)<input type="number" min="0" value={p.price?.AED || ''} onChange={(e) => setIn('price', 'AED', +e.target.value)} /></label>
+              <label>Price AED (incl. VAT)<input type="number" min="0" value={p.price?.AED || ''} onChange={(e) => setIn('price', 'AED', +e.target.value)} aria-invalid={!!aedHint(p.price?.INR, p.price?.AED)} />{aedHint(p.price?.INR, p.price?.AED) && <span className="a-field-error">{aedHint(p.price?.INR, p.price?.AED)}</span>}</label>
               <label>Stock<input type="number" min="0" value={p.stock} onChange={(e) => set('stock', +e.target.value)} /></label>
             </div>
             <div className="a-grid2">

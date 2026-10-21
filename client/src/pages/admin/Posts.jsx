@@ -7,6 +7,7 @@ import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
 import { ImageField, csv, fromCsv } from './Fields';
 import Icon from '../../components/Icon';
+import { EmptyState, LoadError } from './ui';
 
 const EMPTY = {
   title: '', slug: '', excerpt: '', content: '## First heading\n\nStart writing…', cover: { src: '', alt: '' },
@@ -15,32 +16,55 @@ const EMPTY = {
 };
 const CATEGORIES = ['Brand Stories', 'Guides', 'Heritage', 'Rituals', 'Behind the Bottle'];
 
+const TABS = [['', 'All'], ['published', 'Published'], ['draft', 'Drafts']];
+
 export function PostList() {
-  const [list, setList] = useState(null);
+  const [tab, setTab] = useState('');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    api('/posts?all=1&limit=50').then((d) => setList(d.items)).catch(() => setList([]));
-  }, []);
+    setError('');
+    api(`/posts?all=1&limit=50${tab ? `&status=${tab}` : ''}`).then(setData).catch((e) => { setError(e.message); setData({ items: [] }); });
+  }, [tab, tick]);
+  const list = data?.items;
+  const counts = data?.counts || {};
   return (
     <div>
-      <header className="a-head"><h1>Journal</h1><Link to="/admin/journal/new" className="a-btn a-primary">+ New article</Link></header>
+      <header className="a-head">
+        <h1>Journal</h1>
+        <div className="a-actions">
+          <div className="a-tabs">
+            {TABS.map(([v, l]) => <button key={l} className={tab === v ? 'is-on' : ''} onClick={() => setTab(v)}>{l}{v && counts[v] ? <span className="a-count">{counts[v]}</span> : null}</button>)}
+          </div>
+          <Link to="/admin/journal/new" className="a-btn a-primary"><Icon name="plus" size={16} /> New article</Link>
+        </div>
+      </header>
       <section className="a-panel">
-        {!list ? <p>Loading…</p> : (
-          <div className="a-table-wrap"><table className="a-table">
-            <thead><tr><th /><th>Title</th><th>Category</th><th>Status</th><th>Published</th><th /></tr></thead>
+        {error && <LoadError message={error} onRetry={() => setTick((n) => n + 1)} />}
+        {!list ? <p className="a-muted">Loading…</p> : list.length === 0 ? (
+          !error && (tab === 'draft'
+            ? <EmptyState icon="pencil" title="No drafts" action="Start an article" to="/admin/journal/new">Use “Save draft” while writing; drafts stay here, unseen by readers, until you publish.</EmptyState>
+            : <EmptyState icon="pencil" title="No articles yet" action="Write the first article" to="/admin/journal/new">Journal articles appear on the website’s Journal page once published.</EmptyState>)
+        ) : (
+          <div className="a-table-wrap a-sticky-head"><table className="a-table">
+            <thead><tr><th /><th>Title</th><th>Category</th><th>Status</th><th>Published</th><th>Views</th><th /></tr></thead>
             <tbody>
               {list.map((p) => (
                 <tr key={p._id}>
-                  <td><img src={p.cover?.src} alt="" className="a-thumb" /></td>
-                  <td><b>{p.title}</b>{p.featured && <small className="a-gold"> · Featured</small>}<br /><small>/journal/{p.slug} · {p.readingMinutes} min</small></td>
+                  <td>{p.cover?.src ? <img src={p.cover.src} alt="" className="a-thumb" /> : <span className="a-thumb a-thumb-empty" aria-hidden="true" />}</td>
+                  <td><Link to={`/admin/journal/${p._id}`} className="a-row-link">{p.title}</Link>{p.featured && <small className="a-gold">Featured</small>}<small>/journal/{p.slug} · {p.readingMinutes} min read</small></td>
                   <td>{p.category}</td>
-                  <td><span className={`a-pill ${p.status === 'published' ? 'ok' : ''}`}>{p.status}</span></td>
-                  <td>{formatDate(p.publishedAt)}</td>
+                  <td><span className={`a-pill ${p.status === 'published' ? 'ok' : 'warn'}`}>{p.status === 'published' ? 'Published' : 'Draft'}</span></td>
+                  <td>{p.publishedAt ? formatDate(p.publishedAt) : <span className="a-muted">—</span>}</td>
+                  <td>{p.status === 'published' ? (p.views || 0).toLocaleString() : <span className="a-muted">—</span>}</td>
                   <td><Link to={`/admin/journal/${p._id}`} className="a-link">Edit</Link></td>
                 </tr>
               ))}
             </tbody>
           </table></div>
         )}
+        <p className="a-muted a-hint" style={{ marginTop: 12 }}>Views count readers opening an article on the website since this counter was added; the team’s own visits are not counted.</p>
       </section>
     </div>
   );
@@ -129,7 +153,7 @@ export function PostEdit() {
         <div className="a-col a-col-side">
           <section className="a-panel a-form">
             <h2>Details</h2>
-            <p className="a-muted">Status: <b>{p.status}</b>{p.publishedAt && ` · ${formatDate(p.publishedAt)}`}</p>
+            <p className="a-muted">Status: <b>{p.status === 'published' ? 'Published' : 'Draft'}</b>{p.publishedAt && ` · ${formatDate(p.publishedAt)}`}{p.status === 'published' && ` · ${(p.views || 0).toLocaleString()} views`}</p>
             <label>URL slug<input value={p.slug} onChange={(e) => set('slug', e.target.value)} placeholder="from title" /></label>
             <label>Category
               <input list="cats" value={p.category} onChange={(e) => set('category', e.target.value)} />

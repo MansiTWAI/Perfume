@@ -11,6 +11,7 @@
 //   POST /api/cmu/create.json      create (manifest) a shipment; body format=json&data=<json>
 //   GET  /api/v1/packages/json/?waybill=<awb>&ref_ids=<order id>   tracking (up to 50 each, comma separated)
 //   POST /api/p/edit               cancel: { waybill, cancellation: "true" }
+//   GET  /c/api/pin-codes/json/?filter_codes=<pin>   is the PIN code serviceable
 import crypto from 'crypto';
 
 export const delhiveryConfigured = () => !!(process.env.DELHIVERY_API_TOKEN && process.env.DELHIVERY_PICKUP_LOCATION);
@@ -127,18 +128,68 @@ export function shippingConfig() {
   };
 }
 
+// Delhivery's own words for a refused shipment, turned into what the team
+// should do about it.
+export function explainRemarks(remarks, order) {
+  const r = String(remarks || '');
+  const pin = digits(order?.customer?.address?.postalCode).slice(0, 6);
+  if (/clientwarehouse|warehouse|pickup/i.test(r)) {
+    return `Delhivery does not recognise the pickup location "${clean(process.env.DELHIVERY_PICKUP_LOCATION, 60)}". In Admin → Shipping → Settings, enter the warehouse name exactly as it appears in your Delhivery account (capitals and spaces count), and use the token from the same account (test or live).`;
+  }
+  if (/non.?serviceable|not serviceable|serviceab|embargo|pin ?code|exception pin|invalid pin/i.test(r)) return `Delhivery does not deliver to PIN code ${pin || '(missing)'}. Check the PIN with the customer.`;
+  if (/phone|mobile/i.test(r)) return 'Delhivery refused the phone number. The customer needs a 10-digit Indian mobile number.';
+  if (/address/i.test(r)) return 'Delhivery refused the delivery address. Check the address lines, city and PIN code.';
+  if (/weight|dimension/i.test(r)) return 'Delhivery refused the parcel weight or size. Check the box settings (DELHIVERY_ITEM_WEIGHT_G, DELHIVERY_BOX_*).';
+  return r;
+}
+
 // Creates the shipment. Returns { awb, reference } or throws. A "duplicate
 // order id" answer means Delhivery already has this order: the caller looks
 // the waybill up instead of creating another one.
 export async function createShipment(order, ref = order.orderNumber) {
-  const data = await call('/api/cmu/create.json', { method: 'POST', form: { format: 'json', data: JSON.stringify(shipmentPayload(order, ref)) }, timeout: 20000 });
+  let data;
+  try {
+    data = await call('/api/cmu/create.json', { method: 'POST', form: { format: 'json', data: JSON.stringify(shipmentPayload(order, ref)) }, timeout: 20000 });
+  } catch (e) {
+    if (!e.retryable && !e.auth) Object.assign(e, { message: explainRemarks(e.message, order) || e.message, rejected: true });
+    throw e;
+  }
   const pkg = Array.isArray(data?.packages) ? data.packages.find((p) => !p.refnum || String(p.refnum) === ref) || data.packages[0] : null;
   const remarks = clean([].concat(pkg?.remarks || []).join(' ') || data?.rmk || '', 300);
   if (pkg && String(pkg.status).toLowerCase() === 'success' && AWB_RX.test(String(pkg.waybill || ''))) {
     return { awb: String(pkg.waybill), reference: clean(data.upload_wbn || '', 40) };
   }
   if (/duplicate/i.test(remarks)) throw fail('Delhivery already has a shipment for this order.', { duplicate: true, retryable: false });
-  throw fail(remarks || 'Delhivery could not create the shipment.', { retryable: /internal error|try again|timeout/i.test(remarks) });
+  const retryable = /internal error|try again|timeout/i.test(remarks);
+  throw fail(retryable ? remarks : explainRemarks(remarks, order) || 'Delhivery could not create the shipment.', { retryable, rejected: !retryable });
+}
+
+// Whether Delhivery delivers to a PIN code: GET /c/api/pin-codes/json/.
+// Returns { serviceable, district, state, cod, prepaid } or null when
+// Delhivery could not be asked (the caller then goes ahead and lets the
+// shipment request decide).
+export async function checkPin(pin) {
+  const p = digits(pin).slice(0, 6);
+  if (!/^[1-9]\d{5}$/.test(p)) return { serviceable: false };
+  let data;
+  try {
+    data = await call('/c/api/pin-codes/json/', { query: { filter_codes: p }, timeout: 8000 });
+  } catch (e) {
+    if (e.auth) throw e;
+    return null;
+  }
+  const pc = (Array.isArray(data?.delivery_codes) ? data.delivery_codes : []).map((x) => x?.postal_code).find((x) => String(x?.pin) === p);
+  if (!pc) return { serviceable: false };
+  const yes = (v) => String(v || '').toUpperCase() === 'Y';
+  const embargo = /embargo/i.test(String(pc.remarks || ''));
+  return {
+    serviceable: !embargo && (yes(pc.pre_paid) || yes(pc.cod)),
+    district: clean(pc.district, 60),
+    state: clean(pc.state_code, 10),
+    cod: yes(pc.cod),
+    prepaid: yes(pc.pre_paid),
+    embargo,
+  };
 }
 
 // Tracking: GET /api/v1/packages/json/?waybill=<awbs>&ref_ids=<order ids>,

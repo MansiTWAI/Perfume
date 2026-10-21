@@ -5,8 +5,10 @@ import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { PeriodPicker, periodParams, Pager, Modal } from './Fields';
 import { ImportModal } from './OrderExcel';
-import { OrderRow, STAGES } from './OrderDetail';
+import { OrderRow, STAGES, CANCEL_REASONS } from './OrderDetail';
+import { confirm, EmptyState, LoadError } from './ui';
 import Icon from '../../components/Icon';
+import { INDIAN_STATES, foreignPlace } from '../../../../shared/india.js';
 
 const PAYMENT_LABEL = { cod: 'Cash on delivery', 'pay-on-confirmation': 'Pay on confirmation' };
 
@@ -34,6 +36,8 @@ function AddOrderModal({ products, onClose, onCreated }) {
   async function submit(e) {
     e.preventDefault();
     setError('');
+    const abroad = region === 'IN' && foreignPlace(c.city, c.state);
+    if (abroad) return setError(`This address is in ${abroad}. India orders ship with Delhivery within India only: choose another market, or correct the address.`);
     setBusy(true);
     try {
       const o = await api('/orders/admin', {
@@ -94,7 +98,14 @@ function AddOrderModal({ products, onClose, onCreated }) {
         <label>Address line 2<input value={c.line2} onChange={set('line2')} /></label>
         <div className="a-grid2">
           <label>City<input required value={c.city} onChange={set('city')} /></label>
-          <label>{region === 'IN' ? 'State' : 'Emirate'}<input value={c.state} onChange={set('state')} /></label>
+          {region === 'IN' ? (
+            <label>State
+              <select required value={c.state} onChange={set('state')}>
+                <option value="">Choose…</option>
+                {INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+          ) : <label>Emirate<input value={c.state} onChange={set('state')} /></label>}
         </div>
         <div className="a-grid2">
           <label>Payment status
@@ -122,7 +133,10 @@ export default function Orders() {
   const [params, setParams] = useSearchParams();
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, params.get(k) || '']));
   const page = Math.max(parseInt(params.get('page'), 10) || 1, 1);
+  const limit = [25, 50, 100].includes(Number(params.get('limit'))) ? Number(params.get('limit')) : 25;
   const [data, setData] = useState(null);
+  const [picked, setPicked] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [error, setError] = useState('');
   const [products, setProducts] = useState([]);
   const [customerName, setCustomerName] = useState('');
@@ -158,13 +172,13 @@ export default function Orders() {
   useEffect(() => {
     if (customRangeIncomplete) return;
     setError('');
-    api(`/orders${toQuery({ ...query, paged: 1, page, limit: 50 })}`)
-      .then(setData)
+    api(`/orders${toQuery({ ...query, paged: 1, page, limit })}`)
+      .then((d) => { setData(d); setPicked(new Set()); })
       .catch((e) => {
         setError(e.message);
         setData({ items: [], total: 0, page: 1, pages: 1 });
       });
-  }, [query, page, reload, customRangeIncomplete]);
+  }, [query, page, limit, reload, customRangeIncomplete]);
   // Search as you type, without a request per keystroke.
   useEffect(() => {
     const t = setTimeout(() => search !== filters.q && update({ q: search }), 350);
@@ -176,7 +190,7 @@ export default function Orders() {
     // Build on the latest URL, not this render's copy, so quick successive
     // changes all stick. Any filter change goes back to page 1.
     setParams((prev) => {
-      const next = { ...Object.fromEntries(FILTER_KEYS.map((k) => [k, prev.get(k) || ''])), ...patch };
+      const next = { ...Object.fromEntries(FILTER_KEYS.map((k) => [k, prev.get(k) || ''])), limit: prev.get('limit') || '', ...patch };
       return Object.fromEntries(Object.entries(next).filter(([, v]) => v));
     });
   }
@@ -194,7 +208,50 @@ export default function Orders() {
     }
   }
 
+  // Bulk: the same status for every selected order (each still follows the
+  // usual rules: stock, emails, Delhivery).
+  async function bulk(status) {
+    const ids = [...picked];
+    const n = `${ids.length} order${ids.length === 1 ? '' : 's'}`;
+    let extra = {};
+    if (status === 'Cancelled') {
+      const a = await confirm({
+        title: `Cancel ${n}?`,
+        message: 'Items go back to stock, coupons are given back and each customer is emailed. Booked Delhivery shipments are cancelled too.',
+        choices: CANCEL_REASONS.filter(([k]) => k !== 'payment_not_completed'),
+        choiceLabel: 'Why are they cancelled?',
+        withNote: true,
+        noteLabel: 'Message for the customers (optional)',
+        confirmLabel: 'Cancel orders',
+        cancelLabel: 'Keep them',
+        danger: true,
+      });
+      if (!a) return;
+      extra = { cancelReason: a.choice, note: a.note };
+    } else if (!(await confirm({ title: `Mark ${n} as ${status}?`, message: 'Each customer is emailed about the change.', confirmLabel: `Mark ${status}` }))) {
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const r = await api('/orders/bulk', { method: 'POST', body: { ids, status, ...extra }, timeout: 120000 });
+      const why = r.results.find((x) => !x.ok)?.message;
+      toast(r.failed ? `${r.updated} updated, ${r.failed} not changed. ${why || ''}` : `${r.updated} order${r.updated === 1 ? '' : 's'} updated`, r.failed ? 'warn' : undefined);
+      setReload((x) => x + 1);
+    } catch (e) {
+      toast(e.message, 'warn');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  const togglePick = (id, on) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (on) next.add(id);
+    else next.delete(id);
+    return next;
+  });
+
   const orders = data?.items;
+  const allPicked = orders?.length > 0 && orders.every((o) => picked.has(o._id));
   return (
     <div>
       <header className="a-head">
@@ -261,18 +318,48 @@ export default function Orders() {
       {customRangeIncomplete && <p className="a-muted">Choose a start or end date for the custom range.</p>}
 
       <section className="a-panel">
-        {error && <p className="a-error">{error}</p>}
-        {orders == null ? <p>Loading…</p> : orders.length === 0 ? <p className="a-muted">{active ? 'No orders match these filters.' : 'No orders here yet.'}</p> : (
+        {error && <LoadError message={error} onRetry={() => setReload((n) => n + 1)} />}
+        {orders == null ? <p className="a-muted">Loading…</p> : orders.length === 0 ? (
+          !error && (active
+            ? <EmptyState icon="search" title="No orders match these filters" action="Clear filters" onAction={() => { setSearch(''); setParams({}); }}>Try another period or status.</EmptyState>
+            : <EmptyState icon="bag" title="No orders yet" action="Add an order" onAction={() => setModal('add')}>Orders from the website appear here as they come in. Phone and WhatsApp orders can be added by hand.</EmptyState>)
+        ) : (
           <>
-            <div className="a-table-wrap">
+            {picked.size > 0 && (
+              <div className="a-bulk" role="region" aria-label="Selected orders">
+                <b>{picked.size} selected</b>
+                <span className="a-actions">
+                  {['Confirmed', 'Packed', 'Delivered'].map((st) => <button key={st} type="button" className="a-btn" disabled={bulkBusy} onClick={() => bulk(st)}>Mark {st}</button>)}
+                  <button type="button" className="a-btn a-danger" disabled={bulkBusy} onClick={() => bulk('Cancelled')}>Cancel…</button>
+                  <button type="button" className="a-btn a-quiet" onClick={() => setPicked(new Set())}>Clear</button>
+                </span>
+              </div>
+            )}
+            <div className="a-table-wrap a-sticky-head">
               <table className="a-table a-orders">
-                <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+                <thead><tr>
+                  <th className="a-sel"><input type="checkbox" checked={allPicked} onChange={(e) => setPicked(e.target.checked ? new Set(orders.map((o) => o._id)) : new Set())} aria-label="Select all orders on this page" /></th>
+                  <th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th>
+                </tr></thead>
                 <tbody>
-                  {orders.map((o) => <OrderRow key={o._id} order={o} onSaved={(n) => setData((d) => ({ ...d, items: d.items.map((x) => (x._id === n._id ? n : x)) }))} />)}
+                  {orders.map((o) => (
+                    <OrderRow
+                      key={o._id}
+                      order={o}
+                      selected={picked.has(o._id)}
+                      onSelect={(on) => togglePick(o._id, on)}
+                      defaultOpen={orders.length === 1 && !!filters.q && filters.q.toUpperCase() === o.orderNumber}
+                      onSaved={(n) => setData((d) => ({ ...d, items: d.items.map((x) => (x._id === n._id ? n : x)) }))}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
-            <Pager page={data.page} pages={data.pages} total={data.total} noun={data.total === 1 ? 'order' : 'orders'} onPage={(p) => setParams({ ...Object.fromEntries(params), page: String(p) })} />
+            <Pager
+              page={data.page} pages={data.pages} total={data.total} limit={limit} noun={data.total === 1 ? 'order' : 'orders'}
+              onPage={(p) => setParams({ ...Object.fromEntries(params), page: String(p) })}
+              onLimit={(n) => setParams({ ...Object.fromEntries(params), limit: String(n), page: '1' })}
+            />
           </>
         )}
       </section>

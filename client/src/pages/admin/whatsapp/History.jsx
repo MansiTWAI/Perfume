@@ -4,6 +4,7 @@ import { api, toQuery } from '../../../lib/api';
 import { useStore } from '../../../context/StoreContext';
 import { Pager } from '../Fields';
 import Icon from '../../../components/Icon';
+import { confirm, EmptyState } from '../ui';
 import { DeliveryBar, STATUS, AUDIENCE, campaignState, live, summary, people, when } from './shared';
 
 // Every campaign: sent, scheduled, cancelled or stopped, with delivery.
@@ -20,8 +21,8 @@ export function HistoryList({ limit = 20, compact = false, filter }) {
     return () => clearTimeout(t);
   }, [data]);
   const items = (data?.items || []).filter(filter || (() => true));
-  if (!data) return <p>Loading…</p>;
-  if (!items.length) return <p className="a-muted">{compact ? 'Nothing yet.' : 'No campaigns yet. Start one from “New campaign”.'}</p>;
+  if (!data) return <p className="a-muted">Loading…</p>;
+  if (!items.length) return compact ? <p className="a-muted">Nothing yet.</p> : <EmptyState icon="send" title="No campaigns yet" action="New campaign" to="/admin/whatsapp/campaigns">Send your first WhatsApp campaign to subscribers: pick who gets it, write or generate the message, preview and send.</EmptyState>;
   return (
     <>
       {!compact && <div className="a-wa-legend" aria-hidden="true"><span className="is-read">Read</span><span className="is-delivered">Delivered</span><span className="is-sent">Sent</span><span className="is-failed">Failed</span></div>}
@@ -80,7 +81,7 @@ export function CampaignResults({ id: idProp, embedded = false }) {
     return () => clearInterval(t);
   }, [d, load]);
   async function act(kind, messageId) {
-    if (kind === 'cancel' && !window.confirm('Cancel this campaign? Messages not yet sent will not go out.')) return;
+    if (kind === 'cancel' && !(await confirm({ title: 'Cancel this campaign?', message: 'Messages not yet sent will not go out.', confirmLabel: 'Cancel campaign', cancelLabel: 'Keep it', danger: true }))) return;
     setBusy(messageId || kind);
     try {
       const r = await api(kind === 'cancel' ? `/admin/whatsapp/campaigns/${id}/cancel` : messageId ? `/admin/whatsapp/messages/${messageId}/retry` : `/admin/whatsapp/campaigns/${id}/retry`, { method: 'POST' });

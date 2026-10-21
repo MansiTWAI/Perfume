@@ -8,6 +8,7 @@ import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/
 import { code } from '../utils.js';
 import { validPhone } from '../models/User.js';
 import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.js';
+import { foreignPlace, indianState, indianPin } from '../../../shared/india.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const MAX_QTY = 10;
@@ -35,7 +36,14 @@ function cleanCustomer(customer, region) {
   const digits = out.phone.replace(/\D/g, '');
   const phoneOk = region.code === 'IN' ? validPhone(out.phone) : digits.length >= 8 && digits.length <= 15;
   if (!phoneOk) throw fail(400, 'Please enter a valid phone number.');
-  if (region.code === 'IN' && !/^[1-9][0-9]{5}$/.test(out.address.postalCode.replace(/\s/g, ''))) throw fail(400, 'Please enter a valid 6-digit PIN code.');
+  if (region.code === 'IN') {
+    if (!indianPin(out.address.postalCode)) throw fail(400, 'Please enter a valid 6-digit PIN code.');
+    // Rupee orders ship with Delhivery, within India only.
+    // City and state only: Indian streets and landmarks can carry foreign names.
+    const abroad = foreignPlace(out.address.city, out.address.state);
+    if (abroad) throw fail(400, `We deliver rupee orders within India only, and this address is in ${abroad}. For the UAE, choose the UAE market at the top of the page; for anywhere else, write to us on WhatsApp.`);
+    out.address.state = indianState(out.address.state) || out.address.state;
+  }
   return out;
 }
 

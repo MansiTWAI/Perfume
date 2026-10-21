@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
 import Review from '../models/Review.js';
 import Order from '../models/Order.js';
@@ -26,15 +27,15 @@ export const publicReview = (x) => ({
   body: x.body,
   reply: x.reply,
   createdAt: x.createdAt,
-  verified: true,
+  verified: x.source !== 'house',
 });
 
 export async function ratingFor(slug) {
   const [s] = await Review.aggregate([
     { $match: { slug, status: 'approved' } },
-    { $group: { _id: null, average: { $avg: '$rating' }, count: { $sum: 1 } } },
+    { $group: { _id: null, average: { $avg: '$rating' }, count: { $sum: 1 }, verified: { $sum: { $cond: [{ $eq: ['$source', 'house'] }, 0, 1] } } } },
   ]);
-  return s ? { average: Math.round(s.average * 10) / 10, count: s.count } : { average: 0, count: 0 };
+  return s ? { average: Math.round(s.average * 10) / 10, count: s.count, verified: s.verified } : { average: 0, count: 0, verified: 0 };
 }
 
 // Approved reviews for a product, newest first, with the summary.
@@ -120,6 +121,41 @@ r.get(
     const orders = await Order.find({ _id: { $in: reviews.map((x) => x.order).filter(Boolean) } }).select('customer.phone').lean();
     const phoneOf = new Map(orders.map((o) => [String(o._id), o.customer?.phone || '']));
     res.json(reviews.map((x) => ({ ...x, phone: phoneOf.get(String(x.order)) || '' })));
+  })
+);
+
+// The team adds a review it received another way (WhatsApp, in store).
+// Published straight away unless status 'pending' is sent; shown without the
+// verified-purchase mark.
+r.post(
+  '/admin',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { slug, name, city, rating, title, body, status } = req.body || {};
+    const product = typeof slug === 'string' && (await Product.findOne({ slug: slug.toLowerCase() }).select('_id slug'));
+    const errors = [];
+    if (!product) errors.push({ field: 'slug', message: 'Choose the fragrance' });
+    const stars = parseInt(rating, 10);
+    if (!(stars >= 1 && stars <= 5)) errors.push({ field: 'rating', message: 'Choose 1 to 5 stars' });
+    const who = String(name || '').trim();
+    if (!who) errors.push({ field: 'name', message: 'Add the reviewer’s name' });
+    const text = String(body || '').trim();
+    if (text.length < 10) errors.push({ field: 'body', message: 'Write the review (at least 10 characters)' });
+    if (errors.length) return res.status(400).json({ message: errors.map((e) => e.message).join('. ') + '.', errors });
+    const review = await Review.create({
+      product: product._id,
+      slug: product.slug,
+      order: new mongoose.Types.ObjectId(),
+      source: 'house',
+      addedBy: req.user?.email,
+      name: displayName(who).slice(0, 40),
+      city: String(city || '').trim().slice(0, 60),
+      rating: stars,
+      title: String(title || '').trim().slice(0, 80),
+      body: text.slice(0, 1200),
+      status: status === 'pending' ? 'pending' : 'approved',
+    });
+    res.status(201).json(review);
   })
 );
 

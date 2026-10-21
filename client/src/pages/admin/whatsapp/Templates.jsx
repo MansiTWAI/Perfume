@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../../lib/api';
 import { useStore } from '../../../context/StoreContext';
 import Icon from '../../../components/Icon';
+import { confirm } from '../ui';
 import { ContentForm, AiPanel, PhonePreview, EMPTY_CONTENT, contentOf, fieldErrors, when } from './shared';
 
 // Saved notifications to reuse. Two ways in: AI Generate (a draft to edit) or
@@ -18,7 +19,7 @@ export function TemplateList() {
   }, [reload]);
 
   async function act(t, kind) {
-    if (kind === 'delete' && !window.confirm(`Delete the template “${t.name}”? Campaigns already sent keep their message.`)) return;
+    if (kind === 'delete' && !(await confirm({ title: `Delete “${t.name}”?`, message: 'Campaigns already sent keep their message.', confirmLabel: 'Delete template', danger: true }))) return;
     try {
       if (kind === 'toggle') await api(`/admin/whatsapp/templates/${t.id}`, { method: 'PATCH', body: { active: !t.active } });
       if (kind === 'duplicate') {

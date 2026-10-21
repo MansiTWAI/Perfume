@@ -282,7 +282,7 @@ export async function releaseUnpaid(order, reason = 'expired') {
   const done = await Order.findOneAndUpdate(
     { _id: order._id, paymentStatus: 'pending', status: 'Order Placed' },
     {
-      $set: { status: ORDER_CANCELLED },
+      $set: { status: ORDER_CANCELLED, cancellation: { reason: 'payment_not_completed', note: '', by: 'system', at: new Date() } },
       $push: { history: { status: ORDER_CANCELLED, note: 'Payment was not completed, so the order was released. You are welcome to order again.' } },
     },
     { new: true }

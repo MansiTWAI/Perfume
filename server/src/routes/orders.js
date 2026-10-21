@@ -8,12 +8,12 @@ import User from '../models/User.js';
 import OrderImport from '../models/OrderImport.js';
 import Address from '../models/Address.js';
 import { optionalAuth, requireAuth, requireAdmin, asyncHandler, isAdminSession } from '../middleware/auth.js';
-import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, REGIONS, shippingFor, statusKey } from '../config/commerce.js';
+import { ORDER_STAGES, ORDER_STATUSES, ORDER_CANCELLED, CANCEL_REASONS, REGIONS, shippingFor, statusKey } from '../config/commerce.js';
 import { discountFor, releaseCoupon } from '../services/coupons.js';
 import { placeOrder } from '../services/placeOrder.js';
 import { reserve, release } from '../services/orderStock.js';
 import { razorpayConfigured, ONLINE_CURRENCIES } from '../services/razorpay.js';
-import { orderFilter, describeFilters } from '../services/filters.js';
+import { orderFilter, describeFilters, periodRange } from '../services/filters.js';
 import { shipmentView, freshen, orderReady, cancelShipmentFor } from '../services/shipping.js';
 import { emailCustomer, alertTeam, STATUS_EMAIL } from '../services/orderEmails.js';
 import { newWorkbook, addTableSheet, sendWorkbook, fileName, tzLabel } from '../services/excel.js';
@@ -525,16 +525,68 @@ r.get(
   })
 );
 
+// Dashboard figures for a period (period, from, to, tz as in the order list;
+// all time by default): orders by status, order value per currency, a daily
+// series for the chart (at most the last 90 days of the period) and why
+// orders were cancelled.
 r.get(
   '/stats',
   requireAdmin,
-  asyncHandler(async (_req, res) => {
-    const [byStatus, revenue, count] = await Promise.all([
-      Order.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
-      Order.aggregate([{ $match: { status: { $ne: ORDER_CANCELLED } } }, { $group: { _id: '$currency', total: { $sum: '$total' } } }]),
-      Order.countDocuments(),
+  asyncHandler(async (req, res) => {
+    let period;
+    try {
+      period = periodRange(req.query);
+    } catch (e) {
+      return res.status(e.status || 400).json({ message: e.message });
+    }
+    const match = {};
+    if (period.from || period.to) match.createdAt = { ...(period.from && { $gte: period.from }), ...(period.to && { $lt: period.to }) };
+    // The admin's clock for the daily buckets ("+05:30" for India).
+    const off = -period.tz;
+    const zone = `${off >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(off) / 60)).padStart(2, '0')}:${String(Math.abs(off) % 60).padStart(2, '0')}`;
+    const end = period.to || new Date();
+    const start = new Date(Math.max(period.from ? period.from.getTime() : 0, end.getTime() - 90 * 864e5));
+    const [byStatus, revenue, count, daily, reasons] = await Promise.all([
+      Order.aggregate([{ $match: match }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
+      Order.aggregate([{ $match: { ...match, status: { $ne: ORDER_CANCELLED } } }, { $group: { _id: '$currency', total: { $sum: '$total' }, n: { $sum: 1 } } }]),
+      Order.countDocuments(match),
+      Order.aggregate([
+        { $match: { createdAt: { $gte: start, $lt: end }, status: { $ne: ORDER_CANCELLED } } },
+        { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: zone } }, currency: '$currency' }, total: { $sum: '$total' }, n: { $sum: 1 } } },
+        { $sort: { '_id.day': 1 } },
+      ]),
+      Order.aggregate([{ $match: { ...match, status: ORDER_CANCELLED } }, { $group: { _id: '$cancellation.reason', n: { $sum: 1 } } }, { $sort: { n: -1 } }]),
     ]);
-    res.json({ byStatus, revenue, count, stages: ORDER_STAGES });
+    res.json({
+      byStatus, revenue, count, stages: ORDER_STAGES,
+      period: { key: period.key, label: period.label },
+      daily: { from: start, to: end, zone, days: daily.map((d) => ({ day: d._id.day, currency: d._id.currency, total: d.total, orders: d.n })) },
+      cancelled: reasons.map((x) => ({ reason: x._id || '', label: CANCEL_REASONS[x._id] || 'Not recorded (cancelled before reasons were kept)', n: x.n })),
+      cancelReasons: CANCEL_REASONS,
+    });
+  })
+);
+
+// The same change for several orders at once (Orders → select → bulk
+// action): { ids: [...], status, cancelReason?, note? }. Each order goes
+// through the normal update, with its own stock, email and courier rules, and
+// reports its own result.
+r.post(
+  '/bulk',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { ids, status, cancelReason, note } = req.body || {};
+    const list = [...new Set((Array.isArray(ids) ? ids : []).map(String).filter((id) => mongoose.isValidObjectId(id)))];
+    if (!list.length || list.length > 100) return res.status(400).json({ message: 'Choose between 1 and 100 orders.' });
+    if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ message: `Choose a status: ${ORDER_STATUSES.join(', ')}.` });
+    if (status === ORDER_CANCELLED && !CANCEL_REASONS[cancelReason]) return res.status(400).json({ message: 'Choose why these orders are cancelled.' });
+    const results = [];
+    for (const id of list) {
+      const out = await runUpdate(req, id, { status, cancelReason, note });
+      results.push({ id, ok: out.status < 300, ...(out.status >= 300 && { message: out.body?.message || 'Not changed.' }), ...(out.status < 300 && { orderNumber: out.body?.orderNumber }) });
+    }
+    const done = results.filter((x) => x.ok).length;
+    res.json({ updated: done, failed: results.length - done, results });
   })
 );
 
@@ -546,7 +598,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found.' });
     const statusBefore = order.status;
-    const { status, carrier, carrierUrl, trackingNumber, eta, paymentStatus, note, notes, customer } = req.body || {};
+    const { status, carrier, carrierUrl, trackingNumber, eta, paymentStatus, note, notes, customer, cancelReason } = req.body || {};
     const problems = [];
     const text = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -587,6 +639,11 @@ export const updateOrder = asyncHandler(async (req, res) => {
       else if (order.status === ORDER_CANCELLED) stockMove = 'reserve';
       order.status = status;
       order.history.push({ status, note: text(note, 300) });
+      if (status === ORDER_CANCELLED) {
+        order.cancellation = { reason: CANCEL_REASONS[cancelReason] ? cancelReason : 'other', note: text(note, 300), by: req.user?.email || 'team', at: new Date() };
+      } else if (stockMove === 'reserve') {
+        order.cancellation = undefined;
+      }
     }
     // Courier and tracking are Delhivery's (create the shipment from the
     // order or Admin → Shipping). Sending the values already saved is fine.
@@ -631,6 +688,18 @@ export const updateOrder = asyncHandler(async (req, res) => {
     res.json(req.apiV1 ? { ...out.toObject(), id: String(out._id), statusKey: statusKey(out) } : out);
 });
 r.patch('/:id', requireAdmin, updateOrder);
+
+// Runs updateOrder for one order and returns its reply ({ status, body }).
+function runUpdate(req, id, body) {
+  return new Promise((resolve) => {
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(b) { resolve({ status: this.statusCode, body: b?.toObject ? b.toObject() : b }); return this; },
+    };
+    updateOrder({ ...req, user: req.user, apiV1: false, params: { id }, body }, res, (e) => resolve({ status: 500, body: { message: e?.message || 'Could not update this order.' } }));
+  });
+}
 
 // Shipment tracking for one of the signed-in customer's orders: the courier,
 // the AWB number, the status and every step so far.
@@ -796,6 +865,7 @@ r.post(
     const reason = clip(req.body?.reason, 200);
     const refund = order.paymentStatus === 'paid' ? ' We will arrange your refund.' : '';
     order.status = ORDER_CANCELLED;
+    order.cancellation = { reason: 'customer_request', note: reason, by: 'customer', at: new Date() };
     order.history.push({ status: ORDER_CANCELLED, note: `Cancelled by you${reason ? `: ${reason}` : ''}.${refund}` });
     order.edits.push({ by: 'customer', summary: `Cancelled the order${reason ? ` (${reason})` : ''}` });
     await order.save();

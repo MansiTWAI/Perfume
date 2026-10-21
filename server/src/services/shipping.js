@@ -8,8 +8,9 @@ import Order from '../models/Order.js';
 import { ORDER_STAGES, ORDER_CANCELLED, SHIPMENT_LABELS, SHIPMENT_FINAL } from '../config/commerce.js';
 import { trackingUrl } from '../../../shared/couriers.js';
 import {
-  delhiveryConfigured, createShipment, trackShipments, cancelShipment, shipLog, clean, AWB_RX,
+  delhiveryConfigured, createShipment, trackShipments, cancelShipment, checkPin, shipLog, clean, AWB_RX,
 } from './delhivery.js';
+import { foreignPlace, indianState, indianPin, indianMobile } from '../../../shared/india.js';
 import { mailConfigured, sendMail, shippingEmail } from './mail.js';
 
 const CARRIER = 'Delhivery';
@@ -35,8 +36,31 @@ export function notReady(o, { manual = false } = {}) {
   if (o.paymentStatus !== 'paid' && !cod) return 'The payment has not been received yet.';
   if (cod && o.status === 'Order Placed' && !manual) return 'Cash on delivery orders ship once they are confirmed.';
   if (!manual && o.trackingNumber && o.shipment?.provider !== 'delhivery') return 'This order already has another courier\'s tracking number.';
-  if (!/^[1-9][0-9]{5}$/.test(String(o.customer?.address?.postalCode || '').replace(/\s/g, ''))) return 'The delivery PIN code must be 6 digits.';
-  if (String(o.customer?.phone || '').replace(/\D/g, '').length < 10) return 'The customer\'s phone number must have 10 digits.';
+  return addressProblem(o);
+}
+
+// What is missing or wrong in the delivery details before Delhivery sees
+// them ('' when they look complete). Checked before every request, so a
+// half-filled or foreign address never reaches the courier.
+export function addressProblem(o) {
+  const c = o.customer || {};
+  const a = c.address || {};
+  const missing = [
+    !String(c.name || '').trim() && 'name',
+    !String(a.line1 || '').trim() && 'address line 1',
+    !String(a.city || '').trim() && 'city',
+    !String(a.postalCode || '').trim() && 'PIN code',
+    !String(c.phone || '').trim() && 'phone number',
+  ].filter(Boolean);
+  if (missing.length) return `The delivery details are incomplete: add the customer's ${missing.join(', ').replace(/, ([^,]*)$/, ' and $1')} in the order, then try again.`;
+  // City and state only: Indian streets and landmarks can carry foreign names.
+  const abroad = foreignPlace(a.city, a.state, a.country);
+  if (abroad || (a.country && !/^india$/i.test(String(a.country).trim()))) return `This address is outside India (${abroad || a.country}). Delhivery delivers within India only: correct the address, or cancel and refund the order.`;
+  // The state is optional (Delhivery works it out from the PIN), but a
+  // filled-in one must be Indian.
+  if (String(a.state || '').trim() && !indianState(a.state)) return `"${clean(a.state, 40)}" is not an Indian state. Correct the state in the order, then try again.`;
+  if (!indianPin(a.postalCode)) return 'The delivery PIN code must be 6 digits.';
+  if (!indianMobile(c.phone)) return 'The customer\'s phone must be a 10-digit Indian mobile number (starting 6, 7, 8 or 9).';
   return '';
 }
 
@@ -59,7 +83,32 @@ export async function ensureShipment(orderId, { manual = false, by = 'system' } 
   const order = await Order.findById(orderId);
   // Retrying a failed attempt carries on what was already decided.
   const why = notReady(order, { manual: manual || order?.shipment?.status === 'failed' });
-  if (why) return { ok: false, reason: why, order };
+  // invalid: the delivery details need fixing (as opposed to the order not
+  // being in a state to ship, e.g. unpaid or already booked).
+  if (why) return { ok: false, invalid: !!order && why === addressProblem(order), reason: why, order };
+
+  // Ask Delhivery whether it delivers to this PIN before booking anything.
+  // If the lookup itself is unavailable, the booking request decides.
+  try {
+    const pin = await checkPin(order.customer.address.postalCode);
+    if (pin && !pin.serviceable) {
+      const reason = pin.embargo
+        ? `Delhivery has paused deliveries to PIN code ${order.customer.address.postalCode} for now. Try again later, or check the PIN with the customer.`
+        : `Delhivery does not deliver to PIN code ${order.customer.address.postalCode}. Check the PIN with the customer (it may be mistyped, or outside India).`;
+      shipLog('shipment_blocked', { orderNumber: order.orderNumber, outcome: 'pin_not_serviceable' });
+      // Automatic runs: park it under Shipping → Problems (no further automatic
+      // tries) so the team sees it, instead of asking again every few minutes.
+      if (!manual) {
+        await Order.updateOne(
+          { _id: order._id, $or: [{ 'shipment.awb': { $in: [null, ''] } }, { 'shipment.status': 'cancelled' }] },
+          { $set: { 'shipment.provider': 'delhivery', 'shipment.status': 'failed', 'shipment.error': reason, 'shipment.errorAt': new Date(), 'shipment.nextAttemptAt': null } }
+        );
+      }
+      return { ok: false, invalid: true, reason, order };
+    }
+  } catch (e) {
+    return { ok: false, invalid: true, reason: clean(e.message, 300), order };
+  }
 
   const now = new Date();
   const claimed = await Order.findOneAndUpdate(
@@ -151,7 +200,7 @@ export async function ensureShipment(orderId, { manual = false, by = 'system' } 
       { new: true }
     );
     shipLog('shipment_failed', { ...log, outcome: retry ? 'will_retry' : 'needs_admin', reason: clean(e.message, 120) });
-    return { ok: false, reason: clean(e.message, 300), order: failed || claimed };
+    return { ok: false, reason: clean(e.message, 300), order: failed || claimed, retryable: !!e.retryable, rejected: !!(e.rejected || e.auth) };
   }
 }
 
@@ -511,9 +560,13 @@ export async function shippingTick() {
   return out;
 }
 
+// Started once, when Delhivery is set up (at boot, or later from the admin
+// panel's settings).
+let jobs = null;
 export function startShippingJobs() {
-  if (!delhiveryConfigured()) return null;
+  if (jobs || !delhiveryConfigured()) return jobs;
   const t = setInterval(() => shippingTick(), 5 * 60 * 1000);
+  jobs = t;
   t.unref?.();
   setTimeout(() => shippingTick(), 30 * 1000).unref?.();
   shipLog('jobs_started', { count: pollMinutes() });

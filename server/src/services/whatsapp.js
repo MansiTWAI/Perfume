@@ -239,9 +239,13 @@ async function finishCampaigns() {
   }
 }
 
+// Started once, when sending is set up (at boot, or later from the admin
+// panel's settings).
+let jobs = null;
 export function startWhatsAppJobs() {
-  if (!whatsappNotifyConfigured()) return null;
+  if (jobs || !whatsappNotifyConfigured()) return jobs;
   const t = setInterval(() => pumpWhatsApp(), 60 * 1000);
+  jobs = t;
   t.unref?.();
   setTimeout(() => pumpWhatsApp(), 20 * 1000).unref?.();
   return t;

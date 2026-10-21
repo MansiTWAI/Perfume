@@ -128,7 +128,7 @@ export function ImportModal({ onClose, onDone }) {
     setError('');
     setStep(3);
     try {
-      const j = await api(`/orders/imports/${job.id}/commit`, { method: 'POST' });
+      const j = await api(`/orders/imports/${job.id}/commit`, { method: 'POST', timeout: 300000 });
       setJob(j);
       setStep(4);
       toast(`${j.totals.updated} order${j.totals.updated === 1 ? '' : 's'} updated from Excel`);

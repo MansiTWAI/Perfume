@@ -173,20 +173,47 @@ r.get(
   })
 );
 
+// The two prices must describe the same bottle: rupees per dirham should be
+// near the exchange rate (about 23). Far outside it (e.g. the AED box holding
+// the rupee price) is refused; somewhat outside it is saved with a warning.
+export const AED_RATE = { usual: 23, warnBelow: 15, warnAbove: 35, refuseBelow: 5, refuseAbove: 80 };
+export function priceCheck(price) {
+  const inr = Number(price?.INR) || 0;
+  const aed = Number(price?.AED) || 0;
+  if (inr < 0 || aed < 0) return { error: 'Prices cannot be negative.' };
+  if (!inr || !aed) return { warnings: aed ? [] : ['No AED price: the fragrance cannot be bought in the UAE market.'] };
+  const rate = inr / aed;
+  const expected = Math.round(inr / AED_RATE.usual);
+  if (rate < AED_RATE.refuseBelow || rate > AED_RATE.refuseAbove) {
+    return { error: `The AED price (AED ${aed}) does not match the rupee price (₹${inr}): it should be near AED ${expected}. Check that each price is in its own box.` };
+  }
+  if (rate < AED_RATE.warnBelow || rate > AED_RATE.warnAbove) {
+    return { warnings: [`AED ${aed} is ${rate < AED_RATE.warnBelow ? 'high' : 'low'} for ₹${inr} (about AED ${expected} at today's rate). Saved, but please check it.`] };
+  }
+  return { warnings: [] };
+}
+const priceFail = (res, error) => res.status(400).json({ message: error, errors: [{ field: 'price.AED', message: error }] });
+
 export const createProduct = asyncHandler(async (req, res) => {
   const body = { ...req.body };
   body.slug = slugify(body.slug || body.name);
+  delete body.warnings;
+  const check = priceCheck(body.price);
+  if (check.error) return priceFail(res, check.error);
   const product = await Product.create(body);
-  res.status(201).json(product);
+  res.status(201).json({ ...product.toJSON(), warnings: check.warnings });
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
   const body = { ...req.body };
   if (body.slug) body.slug = slugify(body.slug);
   delete body._id;
+  delete body.warnings;
+  const check = body.price ? priceCheck(body.price) : { warnings: [] };
+  if (check.error) return priceFail(res, check.error);
   const product = await Product.findByIdAndUpdate(req.params.id, body, { new: true, runValidators: true });
   if (!product) return res.status(404).json({ message: 'Product not found.' });
-  res.json(product);
+  res.json({ ...product.toJSON(), warnings: check.warnings });
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {

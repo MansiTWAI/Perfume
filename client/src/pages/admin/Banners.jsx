@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import { confirm, EmptyState, LoadError } from './ui';
 
 // Store banners for the mobile app (GET /api/banners). Images must be exactly
 // 1080 × 540; the server checks it again. Until one is uploaded, the app shows
@@ -75,7 +76,6 @@ function BannerCard({ b, onSaved, onDeleted }) {
   const [f, setF] = useState(() => fieldsOf(b));
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [sure, setSure] = useState(false);
   const fileRef = useRef(null);
   const [label, tone] = stateOf(b);
   const changed = JSON.stringify(f) !== JSON.stringify(fieldsOf(b));
@@ -110,7 +110,7 @@ function BannerCard({ b, onSaved, onDeleted }) {
     }
   }
   async function remove() {
-    if (!sure) return setSure(true);
+    if (!(await confirm({ title: `Delete ${b.title ? `“${b.title}”` : 'this banner'}?`, message: 'It disappears from the app straight away. This cannot be undone.', confirmLabel: 'Delete banner', cancelLabel: 'Keep it', danger: true }))) return;
     setBusy('delete');
     try {
       await api(`/admin/banners/${b._id}`, { method: 'DELETE' });
@@ -137,10 +137,77 @@ function BannerCard({ b, onSaved, onDeleted }) {
             {busy === 'image' ? 'Uploading…' : 'Replace image'}
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" disabled={!!busy} onChange={(e) => replace(e.target.files?.[0])} />
           </label>
-          <button className="a-btn a-danger" disabled={!!busy} onClick={remove} onBlur={() => setSure(false)}>{sure ? 'Click again to delete' : 'Delete'}</button>
+          <button className="a-btn a-danger" disabled={!!busy} onClick={remove}>Delete</button>
         </div>
       </div>
     </article>
+  );
+}
+
+// How the app's store screen shows the banners: one at a time, swiping, in
+// order. `draft` is the banner being uploaded, shown first so it can be judged.
+function PhoneMock({ banners, draft }) {
+  const slides = [...(draft ? [draft] : []), ...banners];
+  const [i, setI] = useState(0);
+  useEffect(() => { if (i >= slides.length) setI(0); }, [slides.length, i]);
+  const b = slides[i] || { image: DEFAULT_IMAGE, title: '', subtitle: '', buttonLabel: '' };
+  return (
+    <figure className="a-app-phone" aria-label="Preview in the mobile app">
+      <div className="a-app-screen">
+        <div className="a-app-bar"><span>9:41</span><b>AL BARAKAH</b><span aria-hidden="true">● ● ●</span></div>
+        <div className="a-app-banner">
+          <img src={b.imageUrl || b.image || DEFAULT_IMAGE} alt="" />
+          {(b.title || b.subtitle || b.buttonLabel) && (
+            <div className="a-app-copy">
+              {b.title && <b>{b.title}</b>}
+              {b.subtitle && <span>{b.subtitle}</span>}
+              {b.buttonLabel && <em>{b.buttonLabel}</em>}
+            </div>
+          )}
+        </div>
+        {slides.length > 1 && (
+          <div className="a-app-dots" role="tablist" aria-label="Banners">
+            {slides.map((x, n) => <button key={x._id || 'draft'} type="button" role="tab" aria-selected={n === i} aria-label={`Banner ${n + 1}${x === draft ? ' (new)' : ''}`} className={n === i ? 'is-on' : ''} onClick={() => setI(n)} />)}
+          </div>
+        )}
+        <div className="a-app-shelf" aria-hidden="true"><i /><i /><i /><i /></div>
+      </div>
+      <figcaption className="a-muted">{draft && i === 0 ? 'Your new banner (not saved yet)' : slides.length ? `Banner ${i + 1} of ${slides.length} as the app shows it` : 'The default banner'}</figcaption>
+    </figure>
+  );
+}
+
+// Drag a card (or use the arrows) to change the order the app shows them in.
+function OrderList({ list, onMove, busy }) {
+  const [drag, setDrag] = useState(null);
+  const [over, setOver] = useState(null);
+  return (
+    <ol className="a-order-list">
+      {list.map((b, n) => {
+        const [label, tone] = stateOf(b);
+        return (
+          <li
+            key={b._id}
+            draggable={!busy}
+            onDragStart={(e) => { setDrag(n); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragOver={(e) => { e.preventDefault(); setOver(n); }}
+            onDragLeave={() => setOver((x) => (x === n ? null : x))}
+            onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== n) onMove(drag, n); setDrag(null); setOver(null); }}
+            onDragEnd={() => { setDrag(null); setOver(null); }}
+            className={`${drag === n ? 'is-drag' : ''}${over === n && drag !== n ? ' is-over' : ''}`}
+          >
+            <span className="a-grip" aria-hidden="true"><Icon name="grip" size={18} /></span>
+            <span className="a-order-n">{n + 1}</span>
+            <img src={b.imageUrl || b.image} alt="" />
+            <span className="a-order-t"><b>{b.title || 'Untitled banner'}</b><small className={`a-pill ${tone}`}>{label}</small></span>
+            <span className="a-order-btns">
+              <button type="button" disabled={busy || n === 0} onClick={() => onMove(n, n - 1)} aria-label={`Move ${b.title || 'banner'} up`}><Icon name="arrow-up" size={16} /></button>
+              <button type="button" disabled={busy || n === list.length - 1} onClick={() => onMove(n, n + 1)} aria-label={`Move ${b.title || 'banner'} down`}><Icon name="arrow-down" size={16} /></button>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -152,13 +219,37 @@ export default function Banners() {
   const [chosen, setChosen] = useState({ file: null, preview: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const [tick, setTick] = useState(0);
   const fileRef = useRef(null);
 
   useEffect(() => {
+    setLoadError('');
     api('/admin/banners')
       .then((all) => setList(all.filter((b) => b.placement === 'app').map((b) => ({ ...b, imageUrl: b.image }))))
       .catch((e) => { setLoadError(e.message); setList([]); });
-  }, []);
+  }, [tick]);
+
+  // New order: 10, 20, 30… saved for each banner whose place changed.
+  async function move(from, to) {
+    const next = [...list];
+    const [b] = next.splice(from, 1);
+    next.splice(to, 0, b);
+    const numbered = next.map((x, n) => ({ ...x, sortOrder: (n + 1) * 10 }));
+    const changed = numbered.filter((x) => list.find((y) => y._id === x._id)?.sortOrder !== x.sortOrder);
+    setList(numbered);
+    setOrdering(true);
+    try {
+      await Promise.all(changed.map((x) => api(`/admin/banners/${x._id}`, { method: 'PUT', body: { sortOrder: x.sortOrder } })));
+      toast('Order saved');
+      setTick((n) => n + 1); // the cards below show the new order numbers
+    } catch (e) {
+      toast(`The new order was not saved: ${e.message}`, 'warn');
+      setTick((n) => n + 1);
+    } finally {
+      setOrdering(false);
+    }
+  }
 
   async function choose(file) {
     setError('');
@@ -192,6 +283,7 @@ export default function Banners() {
   }
 
   const live = (list || []).filter((b) => stateOf(b)[1] === 'ok');
+  const draft = chosen.preview && !error ? { image: chosen.preview, title: f.title, subtitle: f.subtitle, buttonLabel: f.buttonLabel } : null;
 
   return (
     <div>
@@ -199,6 +291,23 @@ export default function Banners() {
         <h1>App banners</h1>
         <span className="a-muted">Shown at the top of the mobile app store, in order. Images must be exactly {W} × {H} pixels.</span>
       </header>
+
+      <div className="a-banner-top">
+        <section className="a-panel">
+          <div className="a-section-head"><h2>Order in the app</h2>{ordering && <small className="a-muted">Saving…</small>}</div>
+          {loadError && <LoadError message={loadError} onRetry={() => setTick((n) => n + 1)} />}
+          {!list ? <p className="a-muted">Loading…</p> : list.length ? (
+            <>
+              <OrderList list={list} onMove={move} busy={ordering} />
+              <p className="a-muted a-hint" style={{ marginTop: 10 }}>Drag a banner, or use the arrows, to change the order. Hidden, scheduled and ended banners keep their place but are not shown.</p>
+            </>
+          ) : <EmptyState icon="grid" title="No banners yet">The app shows the default house banner until you upload one below.</EmptyState>}
+        </section>
+        <section className="a-panel a-phone-panel">
+          <h2>Phone preview</h2>
+          <PhoneMock banners={live} draft={draft} />
+        </section>
+      </div>
 
       <form className="a-panel a-banner a-banner-new" onSubmit={upload}>
         <div className="a-banner-media">
@@ -220,8 +329,7 @@ export default function Banners() {
         </div>
       </form>
 
-      {loadError && <p className="a-error" role="alert">{loadError}</p>}
-      {!list ? <p>Loading…</p> : (
+      {!list ? null : (
         <>
           {!live.length && (
             <section className="a-panel a-banner">

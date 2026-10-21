@@ -183,17 +183,38 @@ export function PeriodPicker({ value, onChange }) {
 export const periodParams = ({ period, from, to }) =>
   period && period !== 'all' ? { period, ...(period === 'custom' ? { from, to } : {}), tz: new Date().getTimezoneOffset() } : {};
 
-export function Pager({ page, pages, total, onPage, noun = 'items' }) {
+// Page numbers: first, last, and two either side of the current page.
+function pageList(page, pages) {
+  const want = new Set([1, pages, page - 2, page - 1, page, page + 1, page + 2].filter((n) => n >= 1 && n <= pages));
+  const out = [];
+  [...want].sort((a, b) => a - b).forEach((n, i, arr) => {
+    if (i && n - arr[i - 1] > 1) out.push(`gap${n}`);
+    out.push(n);
+  });
+  return out;
+}
+
+// "1–25 of 35 orders", page numbers and, with onLimit, how many per page.
+export function Pager({ page, pages, total, onPage, noun = 'items', limit, onLimit, sizes = [25, 50, 100] }) {
   if (!total) return null;
+  const from = limit ? (page - 1) * limit + 1 : null;
+  const to = limit ? Math.min(page * limit, total) : null;
   return (
-    <div className="a-pager">
-      <span className="a-muted">{total.toLocaleString()} {noun}</span>
-      {pages > 1 && <span className="a-actions">
-        <button className="a-btn" disabled={page <= 1} onClick={() => onPage(page - 1)}><Icon name="arrow-left" size={16} /> Previous</button>
-        <span>Page {page} of {pages}</span>
-        <button className="a-btn" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next <Icon name="arrow-right" size={16} /></button>
-      </span>}
-    </div>
+    <nav className="a-pager" aria-label="Pages">
+      <span className="a-muted">{from ? `${from.toLocaleString()}–${to.toLocaleString()} of ` : ''}{total.toLocaleString()} {noun}</span>
+      <span className="a-actions">
+        {onLimit && (
+          <label className="a-inline">Per page
+            <select value={limit} onChange={(e) => onLimit(Number(e.target.value))}>{sizes.map((n) => <option key={n} value={n}>{n}</option>)}</select>
+          </label>
+        )}
+        <button className="a-btn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page"><Icon name="arrow-left" size={16} /></button>
+        {pageList(page, pages).map((n) => (typeof n === 'string'
+          ? <span key={n} className="a-muted" aria-hidden="true">…</span>
+          : <button key={n} className={`a-btn a-page${n === page ? ' is-on' : ''}`} aria-current={n === page ? 'page' : undefined} onClick={() => n !== page && onPage(n)}>{n}</button>))}
+        <button className="a-btn" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label="Next page"><Icon name="arrow-right" size={16} /></button>
+      </span>
+    </nav>
   );
 }
 

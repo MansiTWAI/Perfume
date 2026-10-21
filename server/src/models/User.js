@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 
 export const ROLES = ['customer', 'admin', 'manager', 'support'];
 export const STAFF_ROLES = ['admin', 'manager', 'support'];
+export const USER_TAGS = ['vip', 'test', 'wholesale'];
 
 // "+91 91112 79997", "0091-9111279997", "09111279997", "9111279997" →
 // "+919111279997". A number without a country code is Indian (+91).
@@ -69,6 +70,8 @@ const userSchema = new mongoose.Schema(
     tokenVersion: { type: Number, default: 0 },
     // Password reset by email: only a hash of the one-time token is kept.
     passwordReset: { hash: String, expiresAt: Date },
+    // Tags the team sets in Admin → Users (Repeat buyer is worked out from orders).
+    tags: [{ type: String, enum: USER_TAGS }],
   },
   { timestamps: true }
 );

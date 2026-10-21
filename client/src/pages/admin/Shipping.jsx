@@ -5,6 +5,7 @@ import { money, formatDate } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { ADMIN_STATUS, shipTone } from '../../lib/shipment';
 import { Pager } from './Fields';
+import { EmptyState, LoadError, formatPhone } from './ui';
 import Icon from '../../components/Icon';
 
 // The shipment tabs: what needs doing first, then the journey in order.
@@ -82,16 +83,18 @@ export default function Shipping() {
     <div>
       <header className="a-head">
         <h1>Shipping</h1>
-        {setup && (
+        {setup?.configured && (
           <p className="a-muted a-hint a-ship-setup">
-            {setup.configured ? (
-              <>Delhivery <b className={setup.mode === 'production' ? 'a-ok' : ''}>{setup.mode === 'production' ? 'live' : 'test (staging)'}</b> · automatic shipments {setup.autoCreate ? 'on' : 'off'} · scan push {setup.webhook ? 'on' : 'off'}</>
-            ) : (
-              <>Delhivery is not set up yet. Add the Delhivery settings on the server; until then, enter couriers by hand on each order.</>
-            )}
+            Delhivery <b className={setup.mode === 'production' ? 'a-ok' : 'a-warn'}>{setup.mode === 'production' ? 'live' : 'test mode'}</b> · automatic shipments {setup.autoCreate ? 'on' : 'off'} · scan push {setup.webhook ? 'on' : 'off'} · <Link to="/admin/settings" className="a-textbtn">Settings</Link>
           </p>
         )}
       </header>
+      {setup && !setup.configured && (
+        <p className="a-note is-bad"><Icon name="error" size={16} /><span>Delhivery is not connected, so shipments cannot be booked. <Link to="/admin/settings" className="a-textbtn">Add the Delhivery token and pickup location</Link>.</span></p>
+      )}
+      {setup?.configured && setup.mode !== 'production' && (
+        <p className="a-note"><Icon name="alert" size={16} /><span><b>Test mode.</b> Shipments go to Delhivery's test system: no courier will collect them and their AWBs are not real. When your live Delhivery account is ready, <Link to="/admin/settings" className="a-textbtn">switch to live in Settings</Link> with the live token.</span></p>
+      )}
 
       <div className="a-tabs a-ship-tabs" role="tablist" aria-label="Shipment status">
         {TABS.map(([key, label]) => {
@@ -111,11 +114,13 @@ export default function Shipping() {
       </section>
 
       <section className="a-panel">
-        {error && <p className="a-error" role="alert">{error}</p>}
-        {!data ? <p>Loading…</p> : data.items.length === 0 ? (
-          <p className="a-muted">{status === 'awaiting' ? 'Nothing is waiting to ship.' : status === 'errors' ? 'No shipment problems.' : 'No shipments here.'}</p>
+        {error && <LoadError message={error} onRetry={() => setReload((n) => n + 1)} />}
+        {!data ? <p className="a-muted">Loading…</p> : data.items.length === 0 ? (
+          !error && <EmptyState icon={status === 'errors' ? 'check' : 'truck'} title={status === 'awaiting' ? 'Nothing is waiting to ship' : status === 'errors' ? 'No shipment problems' : 'No shipments here'}>
+            {status === 'awaiting' ? 'Paid orders and confirmed cash-on-delivery orders appear here until their Delhivery shipment is booked.' : 'Try another tab or date range.'}
+          </EmptyState>
         ) : (
-          <div className="a-table-wrap">
+          <div className="a-table-wrap a-sticky-head">
             <table className="a-table">
               <thead><tr><th>Order</th><th>Customer</th><th>Payment</th><th>Shipment</th><th>AWB</th><th>Last update</th><th><span className="sr-only">Action</span></th></tr></thead>
               <tbody>
@@ -126,7 +131,7 @@ export default function Shipping() {
                   return (
                     <tr key={o.id}>
                       <td><Link to={`/admin/orders?q=${o.orderNumber}`} className="a-link"><b>{o.orderNumber}</b></Link><br /><small>{formatDate(o.createdAt)}</small></td>
-                      <td>{o.customer.name}<br /><small dir="ltr">{o.customer.phone}</small><br /><small>{o.customer.city} {o.customer.postalCode}</small></td>
+                      <td>{o.customer.name}<br /><small dir="ltr">{formatPhone(o.customer.phone) || o.customer.phone}</small><br /><small>{o.customer.city} {o.customer.postalCode}</small></td>
                       <td>{PAY[o.paymentStatus] || o.paymentStatus} · {o.paymentMethod === 'cod' ? 'COD' : o.paymentMethod}<br /><small>{money(o.total, o.currency)}</small></td>
                       <td>
                         <span className={`a-pill a-ship-${shipTone(st)}`}>{ADMIN_STATUS[st] || st}</span>
@@ -143,7 +148,7 @@ export default function Shipping() {
                         ) : !['delivered', 'returned', 'cancelled'].includes(st) ? (
                           <button className="a-btn" disabled={!!busy} onClick={() => act(o, 'refresh')}><Icon name="refresh" size={16} /> {busy === `${o.id}:refresh` ? 'Checking…' : 'Refresh'}</button>
                         ) : null}
-                        {awaiting && o.blocker && <small className="a-muted a-ship-why">{o.blocker}</small>}
+                        {awaiting && o.blocker && <small className="a-muted a-ship-why">{o.blocker} <Link to={`/admin/orders?q=${o.orderNumber}`} className="a-textbtn">Open order</Link></small>}
                       </td>
                     </tr>
                   );

@@ -12,6 +12,7 @@ r.get(
   asyncHandler(async (req, res) => {
     const isAdmin = isAdminSession(req) && req.query.all === '1';
     const filter = isAdmin ? {} : { status: 'published' };
+    if (isAdmin && ['draft', 'published'].includes(req.query.status)) filter.status = req.query.status;
     if (req.query.category && req.query.category !== 'All') filter.category = req.query.category;
     if (req.query.q) {
       const rx = new RegExp(escapeRegex(String(req.query.q).slice(0, 60)), 'i');
@@ -27,7 +28,8 @@ r.get(
         .limit(limit),
       Post.countDocuments(filter),
     ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
+    const counts = isAdmin ? Object.fromEntries((await Post.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }])).map((x) => [x._id, x.n])) : undefined;
+    res.json({ items, total, page, pages: Math.ceil(total / limit), ...(counts && { counts }) });
   })
 );
 
@@ -57,6 +59,8 @@ r.get(
     if (!post || (post.status !== 'published' && !isAdminSession(req))) {
       return res.status(404).json({ message: 'This article could not be found.' });
     }
+    // Count a reader's visit (not the team previewing).
+    if (post.status === 'published' && !isAdminSession(req)) Post.updateOne({ _id: post._id }, { $inc: { views: 1 } }).catch(() => {});
     const base = { status: 'published', _id: { $ne: post._id } };
     const [sameCategory, products] = await Promise.all([
       Post.find({ ...base, category: post.category }).select('-content').sort({ publishedAt: -1 }).limit(3),
@@ -78,7 +82,8 @@ r.post(
   '/',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const post = new Post({ ...req.body, slug: slugify(req.body.slug || req.body.title) });
+    const { views, ...body } = req.body || {}; // eslint-disable-line no-unused-vars
+    const post = new Post({ ...body, slug: slugify(body.slug || body.title) });
     await post.save();
     res.status(201).json(post);
   })
@@ -92,6 +97,7 @@ r.put(
     if (!post) return res.status(404).json({ message: 'Post not found.' });
     const body = { ...req.body };
     delete body._id;
+    delete body.views; // counted by the website only
     if (body.slug) body.slug = slugify(body.slug);
     post.set(body);
     await post.save(); // runs reading-time + publishedAt hooks

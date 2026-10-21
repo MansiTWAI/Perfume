@@ -358,6 +358,11 @@ const AR = {
   'Verified reviews': 'تقييمات موثّقة',
   'In their words': 'بكلماتهم',
   'Verified buyer': 'مشترٍ موثّق',
+  'Choose your state': 'اختر الولاية',
+  '{n} reviews': '{n} تقييمات',
+  '{n} review': 'تقييم واحد',
+  'Shared with the house': 'أُرسل إلى الدار',
+  Reviews: 'التقييمات',
   'From the house': 'من الدار',
   '{name} has no reviews yet. Every review here comes from a delivered order and is read by the house before it appears.':
     'لا توجد تقييمات بعد لعطر {name}. كل تقييم هنا يأتي من طلب تم توصيله، وتقرؤه الدار قبل نشره.',
