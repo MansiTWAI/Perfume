@@ -6,6 +6,7 @@
 // must be an address on a domain of the hosting account). MAIL_TRANSPORT=memory
 // keeps messages in `outbox` instead of sending them (used by the tests).
 import nodemailer from 'nodemailer';
+import { noteActivity } from './integrationLog.js';
 
 export const outbox = [];
 let transport = null;
@@ -37,9 +38,11 @@ export async function sendMail({ to, subject, text, html }) {
   try {
     const r = await getTransport().sendMail({ from: process.env.MAIL_FROM || 'AL BARAKAH LIFESTYLE <no-reply@example.com>', to, subject, text, html });
     last.sentAt = new Date();
+    noteActivity('email', true, 'Email sent', { group: 'sent' });
     return r;
   } catch (e) {
     Object.assign(last, { failedAt: new Date(), error: String(e?.message || e).slice(0, 160) });
+    noteActivity('email', false, `Sending failed: ${last.error}`);
     throw e;
   }
 }

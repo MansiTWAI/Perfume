@@ -25,8 +25,21 @@ export const ID = {
 
 // One JSON line per payment event, so logs can be searched and alerted on.
 // Only ids, amounts and states: never secrets, card data or contact details.
+import { noteActivity } from './integrationLog.js';
 const LOG_FIELDS = ['orderNumber', 'razorpayOrderId', 'razorpayPaymentId', 'razorpayRefundId', 'eventId', 'status', 'amount', 'currency', 'source', 'outcome', 'reason'];
+const PAY_ACTIVITY = {
+  razorpay_order_created: [true, () => 'Checkout payment opened with Razorpay', 'order'],
+  payment_captured: [true, (f) => `Payment received for ${f.orderNumber}`, 'paid'],
+  webhook_handled: [true, () => 'Payment webhook received', 'webhook'],
+  refund_created: [true, (f) => `Refund sent for ${f.orderNumber}`, 'refund'],
+  provider_unreachable: [false, () => 'Could not reach Razorpay'],
+  provider_error: [false, (f) => `Razorpay refused a request (HTTP ${f.status})${f.reason ? `: ${f.reason}` : ''}`],
+  webhook_rejected: [false, () => 'A payment webhook was refused: the signature did not match the webhook secret'],
+  webhook_not_configured: [false, () => 'A payment webhook arrived but the webhook secret is not set'],
+};
 export function payLog(event, fields = {}) {
+  const a = PAY_ACTIVITY[event];
+  if (a) noteActivity('payments', a[0], a[1](fields), { group: a[2] });
   if (process.env.NODE_ENV === 'test') return;
   const safe = Object.fromEntries(LOG_FIELDS.filter((k) => fields[k] !== undefined && fields[k] !== null).map((k) => [k, fields[k]]));
   console.log(JSON.stringify({ at: new Date().toISOString(), scope: 'payment', event, ...safe }));

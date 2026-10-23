@@ -16,7 +16,7 @@ import Shipping from './Shipping';
 import { CouponList, CouponEdit } from './Coupons';
 import WhatsApp from './WhatsApp';
 import Banners from './Banners';
-import Connections from './Connections';
+import Integrations from './Integrations';
 import { InvoicePage } from './Invoice';
 import { ConfirmHost } from './ui';
 import Icon from '../../components/Icon';
@@ -96,7 +96,7 @@ const NAV = [
   ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders', false, 'orders'], ['/admin/shipping', 'Shipping', false, 'shipping'], ['/admin/coupons', 'Coupons']]],
   ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews', false, 'reviews'], ['/admin/journal', 'Journal']]],
   ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries', false, 'enquiries'], ['/admin/subscribers', 'Newsletter']]],
-  ['Setup', [['/admin/connections', 'Connections', false, 'connections']]],
+  ['Setup', [['/admin/integrations', 'Integrations', false, 'connections']]],
 ];
 const COUNT_TITLE = { orders: 'new orders to confirm', shipping: 'shipments with a problem', reviews: 'reviews waiting', enquiries: 'unread enquiries', connections: 'services not working' };
 
@@ -171,8 +171,9 @@ export default function Admin() {
           <Route path="whatsapp/*" element={<WhatsApp />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
-          <Route path="connections" element={<Connections />} />
-          <Route path="settings" element={<Navigate to="/admin/connections" replace />} />
+          <Route path="integrations" element={<Integrations />} />
+          <Route path="connections" element={<Navigate to="/admin/integrations" replace />} />
+          <Route path="settings" element={<Navigate to="/admin/integrations" replace />} />
         </Routes>
       </main>
       <ConfirmHost />

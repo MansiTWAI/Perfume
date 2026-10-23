@@ -85,15 +85,15 @@ export default function Shipping() {
         <h1>Shipping</h1>
         {setup?.configured && (
           <p className="a-muted a-hint a-ship-setup">
-            Delhivery <b className={setup.mode === 'production' ? 'a-ok' : 'a-warn'}>{setup.mode === 'production' ? 'live' : 'test mode'}</b> · automatic shipments {setup.autoCreate ? 'on' : 'off'} · scan push {setup.webhook ? 'on' : 'off'} · <Link to="/admin/connections" className="a-textbtn">Connection</Link>
+            Delhivery <b className={setup.mode === 'production' ? 'a-ok' : 'a-warn'}>{setup.mode === 'production' ? 'live' : 'test mode'}</b> · automatic shipments {setup.autoCreate ? 'on' : 'off'} · scan push {setup.webhook ? 'on' : 'off'} · <Link to="/admin/integrations" className="a-textbtn">Integration</Link>
           </p>
         )}
       </header>
       {setup && !setup.configured && (
-        <p className="a-note is-bad"><Icon name="error" size={16} /><span>Delhivery is not connected, so shipments cannot be booked. <Link to="/admin/connections" className="a-textbtn">See what’s missing</Link>.</span></p>
+        <p className="a-note is-bad"><Icon name="error" size={16} /><span>Delhivery is not connected, so shipments cannot be booked. <Link to="/admin/integrations" className="a-textbtn">See what’s missing</Link>.</span></p>
       )}
       {setup?.configured && setup.mode !== 'production' && (
-        <p className="a-note"><Icon name="alert" size={16} /><span><b>Test mode.</b> Shipments go to Delhivery's test system: no courier will collect them and their AWBs are not real. When your live Delhivery account is ready, switch the server settings to live (<Link to="/admin/connections" className="a-textbtn">Connections</Link>).</span></p>
+        <p className="a-note"><Icon name="alert" size={16} /><span><b>Test mode.</b> Shipments go to Delhivery's test system: no courier will collect them and their AWBs are not real. When your live Delhivery account is ready, switch it to Live in <Link to="/admin/integrations" className="a-textbtn">Integrations</Link>.</span></p>
       )}
 
       <div className="a-tabs a-ship-tabs" role="tablist" aria-label="Shipment status">

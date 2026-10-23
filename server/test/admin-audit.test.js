@@ -151,30 +151,77 @@ describe('users and menu alerts', () => {
   });
 });
 
-describe('connections (read-only health)', () => {
-  test('shows each service without any key, and checks them on request', async () => {
-    const { token } = await makeUser('admin');
-    const r = await http('GET', '/api/admin/connections', { token });
+describe('integrations health center', () => {
+  test('four honest stages, checks with the provider, and no secrets', async () => {
+    const { token, user } = await makeUser('admin');
+    let r = await http('GET', '/api/admin/integrations', { token });
     assert.equal(r.status, 200);
     const text = JSON.stringify(r.body);
     for (const k of ['DELHIVERY_API_TOKEN', 'WHATSAPP_ACCESS_TOKEN', 'RAZORPAY_KEY_SECRET', 'GEMINI_API_KEY']) assert.ok(!text.includes(process.env[k]), k);
-    assert.equal(r.body.items.delhivery.state, 'warn'); // test mode in the test suite
-    assert.equal(r.body.items.email.state, 'ok');
-    assert.equal(r.body.items.whatsapp.state, 'ok');
-    assert.equal(r.body.attention, 0);
-    const dlv = await http('POST', '/api/admin/connections/delhivery/test', { token });
-    assert.match(dlv.body.message, /Connected to Delhivery test/);
-    const wa = await http('POST', '/api/admin/connections/whatsapp/test', { token });
-    assert.match(wa.body.message, /Connected: Al Barakah Lifestyle/);
-    const mail = await http('POST', '/api/admin/connections/email/test', { token });
-    assert.equal(mail.status, 200);
-    const after = await http('GET', '/api/admin/connections', { token });
-    assert.ok(after.body.items.email.facts.find(([k]) => k === 'Last email sent')[1].at);
-    assert.equal((await http('GET', '/api/admin/settings/integrations', { token })).status, 404); // no key editing any more
+    const dlv = r.body.items.find((x) => x.id === 'delhivery');
+    assert.equal(dlv.mode, 'test');
+    assert.equal(dlv.stages.configured.state, 'ok');
+    assert.equal(dlv.stages.connected.state, 'unknown'); // never checked
+    assert.equal(dlv.stages.production.state, 'warn'); // test mode
+    const all = await http('POST', '/api/admin/integrations/check', { token });
+    assert.equal(all.body.results.delhivery.ok, true);
+    assert.equal(all.body.results.payments.ok, true);
+    assert.equal(all.body.results.whatsapp.ok, true);
+    assert.equal(all.body.results.ai.ok, true);
+    r = await http('GET', '/api/admin/integrations', { token });
+    assert.equal(r.body.items.find((x) => x.id === 'delhivery').stages.connected.state, 'ok');
+    const pin = await http('POST', '/api/admin/integrations/delhivery/test', { token, body: { input: { pin: '500052' } } });
+    assert.match(pin.body.result.message, /delivers to 500052/);
+    assert.equal((await http('POST', '/api/admin/integrations/delhivery/test', { token, body: { input: { pin: '12' } } })).status, 400);
+    const mail = await http('POST', '/api/admin/integrations/email/test', { token, body: { input: {} } });
+    assert.ok(mail.body.result.message.includes(`sent to ${user.email}`));
+    const log = await http('GET', '/api/admin/integrations/activity?integration=email', { token });
+    assert.ok(log.body.items.some((e) => e.kind === 'test' && e.ok && e.by === user.email));
+    assert.ok(log.body.items.some((e) => e.kind === 'activity' && e.message === 'Email sent'));
     const manager = (await makeUser('manager')).token;
-    assert.equal((await http('GET', '/api/admin/connections', { token: manager })).status, 403);
+    assert.equal((await http('GET', '/api/admin/integrations', { token: manager })).status, 403);
   });
-  test('the menu counts a broken service', async () => {
+
+  test('settings: write-only secrets, password required, saved to the settings file with a backup', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { token } = await makeUser('admin');
+    const pw = 'admin-pass-12345';
+    const owner = await User.create({ name: 'Owner', email: 'owner@example.test', role: 'admin', passwordHash: await User.hashPassword(pw) });
+    const { signToken } = await import('../src/middleware/auth.js');
+    const ownerToken = signToken(owner, { mfa: true });
+    const view = await http('GET', '/api/admin/integrations/delhivery/settings', { token });
+    const tok = view.body.settings.find((s) => s.key === 'DELHIVERY_API_TOKEN');
+    assert.equal(tok.set, true);
+    assert.equal(tok.value, undefined);
+    assert.ok(tok.preview.startsWith('…'));
+    assert.ok(!JSON.stringify(view.body).includes(process.env.DELHIVERY_API_TOKEN));
+    const noPw = await http('PUT', '/api/admin/integrations/delhivery/settings', { token: ownerToken, body: { values: { DELHIVERY_PICKUP_LOCATION: 'Main Warehouse' } } });
+    assert.equal(noPw.status, 403);
+    const bad = await http('PUT', '/api/admin/integrations/delhivery/settings', { token: ownerToken, body: { password: pw, values: { DELHIVERY_PICKUP_LOCATION: 'https://track.delhivery.com/x', DELHIVERY_API_TOKEN: 'short' } } });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(bad.body.errors.map((e) => e.field).sort(), ['DELHIVERY_API_TOKEN', 'DELHIVERY_PICKUP_LOCATION']);
+    const before = process.env.DELHIVERY_PICKUP_LOCATION;
+    try {
+      const ok = await http('PUT', '/api/admin/integrations/delhivery/settings', { token: ownerToken, body: { password: pw, values: { DELHIVERY_PICKUP_LOCATION: 'Main Warehouse', DELHIVERY_API_TOKEN: '' } } });
+      assert.equal(ok.status, 200);
+      assert.deepEqual(ok.body.changed, ['Pickup location']);
+      assert.equal(process.env.DELHIVERY_PICKUP_LOCATION, 'Main Warehouse');
+      const file = fs.readFileSync(process.env.SETTINGS_FILE, 'utf8');
+      assert.match(file, /^DELHIVERY_PICKUP_LOCATION=Main Warehouse$/m);
+      assert.match(file, /^DELHIVERY_ENV=staging$/m); // untouched lines kept
+      assert.ok(!file.includes('DELHIVERY_API_TOKEN')); // an empty secret keeps the current one
+      const base = path.basename(process.env.SETTINGS_FILE);
+      assert.ok(fs.readdirSync(path.dirname(process.env.SETTINGS_FILE)).some((f) => f.startsWith(`${base}.backup-`)));
+      assert.ok(ok.body.check); // checked straight after saving
+      const log = await http('GET', '/api/admin/integrations/activity?integration=delhivery', { token });
+      assert.equal(log.body.items.find((e) => e.kind === 'config').message, 'Changed: Pickup location');
+    } finally {
+      process.env.DELHIVERY_PICKUP_LOCATION = before;
+    }
+  });
+
+  test('the menu counts a broken service the shop needs', async () => {
     const { token } = await makeUser('admin');
     const before = process.env.DELHIVERY_PICKUP_LOCATION;
     process.env.DELHIVERY_PICKUP_LOCATION = 'https://example.com/pickup';

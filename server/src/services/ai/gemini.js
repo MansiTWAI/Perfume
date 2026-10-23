@@ -3,6 +3,8 @@
 // response. GEMINI_MODEL picks the model; when Google reports it busy, the
 // retry uses GEMINI_FALLBACK_MODEL (defaults below, chosen on 2026-10-07 for
 // speed and reliability with tool calls).
+import { noteActivity } from '../integrationLog.js';
+
 export const geminiConfigured = () => !!process.env.GEMINI_API_KEY;
 const models = () => [process.env.GEMINI_MODEL || 'gemini-3.6-flash', process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite'];
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -43,9 +45,11 @@ export async function generate({ system, contents, tools, temperature = 0.4, max
         await wait(600);
         continue;
       }
+      noteActivity('ai', false, 'Could not reach Google Gemini');
       throw unavailable();
     }
     if (res.ok) {
+      noteActivity('ai', true, 'Concierge answered a shopper', { group: 'reply' });
       const data = await res.json().catch(() => ({}));
       const content = data?.candidates?.[0]?.content;
       if (!content?.parts?.length) {
@@ -67,6 +71,7 @@ export async function generate({ system, contents, tools, temperature = 0.4, max
       await wait(900);
       continue;
     }
+    noteActivity('ai', false, res.status === 400 || res.status === 403 ? `Google refused the request (HTTP ${res.status}): check the API key and model` : `Gemini answered HTTP ${res.status}`);
     throw unavailable();
   }
   throw unavailable();

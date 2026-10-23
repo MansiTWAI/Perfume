@@ -26,8 +26,8 @@ function Overview({ status }) {
     <div>
       {!status.configured && (
         <section className="a-panel a-connect">
-          <EmptyState icon="chat" title="Connect WhatsApp to send campaigns" action="See what’s needed" to="/admin/connections">
-            Your Meta WhatsApp Business (Cloud API) token, phone number ID and approved template go in the server settings file. Until then customers can still subscribe, and you can prepare campaigns.
+          <EmptyState icon="chat" title="Connect WhatsApp to send campaigns" action="Open Integrations" to="/admin/integrations">
+            Add your Meta WhatsApp Business (Cloud API) token, phone number ID and approved template in Integrations. Until then customers can still subscribe, and you can prepare campaigns.
           </EmptyState>
         </section>
       )}
@@ -143,9 +143,9 @@ function Settings({ status }) {
         ))}
       </ul>
       <div className="a-actions" style={{ marginTop: 14 }}>
-        <Link to="/admin/connections" className="a-btn a-primary">Check the connection</Link>
+        <Link to="/admin/integrations" className="a-btn a-primary">Open Integrations</Link>
       </div>
-      <p className="a-muted a-hint" style={{ marginTop: 10 }}>These are set in the server settings file (server/.env) by whoever manages the server, so tokens stay private.</p>
+      <p className="a-muted a-hint" style={{ marginTop: 10 }}>Manage these in Integrations. Tokens are write-only and never shown again.</p>
     </section>
   );
 }

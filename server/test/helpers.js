@@ -21,6 +21,13 @@ process.env.DELHIVERY_PICKUP_LOCATION = 'Test Warehouse';
 process.env.DELHIVERY_WEBHOOK_TOKEN = crypto.randomBytes(20).toString('hex');
 process.env.DELHIVERY_AUTO_CREATE = 'true';
 process.env.MAIL_TRANSPORT = 'memory';
+// Settings changed from the studio go to a scratch copy, never server/.env.
+{
+  const os = await import('os');
+  const fs = await import('fs');
+  process.env.SETTINGS_FILE = `${os.tmpdir()}/abl-test-env-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
+  fs.writeFileSync(process.env.SETTINGS_FILE, '# test settings\nDELHIVERY_ENV=staging\n');
+}
 process.env.WHATSAPP_ACCESS_TOKEN = `wa-${crypto.randomBytes(12).toString('hex')}`;
 process.env.WHATSAPP_PHONE_NUMBER_ID = '100200300400';
 process.env.WHATSAPP_NOTIFY_TEMPLATE = 'house_update';
@@ -48,6 +55,7 @@ export const whatsapp = await import('../src/services/whatsapp.js');
 export const { default: WhatsAppContact } = await import('../src/models/WhatsAppContact.js');
 export const { default: WhatsAppMessage, WhatsAppCampaign } = await import('../src/models/WhatsAppMessage.js');
 export const { default: Coupon } = await import('../src/models/Coupon.js');
+const integrationLog = await import('../src/services/integrationLog.js');
 const mongoose = (await import('mongoose')).default;
 await Promise.all([Order.init(), PaymentEvent.init(), Product.init(), User.init()]);
 
@@ -159,6 +167,7 @@ const reply = (status, body) => new Response(JSON.stringify(body), { status, hea
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   if (u.startsWith('https://generativelanguage.googleapis.com/')) {
+    if ((opts.method || 'GET') === 'GET') return opts.headers?.['x-goog-api-key'] === process.env.GEMINI_API_KEY ? reply(200, { models: [{ name: 'models/test' }] }) : reply(400, { error: { message: 'API key not valid' } });
     const body = JSON.parse(opts.body);
     gemini.requests.push({ url: u, headers: opts.headers, body });
     const next = gemini.queue.shift();
@@ -173,6 +182,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const auth = Buffer.from(String(opts.headers?.Authorization || '').replace('Basic ', ''), 'base64').toString();
   if (auth !== `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`) return reply(401, { error: { code: 'BAD_REQUEST_ERROR', description: 'Authentication failed' } });
   const path = u.slice('https://api.razorpay.com/v1'.length);
+  if ((opts.method || 'GET') === 'GET' && path.startsWith('/payments?')) return reply(200, { entity: 'collection', count: 0, items: [] });
   const method = opts.method || 'GET';
   rzp.calls.push(`${method} ${path}`);
   if (rzp.down) throw new TypeError('fetch failed');
@@ -256,6 +266,7 @@ export async function placeOnline(items, { email = 'buyer@example.test', token, 
 }
 
 export async function reset() {
+  integrationLog.resetActivityLog();
   await whatsapp.whatsappIdle(); // let a send in progress finish before the data goes
   await mongoose.connection.db.dropDatabase();
   await Promise.all(Object.values(mongoose.models).map((m) => m.createIndexes())); // unique indexes are part of the rules

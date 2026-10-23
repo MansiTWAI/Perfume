@@ -25,6 +25,7 @@ import WhatsAppMessage, { WhatsAppCampaign } from '../models/WhatsAppMessage.js'
 import Lead, { scoreLead } from '../models/Lead.js';
 import { normalizePhone, validPhone, phoneKeys } from '../models/User.js';
 import { readContent, loadRefs, render } from './notifyContent.js';
+import { noteActivity } from './integrationLog.js';
 
 const GRAPH = 'https://graph.facebook.com/v20.0';
 export const MAX_ATTEMPTS = 4;
@@ -116,12 +117,21 @@ async function graphSend(to, body) {
       signal: AbortSignal.timeout(15000),
     });
   } catch (e) {
-    throw fail(e?.name === 'TimeoutError' ? 'WhatsApp did not answer in time.' : 'Could not reach WhatsApp.', 'network', false);
+    const msg = e?.name === 'TimeoutError' ? 'WhatsApp did not answer in time.' : 'Could not reach WhatsApp.';
+    noteActivity('whatsapp', false, msg);
+    throw fail(msg, 'network', false);
   }
   const data = await res.json().catch(() => ({}));
-  if (res.ok && data?.messages?.[0]?.id) return data.messages[0].id;
+  if (res.ok && data?.messages?.[0]?.id) {
+    noteActivity('whatsapp', true, 'Message accepted by WhatsApp', { group: 'sent' });
+    return data.messages[0].id;
+  }
   const err = data?.error || {};
   const code = String(err.code ?? res.status);
+  // Account-wide problems (token, template, Meta down), not one customer's number.
+  if (['190', '10', '200', '132000', '132001', '132012', '132015', '100'].includes(code) || res.status >= 500 || res.status === 401) {
+    noteActivity('whatsapp', false, REASONS[code] || oneLine(err.message || `WhatsApp answered ${res.status}.`, 200));
+  }
   const permanent = PERMANENT.has(code) || (res.status >= 400 && res.status < 500 && res.status !== 429 && !['4', '80007', '130429', '131056', '131048'].includes(code));
   throw fail(REASONS[code] || oneLine(err.error_data?.details || err.message || `WhatsApp answered ${res.status}.`, 280), code, permanent);
 }

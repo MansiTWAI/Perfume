@@ -13,6 +13,7 @@
 //   POST /api/p/edit               cancel: { waybill, cancellation: "true" }
 //   GET  /c/api/pin-codes/json/?filter_codes=<pin>   is the PIN code serviceable
 import crypto from 'crypto';
+import { noteActivity } from './integrationLog.js';
 
 export const delhiveryConfigured = () => !!(process.env.DELHIVERY_API_TOKEN && process.env.DELHIVERY_PICKUP_LOCATION);
 export const looksLikeUrl = (v) => /^\s*(https?:\/\/|www\.)|\.(com|in|net|org)(\/|\s*$)/i.test(String(v || ''));
@@ -32,7 +33,21 @@ export const REF_RX = /^[A-Z0-9-]{4,30}$/;
 // One JSON line per shipping event: ids and states only, never the token,
 // addresses or phone numbers.
 const LOG_FIELDS = ['orderNumber', 'awb', 'status', 'courierStatus', 'source', 'outcome', 'reason', 'count'];
+// What reaches Admin → Integrations: real successes and Delhivery-side
+// failures (a refused PIN or address is the order's problem, not Delhivery's).
+const DLV_ACTIVITY = {
+  shipment_created: [true, (f) => `Shipment booked for ${f.orderNumber}`, 'booked'],
+  webhook_scan: [true, () => 'Tracking update received (scan push)', 'scan'],
+  shipment_cancelled: [true, (f) => `Shipment cancelled for ${f.orderNumber}`, 'cancelled'],
+  shipment_failed: [false, (f) => `Booking failed for ${f.orderNumber}: ${f.reason}`],
+  tracking_failed: [false, (f) => `Tracking check failed: ${f.reason}`],
+  tick_failed: [false, (f) => `Background shipping check failed: ${f.reason}`],
+  shipment_cancel_failed: [false, (f) => `Cancelling ${f.orderNumber} failed: ${f.reason}`],
+  webhook_rejected: [false, () => 'A scan push was refused: wrong webhook token'],
+};
 export function shipLog(event, fields = {}) {
+  const a = DLV_ACTIVITY[event];
+  if (a) noteActivity('delhivery', a[0], a[1](fields), { group: a[2] });
   if (process.env.NODE_ENV === 'test') return;
   const safe = Object.fromEntries(LOG_FIELDS.filter((k) => fields[k] !== undefined && fields[k] !== null).map((k) => [k, fields[k]]));
   console.log(JSON.stringify({ at: new Date().toISOString(), scope: 'shipping', event, ...safe }));

@@ -265,8 +265,8 @@ describe('creating shipments', () => {
       const r = await http('POST', `/api/admin/orders/${n}/shipment`, { token });
       assert.equal(r.status, 409);
       assert.match(r.body.message, /web address, not a warehouse name/);
-      const conn = await http('GET', '/api/admin/connections', { token });
-      assert.equal(conn.body.items.delhivery.state, 'bad');
+      const conn = await http('GET', '/api/admin/integrations', { token });
+      assert.equal(conn.body.items.find((x) => x.id === 'delhivery').overall, 'bad');
       assert.equal(conn.body.attention, 1);
     } finally {
       process.env.DELHIVERY_PICKUP_LOCATION = before;
