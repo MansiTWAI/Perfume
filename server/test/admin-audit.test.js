@@ -62,6 +62,9 @@ describe('orders: cancellation reasons, bulk changes and dashboard figures', () 
     assert.equal(week.body.daily.days.reduce((n, d) => n + d.orders, 0), 1);
     assert.deepEqual(week.body.cancelled.map((x) => [x.reason, x.n]), [['duplicate', 1]]);
     assert.equal((await http('GET', '/api/orders/stats?period=custom', { token })).status, 400);
+    // Paid, then cancelled, not refunded: shown as a refund the shop owes.
+    await Order.updateOne({ _id: a._id }, { paymentStatus: 'paid' });
+    assert.equal((await http('GET', '/api/orders/stats', { token })).body.refundsDue, 1);
   });
 });
 

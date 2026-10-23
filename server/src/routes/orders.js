@@ -546,7 +546,7 @@ r.get(
     const zone = `${off >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(off) / 60)).padStart(2, '0')}:${String(Math.abs(off) % 60).padStart(2, '0')}`;
     const end = period.to || new Date();
     const start = new Date(Math.max(period.from ? period.from.getTime() : 0, end.getTime() - 90 * 864e5));
-    const [byStatus, revenue, count, daily, reasons] = await Promise.all([
+    const [byStatus, revenue, count, daily, reasons, refundsDue] = await Promise.all([
       Order.aggregate([{ $match: match }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
       Order.aggregate([{ $match: { ...match, status: { $ne: ORDER_CANCELLED } } }, { $group: { _id: '$currency', total: { $sum: '$total' }, n: { $sum: 1 } } }]),
       Order.countDocuments(match),
@@ -556,6 +556,8 @@ r.get(
         { $sort: { '_id.day': 1 } },
       ]),
       Order.aggregate([{ $match: { ...match, status: ORDER_CANCELLED } }, { $group: { _id: '$cancellation.reason', n: { $sum: 1 } } }, { $sort: { n: -1 } }]),
+      // Paid, then cancelled, and not refunded yet: money the shop owes (any date).
+      Order.countDocuments({ status: ORDER_CANCELLED, paymentStatus: 'paid' }),
     ]);
     res.json({
       byStatus, revenue, count, stages: ORDER_STAGES,
@@ -563,6 +565,7 @@ r.get(
       daily: { from: start, to: end, zone, days: daily.map((d) => ({ day: d._id.day, currency: d._id.currency, total: d.total, orders: d.n })) },
       cancelled: reasons.map((x) => ({ reason: x._id || '', label: CANCEL_REASONS[x._id] || 'Not recorded (cancelled before reasons were kept)', n: x.n })),
       cancelReasons: CANCEL_REASONS,
+      refundsDue,
     });
   })
 );

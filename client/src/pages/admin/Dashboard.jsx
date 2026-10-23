@@ -109,6 +109,7 @@ export default function Dashboard() {
           <div className="a-tile" key={r._id}><span>Order value · {r._id}</span><b>{money(r.total, r._id)}</b></div>
         ))}
         <Link to={ordersLink({ status: 'Cancelled' })} className={`a-tile ${cancelledPct >= 30 ? 'warn' : ''}`}><span>Cancelled{stats?.count ? ` · ${cancelledPct}%` : ''}</span><b>{stats ? count('Cancelled') : '—'}</b></Link>
+        {stats?.refundsDue > 0 && <Link to="/admin/orders?status=Cancelled&paymentStatus=paid" className="a-tile warn" title="Paid online, then cancelled, and not refunded yet"><span>Refunds due</span><b>{stats.refundsDue}</b></Link>}
         <Link to="/admin/products?stock=out" className={`a-tile ${out.length ? 'warn' : ''}`}><span>Out of stock</span><b>{out.length}</b></Link>
         <Link to="/admin/products?stock=low" className={`a-tile ${low.length ? 'warn' : ''}`}><span>Low stock (1–5)</span><b>{low.length}</b></Link>
       </div>
@@ -169,7 +170,7 @@ export default function Dashboard() {
                   <tr key={p._id}>
                     <td><b>{p.name}</b></td>
                     <td>{p.stock <= 0 ? <span className="a-pill bad">Out of stock</span> : <span className={p.stock <= 5 ? 'a-warn' : ''}>{p.stock} in stock</span>}</td>
-                    <td>{p.published ? <span className="a-pill ok">Live</span> : <span className="a-pill off">Hidden</span>}</td>
+                    <td>{!p.published ? <span className="a-pill off">Hidden</span> : p.stock <= 0 ? <span className="a-pill warn">Live · Sold out</span> : <span className="a-pill ok">Live</span>}</td>
                     <td><Link to={`/admin/products/${p._id}`} className="a-link">Edit</Link></td>
                   </tr>
                 ))}

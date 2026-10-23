@@ -323,7 +323,7 @@ export function OrderRow({ order, onSaved, selected, onSelect, defaultOpen = fal
         <td>
           {money(order.total, order.currency)}<br /><small>{order.paymentMethod} · {PAY_LABEL[order.paymentStatus] || order.paymentStatus}</small>
           {order.discount > 0 && <><br /><small className="a-gold">{order.coupon?.code || 'Discount'} −{money(order.discount, order.currency)}</small></>}
-          {order.payment?.issues?.some((i) => !i.resolved) && <><br /><small className="a-warn a-ico-line"><Icon name="alert" size={14} /> refund due</small></>}
+          {(order.payment?.issues?.some((i) => !i.resolved) || (order.status === 'Cancelled' && order.paymentStatus === 'paid')) && <><br /><small className="a-warn a-ico-line" title="Paid, then cancelled: refund it in the payment panel"><Icon name="alert" size={14} /> refund due</small></>}
         </td>
         <td><span className={`a-pill ${order.status === 'Cancelled' ? 'bad' : order.status === 'Delivered' ? 'ok' : ''}`}>{order.status}</span>{order.status === 'Cancelled' && <><br /><small className="a-why" title={order.cancellation?.note || ''}>{cancelLabel(order)}</small></>}</td>
       </tr>

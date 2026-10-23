@@ -100,7 +100,7 @@ export function ProductList() {
                     <td>{money(p.price?.INR, 'INR')}<br /><small>{p.price?.AED ? money(p.price.AED, 'AED') : 'No AED price'}</small>{hint && <><br /><small className="a-warn" title={hint}>Check AED price</small></>}</td>
                     <td><span className={`a-pill ${tone}`}>{stockLabel}</span></td>
                     <td>{p.notes?.top?.length ? (p.notes.approved ? <span className="a-pill ok">Approved</span> : <span className="a-pill warn">Awaiting approval</span>) : '—'}</td>
-                    <td>{p.published ? <span className="a-pill ok">Live</span> : <span className="a-pill off">Hidden</span>}{p.published && p.stock <= 0 && <><br /><small className="a-warn">cannot be bought</small></>}</td>
+                    <td>{!p.published ? <span className="a-pill off">Hidden</span> : p.stock <= 0 ? <span className="a-pill warn" title="Shown in the store as Sold out; it cannot be ordered until restocked">Live · Sold out</span> : <span className="a-pill ok">Live</span>}</td>
                     <td className="a-cell-action">
                       <Link to={`/admin/products/${p._id}`} className="a-btn a-quiet">Edit</Link>
                       <button type="button" className="a-btn a-quiet a-danger-text" onClick={() => remove(p)} aria-label={`Delete ${p.name}`}><Icon name="trash" size={16} /></button>
