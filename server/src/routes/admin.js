@@ -26,10 +26,10 @@ import { productQuery, createProduct, updateProduct, deleteProduct } from './pro
 import { listOrders, updateOrder } from './orders.js';
 import { refundOrder, reconcile } from '../services/payments.js';
 import { ensureShipment, refreshTracking, cancelShipmentFor, notReady, autoCreateOn } from '../services/shipping.js';
-import { delhiveryConfigured, delhiveryMode, checkPin } from '../services/delhivery.js';
-import { GROUPS, describe as describeSettings, saveGroup } from '../services/settings.js';
-import { startWhatsAppJobs, whatsappNotifyConfigured } from '../services/whatsapp.js';
-import { startShippingJobs } from '../services/shipping.js';
+import { delhiveryConfigured, delhiveryMode, checkPin, setupProblem } from '../services/delhivery.js';
+import { whatsappNotifyConfigured } from '../services/whatsapp.js';
+import { mailConfigured, mailStatus, sendMail } from '../services/mail.js';
+import { razorpayConfigured, razorpayMode } from '../services/razorpay.js';
 import { Enquiry } from '../models/Enquiry.js';
 import { SHIPMENT_STATUSES, SHIPMENT_LABELS } from '../config/commerce.js';
 import Lead, { LEAD_STATUSES } from '../models/Lead.js';
@@ -1025,69 +1025,166 @@ r.get(
   '/counts',
   requireRole(...SERVE),
   asyncHandler(async (_req, res) => {
-    const [orders, enquiries, reviews, shipping] = await Promise.all([
+    const [orders, enquiries, reviews, shipping, conn] = await Promise.all([
       Order.countDocuments({ status: 'Order Placed' }),
       Enquiry.countDocuments({ status: 'new' }),
       Review.countDocuments({ status: 'pending' }),
       Order.countDocuments({ status: { $ne: ORDER_CANCELLED }, $or: [{ 'shipment.status': 'failed' }, { 'shipment.status': 'exception' }] }),
+      connections(),
     ]);
-    res.json({ orders, enquiries, reviews, shipping });
+    res.json({ orders, enquiries, reviews, shipping, connections: needsAttention(conn) });
   })
 );
 
-// ----- integration settings (admins) -----
-// WhatsApp and Delhivery keys, saved encrypted (services/settings.js).
-// Secrets are never sent back; only whether they are set.
-const settingsView = () => ({
-  whatsapp: { label: GROUPS.whatsapp.label, keys: describeSettings('whatsapp'), ready: whatsappNotifyConfigured() },
-  delhivery: { label: GROUPS.delhivery.label, keys: describeSettings('delhivery'), ready: delhiveryConfigured(), mode: delhiveryMode() },
-});
-r.get('/settings/integrations', requireRole(), asyncHandler(async (_req, res) => res.json(settingsView())));
-r.put(
-  '/settings/integrations/:group',
-  requireRole(),
-  asyncHandler(async (req, res) => {
-    if (!GROUPS[req.params.group]) return res.status(404).json({ message: 'Unknown settings group.' });
-    const out = await saveGroup(req.params.group, { values: req.body?.values || {}, clear: Array.isArray(req.body?.clear) ? req.body.clear : [] }, req.user.email);
-    if (out.errors) return res.status(400).json({ message: out.errors.map((e) => e.message).join(' '), errors: out.errors.map((e) => ({ field: e.field, message: e.message })) });
-    // Start the background work now if it was waiting for these keys.
-    startWhatsAppJobs();
-    startShippingJobs();
-    res.json(settingsView());
-  })
-);
-// Checks the saved keys against the service, without sending anything.
+// ----- connections (admins) -----
+// Read-only health of the outside services the shop depends on. Keys live
+// only in server/.env; nothing here shows or changes them.
+//   state: ok (working) · warn (works, but needs attention) · off (not set up) · bad (broken)
+async function connections() {
+  const pickup = process.env.DELHIVERY_PICKUP_LOCATION || '';
+  const [lastBooked, failed] = delhiveryConfigured()
+    ? await Promise.all([
+      Order.findOne({ 'shipment.createdAt': { $ne: null } }).sort({ 'shipment.createdAt': -1 }).select('shipment.createdAt orderNumber').lean(),
+      Order.countDocuments({ status: { $ne: ORDER_CANCELLED }, 'shipment.status': 'failed' }),
+    ])
+    : [null, 0];
+  const dlvProblem = setupProblem();
+  const delhivery = !delhiveryConfigured()
+    ? { state: 'off', summary: 'Not set up: the API token and pickup location are missing from the server settings.' }
+    : dlvProblem
+      ? { state: 'bad', summary: dlvProblem }
+      : delhiveryMode() !== 'production'
+        ? { state: 'warn', summary: 'Test mode: shipments go to Delhivery’s test system and are not collected.' }
+        : failed
+          ? { state: 'warn', summary: `Live, but ${failed} shipment${failed === 1 ? '' : 's'} could not be booked. See Shipping → Problems.` }
+          : { state: 'ok', summary: 'Live: shipments are booked and tracked automatically.' };
+  Object.assign(delhivery, {
+    name: 'Delhivery', role: 'Shipping and tracking', link: '/admin/shipping',
+    facts: [
+      ['Mode', delhiveryMode() === 'production' ? 'Live' : 'Test'],
+      ['Pickup location', pickup || '—'],
+      ['Last booking', lastBooked ? { at: lastBooked.shipment.createdAt, text: lastBooked.orderNumber } : 'None yet'],
+      ['Live tracking updates', process.env.DELHIVERY_WEBHOOK_TOKEN ? 'Instant (scan push on)' : 'Every 30 minutes'],
+    ],
+    keys: ['DELHIVERY_API_TOKEN', 'DELHIVERY_ENV', 'DELHIVERY_PICKUP_LOCATION', 'DELHIVERY_WEBHOOK_TOKEN'],
+  });
+
+  const waAccount = !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+  const whatsapp = {
+    name: 'WhatsApp', role: 'Campaigns to subscribers', link: '/admin/whatsapp',
+    ...(whatsappNotifyConfigured()
+      ? { state: process.env.WHATSAPP_APP_SECRET ? 'ok' : 'warn', summary: process.env.WHATSAPP_APP_SECRET ? 'Connected: campaigns can be sent.' : 'Connected, but delivery receipts and STOP replies are off (app secret missing).' }
+      : { state: 'off', summary: waAccount ? 'Account added, but the approved message template is missing.' : 'Not connected. Customers can still subscribe; campaigns cannot be sent.' }),
+    facts: [
+      ['Account', waAccount ? `Phone number ID …${String(process.env.WHATSAPP_PHONE_NUMBER_ID).slice(-4)}` : 'Not added'],
+      ['Campaign template', process.env.WHATSAPP_NOTIFY_TEMPLATE || 'Not added'],
+      ['Delivery receipts', process.env.WHATSAPP_APP_SECRET ? 'On' : 'Off'],
+    ],
+    keys: ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_NOTIFY_TEMPLATE', 'WHATSAPP_APP_SECRET', 'WHATSAPP_WEBHOOK_VERIFY_TOKEN'],
+  };
+
+  const m = mailStatus();
+  const mailBroken = m.failedAt && (!m.sentAt || m.failedAt > m.sentAt);
+  const email = {
+    name: 'Email', role: 'Order updates, sign-up codes, team alerts', link: '',
+    ...(!mailConfigured()
+      ? { state: 'bad', summary: 'Not set up: customers get no order emails.' }
+      : mailBroken
+        ? { state: 'bad', summary: `The last email failed: ${m.error}` }
+        : { state: 'ok', summary: 'Working: order updates and alerts are emailed.' }),
+    facts: [
+      ['Sends from', String(process.env.MAIL_FROM || '—').replace(/^.*<|>$/g, '')],
+      ['Last email sent', m.sentAt ? { at: m.sentAt } : 'None since the last restart'],
+      ['Team alerts go to', process.env.ORDER_ALERT_EMAIL || String(process.env.MAIL_FROM || '—').replace(/^.*<|>$/g, '')],
+    ],
+    keys: ['MAIL_TRANSPORT', 'MAIL_FROM', 'ORDER_ALERT_EMAIL'],
+  };
+
+  const payments = {
+    name: 'Online payments', role: 'Razorpay (cards, UPI, net banking)', link: '',
+    ...(!razorpayConfigured()
+      ? { state: 'off', summary: 'Not set up: “Pay online” is hidden at checkout.' }
+      : razorpayMode() !== 'live'
+        ? { state: 'warn', summary: 'Test mode: no real money is collected.' }
+        : !process.env.RAZORPAY_WEBHOOK_SECRET
+          ? { state: 'warn', summary: 'Live, but the payment webhook is off: payments that finish after the customer closes the page are only found by the 5-minute check.' }
+          : { state: 'ok', summary: 'Live: customers can pay online.' }),
+    facts: [
+      ['Mode', razorpayConfigured() ? (razorpayMode() === 'live' ? 'Live' : 'Test') : '—'],
+      ['Payment webhook', process.env.RAZORPAY_WEBHOOK_SECRET ? 'On' : 'Off'],
+    ],
+    keys: ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'],
+  };
+
+  const ai = {
+    name: 'AI concierge', role: 'Website chat and AI leads', link: '/admin/leads',
+    ...(geminiConfigured() ? { state: 'ok', summary: 'On: shoppers can chat and leads are collected.' } : { state: 'off', summary: 'Off: the website shows the WhatsApp button instead.' }),
+    facts: [['Model', process.env.GEMINI_MODEL || 'default']],
+    keys: ['GEMINI_API_KEY', 'GEMINI_MODEL'],
+  };
+  return { delhivery, email, payments, whatsapp, ai };
+}
+// Broken or switched-off services that the shop needs (for the menu dot).
+const needsAttention = (c) => ['delhivery', 'email', 'payments'].filter((k) => ['bad', 'off'].includes(c[k].state)).length;
+
+r.get('/connections', requireRole(), asyncHandler(async (_req, res) => {
+  const c = await connections();
+  res.json({ checkedAt: new Date(), file: 'server/.env', attention: needsAttention(c), items: c });
+}));
+
+// Checks one service with its provider, sending nothing to customers.
+// Email sends one test message to the signed-in admin.
 r.post(
-  '/settings/integrations/:group/test',
+  '/connections/:name/test',
   requireRole(),
   asyncHandler(async (req, res) => {
-    const group = req.params.group;
-    if (group === 'whatsapp') {
+    const name = req.params.name;
+    const done = (ok, message, status = ok ? 200 : 422) => res.status(status).json({ ok, message });
+    if (name === 'delhivery') {
+      if (!delhiveryConfigured()) return done(false, 'Delhivery is not set up in the server settings yet.', 409);
+      if (setupProblem()) return done(false, setupProblem());
+      try {
+        const pin = await checkPin('500052');
+        if (!pin) return done(false, 'Could not reach Delhivery. Try again in a minute.', 502);
+        return done(true, `Connected to Delhivery ${delhiveryMode() === 'production' ? 'live' : 'test'}. The token works.`);
+      } catch (e) {
+        return done(false, `${e.message} A test token works only in test mode, a live token only in live mode.`);
+      }
+    }
+    if (name === 'whatsapp') {
       const { WHATSAPP_ACCESS_TOKEN: token, WHATSAPP_PHONE_NUMBER_ID: id } = process.env;
-      if (!token || !id) return res.status(409).json({ ok: false, message: 'Add the access token and the phone number ID first.' });
+      if (!token || !id) return done(false, 'WhatsApp is not connected yet: the access token and phone number ID are missing.', 409);
       try {
         const r2 = await fetch(`https://graph.facebook.com/v20.0/${encodeURIComponent(id)}?fields=display_phone_number,verified_name,quality_rating`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) });
         const d = await r2.json().catch(() => ({}));
-        if (!r2.ok) return res.status(422).json({ ok: false, message: `Meta refused: ${String(d?.error?.message || `HTTP ${r2.status}`).slice(0, 200)}. Check the token (it must be a permanent System User token) and the phone number ID.` });
-        const missing = whatsappNotifyConfigured() ? '' : ' Add the campaign template name to start sending.';
-        return res.json({ ok: true, message: `Connected: ${d.verified_name || 'WhatsApp Business'} (${d.display_phone_number || id})${d.quality_rating ? `, quality ${d.quality_rating}` : ''}.${missing}` });
+        if (!r2.ok) return done(false, `Meta refused: ${String(d?.error?.message || `HTTP ${r2.status}`).slice(0, 200)}`);
+        return done(true, `Connected: ${d.verified_name || 'WhatsApp Business'} (${d.display_phone_number || id})${d.quality_rating ? `, quality ${d.quality_rating}` : ''}.`);
       } catch {
-        return res.status(502).json({ ok: false, message: 'Could not reach Meta. Try again in a minute.' });
+        return done(false, 'Could not reach Meta. Try again in a minute.', 502);
       }
     }
-    if (group === 'delhivery') {
-      if (!process.env.DELHIVERY_API_TOKEN) return res.status(409).json({ ok: false, message: 'Add the API token first.' });
+    if (name === 'email') {
+      if (!mailConfigured()) return done(false, 'Email is not set up in the server settings.', 409);
       try {
-        const pin = await checkPin('110001');
-        if (!pin) return res.status(502).json({ ok: false, message: 'Could not reach Delhivery. Try again in a minute.' });
-        const where = delhiveryMode() === 'production' ? 'live (production)' : 'test (staging)';
-        const pickup = process.env.DELHIVERY_PICKUP_LOCATION ? '' : ' Add the pickup location (warehouse name) before creating shipments.';
-        return res.json({ ok: true, message: `Connected to Delhivery ${where}. The token works.${pickup}` });
+        await sendMail({ to: req.user.email, subject: 'Test email from your admin studio', text: 'This is a test from Admin → Connections. If you can read it, order emails are working.' });
+        return done(true, `Test email sent to ${req.user.email}. Check the inbox (and spam) in a minute.`);
       } catch (e) {
-        return res.status(422).json({ ok: false, message: `${e.message} A test token works only in test mode, a live token only in live mode.` });
+        return done(false, `Sending failed: ${String(e.message).slice(0, 160)}`, 502);
       }
     }
-    res.status(404).json({ message: 'Unknown settings group.' });
+    if (name === 'payments') {
+      if (!razorpayConfigured()) return done(false, 'Razorpay is not set up in the server settings.', 409);
+      try {
+        const r2 = await fetch('https://api.razorpay.com/v1/payments?count=1', { headers: { Authorization: `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64')}` }, signal: AbortSignal.timeout(10000) });
+        if (r2.status === 401) return done(false, 'Razorpay refused the keys. Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.');
+        if (!r2.ok) return done(false, `Razorpay answered HTTP ${r2.status}. Try again in a minute.`, 502);
+        return done(true, `Connected to Razorpay (${razorpayMode()} mode). The keys work.`);
+      } catch {
+        return done(false, 'Could not reach Razorpay. Try again in a minute.', 502);
+      }
+    }
+    if (name === 'ai') return geminiConfigured() ? done(true, 'The AI key is set. Try the concierge on the website to see it answer.') : done(false, 'The AI concierge is off: GEMINI_API_KEY is not set.', 409);
+    res.status(404).json({ message: 'Unknown connection.' });
   })
 );
 

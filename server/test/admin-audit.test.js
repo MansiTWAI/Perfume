@@ -147,47 +147,42 @@ describe('users and menu alerts', () => {
     await codOrder();
     await http('POST', '/api/enquiries', { body: { name: 'Riya', email: 'riya@example.test', phone: '9876543210', topic: 'Gifting', message: 'Gift wrap?' } });
     const r = await http('GET', '/api/admin/counts', { token });
-    assert.deepEqual(r.body, { orders: 1, enquiries: 1, reviews: 0, shipping: 0 });
+    assert.deepEqual(r.body, { orders: 1, enquiries: 1, reviews: 0, shipping: 0, connections: 0 });
   });
 });
 
-describe('integration settings from the studio', () => {
-  test('saved keys apply at once, secrets never come back, clearing returns to the server file', async () => {
+describe('connections (read-only health)', () => {
+  test('shows each service without any key, and checks them on request', async () => {
+    const { token } = await makeUser('admin');
+    const r = await http('GET', '/api/admin/connections', { token });
+    assert.equal(r.status, 200);
+    const text = JSON.stringify(r.body);
+    for (const k of ['DELHIVERY_API_TOKEN', 'WHATSAPP_ACCESS_TOKEN', 'RAZORPAY_KEY_SECRET', 'GEMINI_API_KEY']) assert.ok(!text.includes(process.env[k]), k);
+    assert.equal(r.body.items.delhivery.state, 'warn'); // test mode in the test suite
+    assert.equal(r.body.items.email.state, 'ok');
+    assert.equal(r.body.items.whatsapp.state, 'ok');
+    assert.equal(r.body.attention, 0);
+    const dlv = await http('POST', '/api/admin/connections/delhivery/test', { token });
+    assert.match(dlv.body.message, /Connected to Delhivery test/);
+    const wa = await http('POST', '/api/admin/connections/whatsapp/test', { token });
+    assert.match(wa.body.message, /Connected: Al Barakah Lifestyle/);
+    const mail = await http('POST', '/api/admin/connections/email/test', { token });
+    assert.equal(mail.status, 200);
+    const after = await http('GET', '/api/admin/connections', { token });
+    assert.ok(after.body.items.email.facts.find(([k]) => k === 'Last email sent')[1].at);
+    assert.equal((await http('GET', '/api/admin/settings/integrations', { token })).status, 404); // no key editing any more
+    const manager = (await makeUser('manager')).token;
+    assert.equal((await http('GET', '/api/admin/connections', { token: manager })).status, 403);
+  });
+  test('the menu counts a broken service', async () => {
     const { token } = await makeUser('admin');
     const before = process.env.DELHIVERY_PICKUP_LOCATION;
-    const token0 = process.env.DELHIVERY_API_TOKEN;
+    process.env.DELHIVERY_PICKUP_LOCATION = 'https://example.com/pickup';
     try {
-      const view = await http('GET', '/api/admin/settings/integrations', { token });
-      assert.equal(view.status, 200);
-      const tok = view.body.delhivery.keys.find((k) => k.key === 'DELHIVERY_API_TOKEN');
-      assert.equal(tok.set, true);
-      assert.equal(tok.value, undefined);
-      assert.ok(!JSON.stringify(view.body).includes(token0));
-      const bad = await http('PUT', '/api/admin/settings/integrations/delhivery', { token, body: { values: { DELHIVERY_ENV: 'live' } } });
-      assert.equal(bad.status, 400);
-      const ok = await http('PUT', '/api/admin/settings/integrations/delhivery', { token, body: { values: { DELHIVERY_PICKUP_LOCATION: 'ABL Hyderabad', DELHIVERY_API_TOKEN: '' } } });
-      assert.equal(ok.status, 200);
-      assert.equal(process.env.DELHIVERY_PICKUP_LOCATION, 'ABL Hyderabad');
-      assert.equal(process.env.DELHIVERY_API_TOKEN, token0); // empty secret = keep
-      assert.equal(ok.body.delhivery.keys.find((k) => k.key === 'DELHIVERY_PICKUP_LOCATION').source, 'panel');
-      const test1 = await http('POST', '/api/admin/settings/integrations/delhivery/test', { token });
-      assert.equal(test1.status, 200);
-      assert.match(test1.body.message, /test \(staging\)/);
-      const wa = await http('POST', '/api/admin/settings/integrations/whatsapp/test', { token });
-      assert.match(wa.body.message, /Connected: Al Barakah Lifestyle/);
-      await http('PUT', '/api/admin/settings/integrations/delhivery', { token, body: { clear: ['DELHIVERY_PICKUP_LOCATION'] } });
-      assert.equal(process.env.DELHIVERY_PICKUP_LOCATION, before);
-      process.env.SETTINGS_FROM_DB = 'off'; // e.g. a local copy sharing the live database
-      const off = await http('PUT', '/api/admin/settings/integrations/delhivery', { token, body: { values: { DELHIVERY_PICKUP_LOCATION: 'Elsewhere' } } });
-      process.env.SETTINGS_FROM_DB = 'on';
-      assert.equal(off.status, 400);
-      assert.match(off.body.message, /switched off on this server/);
-      assert.equal(process.env.DELHIVERY_PICKUP_LOCATION, before);
-      const manager = (await makeUser('manager')).token;
-      assert.equal((await http('GET', '/api/admin/settings/integrations', { token: manager })).status, 403);
+      const r = await http('GET', '/api/admin/counts', { token });
+      assert.equal(r.body.connections, 1);
     } finally {
       process.env.DELHIVERY_PICKUP_LOCATION = before;
-      process.env.DELHIVERY_API_TOKEN = token0;
     }
   });
 });

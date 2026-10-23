@@ -29,8 +29,19 @@ function getTransport() {
   return transport;
 }
 
+// The last send since the server started, for Admin → Connections.
+const last = { sentAt: null, failedAt: null, error: '' };
+export const mailStatus = () => ({ ...last });
+
 export async function sendMail({ to, subject, text, html }) {
-  return getTransport().sendMail({ from: process.env.MAIL_FROM || 'AL BARAKAH LIFESTYLE <no-reply@example.com>', to, subject, text, html });
+  try {
+    const r = await getTransport().sendMail({ from: process.env.MAIL_FROM || 'AL BARAKAH LIFESTYLE <no-reply@example.com>', to, subject, text, html });
+    last.sentAt = new Date();
+    return r;
+  } catch (e) {
+    Object.assign(last, { failedAt: new Date(), error: String(e?.message || e).slice(0, 160) });
+    throw e;
+  }
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

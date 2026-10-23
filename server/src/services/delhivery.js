@@ -19,7 +19,7 @@ export const looksLikeUrl = (v) => /^\s*(https?:\/\/|www\.)|\.(com|in|net|org)(\
 // A set-up mistake that makes every booking fail ('' when none).
 export function setupProblem() {
   const pickup = String(process.env.DELHIVERY_PICKUP_LOCATION || '').trim();
-  if (looksLikeUrl(pickup)) return `The Delhivery pickup location is set to "${clean(pickup, 60)}", which is a web address, not a warehouse name. In Admin → Settings, enter the warehouse name exactly as it appears in Delhivery One → Settings → Pickup locations.`;
+  if (looksLikeUrl(pickup)) return `The Delhivery pickup location is set to "${clean(pickup, 60)}", which is a web address, not a warehouse name. Set DELHIVERY_PICKUP_LOCATION in the server settings file (server/.env) to the warehouse name exactly as it appears in Delhivery One → Settings → Pickup locations, then restart the app.`;
   return '';
 }
 export const delhiveryMode = () => (process.env.DELHIVERY_ENV === 'production' ? 'production' : 'staging');
@@ -143,7 +143,7 @@ export function explainRemarks(remarks, order) {
   // "'NoneType' object has no attribute 'end_date'" is what Delhivery answers
   // when the pickup location name matches no warehouse of the account.
   if (/clientwarehouse|warehouse|pickup|end_date|nonetype/i.test(r)) {
-    return `Delhivery does not recognise the pickup location "${clean(process.env.DELHIVERY_PICKUP_LOCATION, 60)}". In Admin → Shipping → Settings, enter the warehouse name exactly as it appears in your Delhivery account (capitals and spaces count), and use the token from the same account (test or live).`;
+    return `Delhivery does not recognise the pickup location "${clean(process.env.DELHIVERY_PICKUP_LOCATION, 60)}". Set DELHIVERY_PICKUP_LOCATION in the server settings file to the warehouse name exactly as it appears in your Delhivery account (capitals and spaces count), and use the token from the same account (test or live).`;
   }
   if (/non.?serviceable|not serviceable|serviceab|embargo|pin ?code|exception pin|invalid pin/i.test(r)) return `Delhivery does not deliver to PIN code ${pin || '(missing)'}. Check the PIN with the customer.`;
   if (/phone|mobile/i.test(r)) return 'Delhivery refused the phone number. The customer needs a 10-digit Indian mobile number.';

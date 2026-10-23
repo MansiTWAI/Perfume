@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useStore } from '../../context/StoreContext';
 import { api } from '../../lib/api';
@@ -16,7 +16,7 @@ import Shipping from './Shipping';
 import { CouponList, CouponEdit } from './Coupons';
 import WhatsApp from './WhatsApp';
 import Banners from './Banners';
-import Settings from './Settings';
+import Connections from './Connections';
 import { InvoicePage } from './Invoice';
 import { ConfirmHost } from './ui';
 import Icon from '../../components/Icon';
@@ -96,9 +96,9 @@ const NAV = [
   ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders', false, 'orders'], ['/admin/shipping', 'Shipping', false, 'shipping'], ['/admin/coupons', 'Coupons']]],
   ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews', false, 'reviews'], ['/admin/journal', 'Journal']]],
   ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries', false, 'enquiries'], ['/admin/subscribers', 'Newsletter']]],
-  ['Setup', [['/admin/settings', 'Settings']]],
+  ['Setup', [['/admin/connections', 'Connections', false, 'connections']]],
 ];
-const COUNT_TITLE = { orders: 'new orders to confirm', shipping: 'shipments with a problem', reviews: 'reviews waiting', enquiries: 'unread enquiries' };
+const COUNT_TITLE = { orders: 'new orders to confirm', shipping: 'shipments with a problem', reviews: 'reviews waiting', enquiries: 'unread enquiries', connections: 'services not working' };
 
 export default function Admin() {
   const { user, logout } = useStore();
@@ -122,8 +122,10 @@ export default function Admin() {
   }, [logout]);
   // On narrow screens the menu scrolls sideways: keep the current page in view.
   useEffect(() => {
-    nav.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [pathname]);
+    // After the page has drawn, so the menu's final height is known.
+    const t = setTimeout(() => nav.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 60);
+    return () => clearTimeout(t);
+  }, [pathname, user]);
   if (!user || user.role !== 'admin') return <AdminLogin notice={notice} />;
   return (
     <div className="admin">
@@ -169,7 +171,8 @@ export default function Admin() {
           <Route path="whatsapp/*" element={<WhatsApp />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="subscribers" element={<Subscribers />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="connections" element={<Connections />} />
+          <Route path="settings" element={<Navigate to="/admin/connections" replace />} />
         </Routes>
       </main>
       <ConfirmHost />

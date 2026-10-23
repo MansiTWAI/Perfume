@@ -21,7 +21,6 @@ process.env.DELHIVERY_PICKUP_LOCATION = 'Test Warehouse';
 process.env.DELHIVERY_WEBHOOK_TOKEN = crypto.randomBytes(20).toString('hex');
 process.env.DELHIVERY_AUTO_CREATE = 'true';
 process.env.MAIL_TRANSPORT = 'memory';
-process.env.SETTINGS_FROM_DB = 'on'; // the in-memory test database, never the live one
 process.env.WHATSAPP_ACCESS_TOKEN = `wa-${crypto.randomBytes(12).toString('hex')}`;
 process.env.WHATSAPP_PHONE_NUMBER_ID = '100200300400';
 process.env.WHATSAPP_NOTIFY_TEMPLATE = 'house_update';

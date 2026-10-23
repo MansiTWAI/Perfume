@@ -26,8 +26,8 @@ function Overview({ status }) {
     <div>
       {!status.configured && (
         <section className="a-panel a-connect">
-          <EmptyState icon="chat" title="Connect WhatsApp to send campaigns" action="Connect WhatsApp" to="/admin/settings">
-            Paste your Meta WhatsApp Business (Cloud API) token, phone number ID and approved template in Settings. Until then customers can still subscribe, and you can prepare campaigns.
+          <EmptyState icon="chat" title="Connect WhatsApp to send campaigns" action="See what’s needed" to="/admin/connections">
+            Your Meta WhatsApp Business (Cloud API) token, phone number ID and approved template go in the server settings file. Until then customers can still subscribe, and you can prepare campaigns.
           </EmptyState>
         </section>
       )}
@@ -143,9 +143,9 @@ function Settings({ status }) {
         ))}
       </ul>
       <div className="a-actions" style={{ marginTop: 14 }}>
-        <Link to="/admin/settings" className="a-btn a-primary">{status.account ? 'Change WhatsApp settings' : 'Connect WhatsApp'}</Link>
+        <Link to="/admin/connections" className="a-btn a-primary">Check the connection</Link>
       </div>
-      <p className="a-muted a-hint" style={{ marginTop: 10 }}>Keys are pasted in Admin → Settings, stored encrypted and never shown again.</p>
+      <p className="a-muted a-hint" style={{ marginTop: 10 }}>These are set in the server settings file (server/.env) by whoever manages the server, so tokens stay private.</p>
     </section>
   );
 }
