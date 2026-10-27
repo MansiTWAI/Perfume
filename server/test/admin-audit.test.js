@@ -86,11 +86,16 @@ describe('coupons, products, reviews, journal', () => {
     const swapped = await http('POST', '/api/admin/products', { token, body: { name: 'Swap', price: { INR: 2799, AED: 2799 } } });
     assert.equal(swapped.status, 400);
     assert.match(swapped.body.message, /should be near AED 122/);
-    const odd = await http('POST', '/api/admin/products', { token, body: { name: 'Odd', price: { INR: 2799, AED: 249 } } });
+    const odd = await http('POST', '/api/admin/products', { token, body: { name: 'Odd', price: { INR: 2799, AED: 349 } } });
     assert.equal(odd.status, 201);
-    assert.match(odd.body.warnings[0], /AED 249 is high/);
+    assert.match(odd.body.warnings[0], /AED 349 is unusually high/);
     const fine = await http('PUT', `/api/admin/products/${odd.body._id}`, { token, body: { price: { INR: 2799, AED: 125 } } });
     assert.deepEqual(fine.body.warnings, []);
+    // The shop's own pricing (₹1,250 / AED 100, duo ₹2,500 / AED 229) is not flagged.
+    for (const price of [{ INR: 1250, AED: 100 }, { INR: 2500, AED: 229 }]) {
+      const own = await http('PUT', `/api/admin/products/${odd.body._id}`, { token, body: { price } });
+      assert.deepEqual(own.body.warnings, []);
+    }
   });
   test('the house can add a review; it is published but never marked as a verified purchase', async () => {
     const p = await makeProduct();

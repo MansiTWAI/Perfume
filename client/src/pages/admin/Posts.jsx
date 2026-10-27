@@ -5,7 +5,7 @@ import { formatDate } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
-import { ImageField, csv, fromCsv } from './Fields';
+import { CsvInput, ImageField } from './Fields';
 import Icon from '../../components/Icon';
 import { EmptyState, LoadError } from './ui';
 
@@ -159,7 +159,7 @@ export function PostEdit() {
               <input list="cats" value={p.category} onChange={(e) => set('category', e.target.value)} />
               <datalist id="cats">{CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
             </label>
-            <label>Tags (comma separated)<input value={csv(p.tags)} onChange={(e) => set('tags', fromCsv(e.target.value))} /></label>
+            <label>Tags (comma separated)<CsvInput value={p.tags} onChange={(v) => set('tags', v)} /></label>
             <label>Author<input value={p.author} onChange={(e) => set('author', e.target.value)} /></label>
             <label className="a-check"><input type="checkbox" checked={p.featured} onChange={(e) => set('featured', e.target.checked)} /> Feature at the top of the Journal</label>
           </section>

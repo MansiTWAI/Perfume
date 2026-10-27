@@ -4,17 +4,20 @@ import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useStore } from '../../context/StoreContext';
 import { clearApiCache } from '../../hooks/useApi';
-import { ImageField, PhotoGallery, RowList, csv, fromCsv } from './Fields';
+import { CsvInput, ImageField, PhotoGallery, RowList } from './Fields';
 import Icon from '../../components/Icon';
 import { confirm, EmptyState, LoadError } from './ui';
 
-// Rupees per dirham the two prices should roughly follow (the server checks too).
+// Rupees per dirham. The shop prices the UAE a little above the exchange rate
+// on purpose (₹1,250 / AED 100), so only clear outliers are flagged; the
+// server applies the same range.
 const AED_RATE = 23;
 export function aedHint(inr, aed) {
   if (!inr || !aed) return '';
   const rate = inr / aed;
-  if (rate >= 15 && rate <= 35) return '';
-  return `Expected about AED ${Math.round(inr / AED_RATE)} for ₹${inr}.${rate < 5 || rate > 80 ? ' This will not save: check each price is in its own box.' : ''}`;
+  if (rate >= 9 && rate <= 40) return '';
+  if (rate < 5 || rate > 80) return `This will not save: AED ${aed} cannot be right for ₹${inr} (about AED ${Math.round(inr / AED_RATE)}). Check each price is in its own box.`;
+  return `AED ${aed} is unusually ${rate < 9 ? 'high' : 'low'} for ₹${inr}. Check both prices.`;
 }
 
 const stockState = (p) => (p.stock <= 0 ? ['Out of stock', 'bad'] : p.stock <= 5 ? [`Low · ${p.stock} left`, 'warn'] : [`${p.stock} in stock`, '']);
@@ -118,9 +121,10 @@ export function ProductList() {
 
 // Notes as one comma-separated line per tier. Existing descriptions and
 // pictures are kept for any note whose name stays the same.
-const noteLine = (list) => (list || []).map((n) => n.name).join(', ');
-const fromNoteLine = (text, old = []) =>
-  fromCsv(text).map((name) => old.find((n) => n.name.toLowerCase() === name.toLowerCase()) || { name, description: '', image: '' });
+const noteNames = (list) => (list || []).map((n) => n.name);
+// Notes keep their description and image when only the list around them changes.
+const toNotes = (names, old = []) =>
+  names.map((name) => old.find((n) => n.name.toLowerCase() === name.toLowerCase()) || { name, description: '', image: '' });
 
 // A new product needs photos, a name, a price and its notes; everything else
 // is folded under "More details".
@@ -208,7 +212,7 @@ export function ProductEdit() {
             <div className="a-grid3">
               <label>Price ₹ (incl. GST) *<input type="number" min="0" required value={p.price?.INR || ''} onChange={(e) => setIn('price', 'INR', +e.target.value)} /></label>
               <label>Price AED (incl. VAT)<input type="number" min="0" value={p.price?.AED || ''} onChange={(e) => setIn('price', 'AED', +e.target.value)} aria-invalid={!!aedHint(p.price?.INR, p.price?.AED)} />{aedHint(p.price?.INR, p.price?.AED) && <span className="a-field-error">{aedHint(p.price?.INR, p.price?.AED)}</span>}</label>
-              <label>Stock<input type="number" min="0" value={p.stock} onChange={(e) => set('stock', +e.target.value)} /></label>
+              <label>Stock<input type="number" min="0" value={p.stock || ''} placeholder="0" onChange={(e) => set('stock', +e.target.value)} /></label>
             </div>
             <div className="a-grid2">
               <label>Fragrance family<input value={p.family} onChange={(e) => set('family', e.target.value)} placeholder="e.g. Oriental Woody Oud" /></label>
@@ -220,9 +224,9 @@ export function ProductEdit() {
           <section className="a-panel a-form">
             <h2>Notes</h2>
             <p className="a-muted">Separate notes with commas.</p>
-            <label>Top notes<input value={noteLine(p.notes?.top)} onChange={(e) => setIn('notes', 'top', fromNoteLine(e.target.value, p.notes?.top))} placeholder="Saffron, Cardamom, Black Pepper" /></label>
-            <label>Heart notes<input value={noteLine(p.notes?.heart)} onChange={(e) => setIn('notes', 'heart', fromNoteLine(e.target.value, p.notes?.heart))} placeholder="Frankincense, Damask Rose" /></label>
-            <label>Base notes<input value={noteLine(p.notes?.base)} onChange={(e) => setIn('notes', 'base', fromNoteLine(e.target.value, p.notes?.base))} placeholder="Oud, Amber, Smoked Woods" /></label>
+            <label>Top notes<CsvInput value={noteNames(p.notes?.top)} onChange={(names) => setIn('notes', 'top', toNotes(names, p.notes?.top))} placeholder="Saffron, Cardamom, Black Pepper" /></label>
+            <label>Heart notes<CsvInput value={noteNames(p.notes?.heart)} onChange={(names) => setIn('notes', 'heart', toNotes(names, p.notes?.heart))} placeholder="Frankincense, Damask Rose" /></label>
+            <label>Base notes<CsvInput value={noteNames(p.notes?.base)} onChange={(names) => setIn('notes', 'base', toNotes(names, p.notes?.base))} placeholder="Oud, Amber, Smoked Woods" /></label>
           </section>
 
           <details className="a-panel a-more">
@@ -276,9 +280,9 @@ export function ProductEdit() {
               <ImageField value={p.video?.poster} onChange={(src) => setIn('video', 'poster', src)} label="Video cover image" />
 
               <h3>Tags</h3>
-              <label>Mood words (comma separated)<input value={csv(p.mood)} onChange={(e) => set('mood', fromCsv(e.target.value))} /></label>
-              <label>Occasions<input value={csv(p.occasions)} onChange={(e) => set('occasions', fromCsv(e.target.value))} /></label>
-              <label>What is included<input value={csv(p.includes)} onChange={(e) => set('includes', fromCsv(e.target.value))} /></label>
+              <label>Mood words (comma separated)<CsvInput value={p.mood} onChange={(v) => set('mood', v)} /></label>
+              <label>Occasions<CsvInput value={p.occasions} onChange={(v) => set('occasions', v)} /></label>
+              <label>What is included<CsvInput value={p.includes} onChange={(v) => set('includes', v)} /></label>
 
               <h3>Arabic</h3>
               <p className="a-muted">Shown to visitors browsing in Arabic. Leave a field empty to use the English text.</p>
@@ -291,8 +295,8 @@ export function ProductEdit() {
                 <label>الحكاية (Story)<textarea rows="5" value={p.ar?.story || ''} onChange={(e) => setIn('ar', 'story', e.target.value)} /></label>
                 <label>طريقة الاستخدام (How to wear)<textarea rows="3" value={p.ar?.howToWear || ''} onChange={(e) => setIn('ar', 'howToWear', e.target.value)} /></label>
                 <label>طريقة الحفظ (How to store)<textarea rows="3" value={p.ar?.howToStore || ''} onChange={(e) => setIn('ar', 'howToStore', e.target.value)} /></label>
-                <label>المناسبات، مفصولة بفواصل (Occasions)<input value={csv(p.ar?.occasions)} onChange={(e) => setIn('ar', 'occasions', fromCsv(e.target.value))} /></label>
-                <label>محتويات العلبة (What is included)<input value={csv(p.ar?.includes)} onChange={(e) => setIn('ar', 'includes', fromCsv(e.target.value))} /></label>
+                <label>المناسبات، مفصولة بفواصل (Occasions)<CsvInput value={p.ar?.occasions} onChange={(v) => setIn('ar', 'occasions', v)} /></label>
+                <label>محتويات العلبة (What is included)<CsvInput value={p.ar?.includes} onChange={(v) => setIn('ar', 'includes', v)} /></label>
               </div>
 
               <h3>Search engines</h3>

@@ -272,3 +272,14 @@ export function RowList({ rows = [], onChange, fields, addLabel = 'Add row', emp
 export const csv = (arr) => (arr || []).join(', ');
 // Latin or Arabic commas.
 export const fromCsv = (s) => s.split(/[,،]/).map((x) => x.trim()).filter(Boolean);
+
+// A comma-separated list box. It keeps the text as typed (a trailing comma
+// or space included) and reports the parsed list; it only rewrites the text
+// when the list changes from outside, such as another product loading.
+export function CsvInput({ value, onChange, ...rest }) {
+  const [text, setText] = useState(csv(value));
+  useEffect(() => {
+    setText((t) => (csv(fromCsv(t)) === csv(value) ? t : csv(value)));
+  }, [csv(value)]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <input {...rest} value={text} onChange={(e) => { setText(e.target.value); onChange(fromCsv(e.target.value)); }} />;
+}

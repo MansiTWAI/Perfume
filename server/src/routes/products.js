@@ -176,7 +176,9 @@ r.get(
 // The two prices must describe the same bottle: rupees per dirham should be
 // near the exchange rate (about 23). Far outside it (e.g. the AED box holding
 // the rupee price) is refused; somewhat outside it is saved with a warning.
-export const AED_RATE = { usual: 23, warnBelow: 15, warnAbove: 35, refuseBelow: 5, refuseAbove: 80 };
+// The shop prices the UAE a little above the exchange rate on purpose
+// (₹1,250 / AED 100 is ₹12.5 per dirham), so only clear outliers warn.
+export const AED_RATE = { usual: 23, warnBelow: 9, warnAbove: 40, refuseBelow: 5, refuseAbove: 80 };
 export function priceCheck(price) {
   const inr = Number(price?.INR) || 0;
   const aed = Number(price?.AED) || 0;
@@ -188,7 +190,7 @@ export function priceCheck(price) {
     return { error: `The AED price (AED ${aed}) does not match the rupee price (₹${inr}): it should be near AED ${expected}. Check that each price is in its own box.` };
   }
   if (rate < AED_RATE.warnBelow || rate > AED_RATE.warnAbove) {
-    return { warnings: [`AED ${aed} is ${rate < AED_RATE.warnBelow ? 'high' : 'low'} for ₹${inr} (about AED ${expected} at today's rate). Saved, but please check it.`] };
+    return { warnings: [`AED ${aed} is unusually ${rate < AED_RATE.warnBelow ? 'high' : 'low'} for ₹${inr}. Saved, but please check both prices.`] };
   }
   return { warnings: [] };
 }
