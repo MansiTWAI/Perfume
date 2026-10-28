@@ -2,17 +2,18 @@ import { Link } from 'react-router-dom';
 import { CONTACT, mapLink, whatsappLink } from '../lib/format';
 import { useStore } from '../context/StoreContext';
 import Newsletter from './Newsletter';
+import { useFragranceLinks } from './Header';
 
 const COLUMNS = [
-  ['Shop', [['/fragrances', 'All fragrances'], ['/fragrances/elarisse', 'ELARISSE'], ['/fragrances/zafreon', 'ZAFREON'], ['/fragrances/signature-duo', 'Signature Duo']]],
   ['The House', [['/about-us', 'About Us'], ['/our-story', 'Our Story'], ['/mission-vision', 'Mission & Vision'], ['/fragrance-heritage', 'Heritage'], ['/journal', 'Journal'], ['/gallery', 'Gallery']]],
   ['Care', [['/contact', 'Contact'], ['/faq', 'FAQ'], ['/shipping-policy', 'Shipping Policy'], ['/refund-policy', 'Refund & Cancellation'], ['/track', 'Track an order']]],
 ];
-// Product names are the same in every language.
-const NAMES = new Set(['ELARISSE', 'ZAFREON', 'Signature Duo']);
-
 export default function Footer() {
   const { t } = useStore();
+  // Shop lists every published fragrance; product names are the same in every language.
+  const fragrances = useFragranceLinks();
+  const names = new Set(fragrances.map(([, name]) => name));
+  const columns = [['Shop', [['/fragrances', 'All fragrances'], ...fragrances.map(([to, name]) => [to, name])]], ...COLUMNS];
   return (
     <footer className="site-footer">
       <div className="container">
@@ -27,12 +28,12 @@ export default function Footer() {
         </div>
 
         <div className="footer-grid">
-          {COLUMNS.map(([title, links]) => (
+          {columns.map(([title, links]) => (
             <nav key={title} aria-label={t(title)}>
               <p className="footer-h">{t(title)}</p>
               <ul>
                 {links.map(([to, label]) => (
-                  <li key={to}><Link to={to}>{NAMES.has(label) ? label : t(label)}</Link></li>
+                  <li key={to}><Link to={to}>{names.has(label) ? label : t(label)}</Link></li>
                 ))}
               </ul>
             </nav>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
+import { useApi } from '../hooks/useApi';
 import { cx, whatsappLink } from '../lib/format';
 import { stopScroll } from './SmoothScroll';
 import RegionSelect from './RegionSelect';
@@ -11,11 +12,18 @@ import Icon from './Icon';
 
 // Every page, in the same groups as the footer. Desktop shows them as four
 // menus (Shop, The House, Journal, Help); phones get them in the menu.
+// The fragrances come from the shop's products, so anything published in
+// Admin > Products appears here; this list only shows while they load.
 const FRAGRANCES = [
   ['/fragrances/elarisse', 'ELARISSE', 'Luminous Floral Amber'],
   ['/fragrances/zafreon', 'ZAFREON', 'Oriental Woody Oud'],
   ['/fragrances/signature-duo', 'Signature Duo', 'Gift set · 2 × 100 ml'],
 ];
+export function useFragranceLinks() {
+  const { data } = useApi('/products');
+  if (!Array.isArray(data) || !data.length) return FRAGRANCES;
+  return data.map((p) => [`/fragrances/${p.slug}`, p.name, p.slug === 'signature-duo' ? 'Gift set · 2 × 100 ml' : p.family]);
+}
 const HOUSE = [
   ['/about-us', 'About Us'],
   ['/our-story', 'Our Story'],
@@ -118,6 +126,7 @@ export default function Header() {
   const [menu, setMenu] = useState(false);
   const [open, setOpen] = useState(null); // which desktop menu is open
   const { pathname } = useLocation();
+  const fragrances = useFragranceLinks();
 
   useEffect(() => {
     let last = scrollY;
@@ -165,7 +174,7 @@ export default function Header() {
               <NavMenu id="shop" label={t('Shop')} active={shopActive} open={open} setOpen={setOpen}>
                 <div className="nav-col">
                   <p className="nav-h">{t('Fragrances')}</p>
-                  {FRAGRANCES.map(([to, name, note]) => (
+                  {fragrances.map(([to, name, note]) => (
                     <Link key={to} to={to} className="nav-product"><b>{name}</b><small>{t(note)}</small></Link>
                   ))}
                 </div>
@@ -273,7 +282,7 @@ export default function Header() {
                 <p className="mm-h">{t('Shop')}</p>
                 <div className="mm-big">
                   <NavLink to="/fragrances" end>{t('All fragrances')}</NavLink>
-                  {FRAGRANCES.map(([to, name]) => <NavLink key={to} to={to}>{name}</NavLink>)}
+                  {fragrances.map(([to, name]) => <NavLink key={to} to={to}>{name}</NavLink>)}
                 </div>
               </motion.div>
               <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.32 } }}>
