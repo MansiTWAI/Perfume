@@ -7,7 +7,6 @@ import { sizesOf, fromPrice } from '../../lib/sizes';
 import { ChapterOpening } from './Chapter';
 
 const EASE = [0.2, 0.7, 0.2, 1];
-const isNew = (p) => /^new$/i.test(p.badge || '');
 
 // The light inside each arch, after the fragrance's own world.
 const STAGE = {
@@ -21,22 +20,19 @@ const STAGE = {
 };
 const DEFAULT_STAGE = 'bg-[radial-gradient(70%_60%_at_50%_45%,#2a1e19,#0d0a09)]';
 
-// Right after the hero: every fragrance in one grid, four to a row on every
-// screen (phones get compact cards), a shorter row centred.
-// Perfumes marked "New" start their own row; the four-question guide is the
-// last card, after every fragrance.
+// Right after the hero: every fragrance in one continuous grid, four to a
+// row on every screen (phones get compact cards). The four-question guide
+// takes the 8th place, closing the second row, and the collection carries
+// on after it.
+const GUIDE_AT = 7;
 export default function Collection({ products }) {
   const { priceOf, fmt, addToCart, toast, t, setFinderOpen } = useStore();
   const all = [...products]
     .filter((p) => p.published !== false && (renderFor(p) || p.images?.[0]?.src))
     .sort((a, b) => (b.featured === true) - (a.featured === true) || (a.sortOrder || 0) - (b.sortOrder || 0));
-  const first = all.filter((p) => !isNew(p));
-  const fresh = all.filter(isNew);
   if (!all.length) return null;
-  const items = [...first.map((p) => ({ p })), ...(first.length && fresh.length ? [{ rowBreak: true }] : []), ...fresh.map((p) => ({ p })), { guide: true }];
-  // A card's width: a quarter of the row, less its share of the gaps
-  // (gap-x-2 / sm:gap-x-4 / lg:gap-x-6 below).
-  const cell = 'shrink-0 grow-0 basis-[calc((100%-1.5rem)/4)] sm:basis-[calc((100%-3rem)/4)] lg:basis-[calc((100%-4.5rem)/4)]';
+  const items = all.map((p) => ({ p }));
+  items.splice(Math.min(GUIDE_AT, items.length), 0, { guide: true });
 
   const reveal = (i) => ({
     initial: { opacity: 0, y: 40 },
@@ -51,14 +47,13 @@ export default function Collection({ products }) {
         <p className="mt-4 max-w-md text-mute">{t('Every fragrance the house makes, side by side. Choose one, or let us help.')}</p>
       </ChapterOpening>
 
-      <ul className="mx-auto mt-10 flex max-w-[calc(var(--max)_-_2*var(--gutter))] list-none flex-wrap justify-center gap-x-2 gap-y-8 sm:mt-14 sm:gap-x-4 md:gap-y-14 lg:gap-x-6">
-        {items.map(({ p, guide, rowBreak }, i) => {
-          if (rowBreak) return <li key="row-break" className="-mt-8 h-0 basis-full md:-mt-14" aria-hidden="true" />;
+      <ul className="mx-auto mt-10 grid max-w-[calc(var(--max)_-_2*var(--gutter))] list-none grid-cols-4 gap-x-2 gap-y-8 sm:mt-14 sm:gap-x-4 md:gap-y-14 lg:gap-x-6">
+        {items.map(({ p, guide }, i) => {
           if (guide) {
             // The guide, shaped like a fragrance card: the house's calligraphy
             // in the arch, the question beneath and one clear action.
             return (
-              <motion.li key="guide" {...reveal(i)} className={`group flex min-w-0 flex-col ${cell}`}>
+              <motion.li key="guide" {...reveal(i)} className="group flex min-w-0 flex-col">
                 <button type="button" onClick={() => setFinderOpen(true)} className="relative block aspect-[3/4] w-full overflow-hidden rounded-arch bg-[radial-gradient(80%_70%_at_50%_30%,#5a1520,#2b080c)]" aria-label={t('Take the guide')}>
                   <img src="/media/calligraphy.webp" alt="" loading="lazy" className="absolute inset-x-[10%] top-[28%] w-[80%] opacity-90 mix-blend-screen transition duration-700 ease-out [mask-image:radial-gradient(closest-side,#000_70%,transparent)] group-hover:-translate-y-2" />
                   <span className="absolute left-1/2 top-[12%] -translate-x-1/2 text-xs text-gold-soft sm:text-lg" aria-hidden="true">✦</span>
@@ -81,7 +76,7 @@ export default function Collection({ products }) {
           const soldOut = sizes ? sizes.every((s) => s.stock <= 0) : p.stock <= 0;
           const wide = render && render.w / render.h > 1;
           return (
-            <motion.li key={p._id || p.slug} {...reveal(i)} className={`group flex min-w-0 flex-col ${cell}`}>
+            <motion.li key={p._id || p.slug} {...reveal(i)} className="group flex min-w-0 flex-col">
               <Link to={`/fragrances/${p.slug}`} className={`relative grid aspect-[3/4] items-end justify-items-center overflow-hidden rounded-arch ${STAGE[p.slug] || DEFAULT_STAGE}`} aria-label={p.name}>
                 {(p.badge || soldOut) && (
                   <span className="absolute left-1/2 top-[6%] z-[1] -translate-x-1/2 whitespace-nowrap rounded-full bg-onyx/70 px-1.5 py-0.5 text-[7px] uppercase tracking-[0.12em] text-gold-soft sm:px-3 sm:py-1 sm:text-[10px] sm:tracking-[0.2em]">{t(soldOut ? 'Sold out' : p.badge)}</span>
