@@ -181,3 +181,13 @@
   .reviews-score { justify-items: center; }
   .reviews-empty { justify-items: center; text-align: center; margin-inline: auto; }
 }
+
+/* Size choice on the product page: one chip per size, its price underneath. */
+.pinfo-sizes { display: grid; gap: 10px; margin: 26px 0 4px; }
+.pinfo-sizes .eyebrow { margin: 0; }
+.pinfo-sizes .chips { justify-content: flex-start; }
+.size-chip { display: grid; justify-items: center; gap: 6px; min-width: 84px; padding: 12px 14px; }
+.size-chip b { font-weight: 500; letter-spacing: 0.06em; }
+.size-chip small { font-size: var(--fs-xs); opacity: 0.8; font-variant-numeric: tabular-nums; }
+.size-chip.is-out b { text-decoration: line-through; opacity: 0.6; }
+@media (max-width: 1023px) { .pinfo-sizes { justify-items: center; } .pinfo-sizes .chips { justify-content: center; } }

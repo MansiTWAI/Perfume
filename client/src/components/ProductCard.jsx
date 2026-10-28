@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { flyToCart } from '../lib/flyToCart';
 import { renderFor } from '../lib/renders';
+import { sizesOf, fromPrice } from '../lib/sizes';
 import FloatingProduct from './FloatingProduct';
 import Img from './Img';
 
@@ -13,7 +14,8 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
   const mediaRef = useRef(null);
   const [a, b] = product.images || [];
   const render = renderFor(product);
-  const soldOut = product.stock <= 0;
+  const options = sizesOf(product);
+  const soldOut = options ? options.every((s) => s.stock <= 0) : product.stock <= 0;
 
   const add = () => {
     flyToCart(render ? mediaRef.current?.querySelector('.fp-img') : imgRef.current);
@@ -53,13 +55,17 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
       <div className="pcard-body">
         <div className="pcard-title">
           <h3><Link to={`/fragrances/${product.slug}`}>{product.name}</Link></h3>
-          <p>{product.family} · <span dir="ltr">{product.sizeLabel.replace(/ \/ [\d.]+ FL\.OZ\.?/i, '')}</span></p>
+          <p>{product.family} · <span dir="ltr">{options ? t('{n} sizes', { n: options.length }) : product.sizeLabel.replace(/ \/ [\d.]+ FL\.OZ\.?/i, '')}</span></p>
         </div>
         <div className="pcard-buy">
-          <span className="pcard-price">{fmt(priceOf(product))}</span>
-          <button className="pcard-add" disabled={soldOut} onClick={add}>
-            {t(soldOut ? 'Sold out' : 'Add to bag')}
-          </button>
+          <span className="pcard-price">{options && <small className="pcard-from">{t('From')} </small>}{fmt(options ? fromPrice(product, priceOf) : priceOf(product))}</span>
+          {options && !soldOut ? (
+            <Link className="pcard-add" to={`/fragrances/${product.slug}`}>{t('Choose size')}</Link>
+          ) : (
+            <button className="pcard-add" disabled={soldOut} onClick={add}>
+              {t(soldOut ? 'Sold out' : 'Add to bag')}
+            </button>
+          )}
         </div>
       </div>
     </motion.article>

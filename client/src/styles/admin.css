@@ -848,3 +848,8 @@ a.a-tile:hover { background: #faf4ea; }
   .a-int-ladder { grid-template-columns: minmax(0, 1fr); }
   .a-int-acts .a-quiet { margin-left: 0; }
 }
+
+/* Product editor: the table of other sizes. */
+.a-sizes input { width: 100%; min-width: 64px; padding: 7px 8px; border: 1px solid var(--a-line); border-radius: 6px; font: inherit; background: #fff; color: var(--a-ink); }
+.a-sizes td { vertical-align: top; }
+.a-sizes .a-field-error { display: block; margin-top: 4px; font-size: 11px; }

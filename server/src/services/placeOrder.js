@@ -118,10 +118,12 @@ export async function placeOrder({ items = [], customer, regionCode = 'IN', paym
     reserved.push({ p, qty });
   }
 
+  // A fragrance sold in several sizes names the size on the order.
+  const sized = new Set((await Product.find({ sizeOf: { $in: lines.map(({ p }) => p.slug) } }).select('sizeOf').lean()).map((x) => x.sizeOf));
   const orderItems = lines.map(({ p, qty }) => ({
     product: p._id,
     slug: p.slug,
-    name: p.name,
+    name: p.sizeOf || sized.has(p.slug) ? `${p.name} · ${p.sizeMl} ML` : p.name,
     image: p.images?.[0]?.src,
     qty,
     unitPrice: p.price[currency],

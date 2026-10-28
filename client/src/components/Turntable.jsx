@@ -5,6 +5,7 @@ import { useMotionValueEvent } from 'framer-motion';
 import { useStore } from '../context/StoreContext';
 import { flyToCart } from '../lib/flyToCart';
 import { renderFor, renderSrcSet } from '../lib/renders';
+import { sizesOf, fromPrice } from '../lib/sizes';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useSectionProgress } from '../hooks/useSectionProgress';
 import { scrollToY } from './SmoothScroll';
@@ -110,7 +111,10 @@ export default function Turntable({ products }) {
             {noteChips(active).map((name) => <li key={name}>{name}</li>)}
           </ul>
           <div className="tt-buy">
-            <span className="tt-price">{fmt(priceOf(active))}</span>
+            <span className="tt-price">{sizesOf(active) && <small>{t('From')} </small>}{fmt(sizesOf(active) ? fromPrice(active, priceOf) : priceOf(active))}</span>
+            {sizesOf(active) ? (
+              <Link className="tt-add" to={`/fragrances/${active.slug}`}>{t('Choose size')}</Link>
+            ) : (
             <button
               className="tt-add"
               disabled={soldOut}
@@ -122,6 +126,7 @@ export default function Turntable({ products }) {
             >
               {t(soldOut ? 'Sold out' : 'Add to bag')}
             </button>
+            )}
           </div>
         </div>
 

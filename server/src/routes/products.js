@@ -51,6 +51,23 @@ async function byPopularity(products) {
   return [...products].sort((a, b) => (sold.get(b.slug) || 0) - (sold.get(a.slug) || 0));
 }
 
+// Each main product carries its sizes (itself included, smallest first) when
+// it is sold in more than one: { _id, slug, sizeMl, sizeLabel, price, compareAt, stock, published }.
+const SIZE_FIELDS = '_id slug sizeMl sizeLabel price compareAt stock published sizeOf';
+const sizeEntry = (p) => ({ _id: p._id, slug: p.slug, sizeMl: p.sizeMl, sizeLabel: p.sizeLabel, price: p.price, compareAt: p.compareAt, stock: p.stock, published: p.published });
+export async function withSizes(list, { includeHidden = false } = {}) {
+  const docs = list.map((p) => (p.toJSON ? p.toJSON() : p));
+  const mains = docs.filter((p) => !p.sizeOf).map((p) => p.slug);
+  if (!mains.length) return docs;
+  const extra = await Product.find({ sizeOf: { $in: mains }, ...(!includeHidden && { published: true }) }).select(SIZE_FIELDS).lean();
+  if (!extra.length) return docs;
+  return docs.map((p) => {
+    const mine = extra.filter((x) => x.sizeOf === p.slug);
+    if (!mine.length) return p;
+    return { ...p, sizes: [p, ...mine].map(sizeEntry).sort((a, b) => (a.sizeMl || 0) - (b.sizeMl || 0)) };
+  });
+}
+
 const pageParams = (q, fallback = 20) => {
   const limit = Math.min(Math.max(parseInt(q.limit, 10) || fallback, 1), 100);
   const page = Math.max(parseInt(q.page, 10) || 1, 1);
@@ -69,7 +86,7 @@ r.get(
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 100);
       let list = await Product.find(filter).sort(sort);
       if (popular) list = await byPopularity(list);
-      return res.json(limit ? list.slice(0, limit) : list);
+      return res.json(await withSizes(limit ? list.slice(0, limit) : list, { includeHidden }));
     }
     const { limit, page } = pageParams(req.query);
     let list;
@@ -159,14 +176,20 @@ r.get(
   '/:slug',
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const product = await Product.findOne(productKey(req.params.slug));
+    let product = await Product.findOne(productKey(req.params.slug));
+    // A size's address shows its fragrance's page with that size chosen.
+    const selected = product?.sizeOf ? product.slug : undefined;
+    if (selected) product = await Product.findOne({ slug: product.sizeOf });
     if (!product || (!product.published && !isAdminSession(req))) {
       return res.status(404).json({ message: 'This fragrance could not be found.' });
     }
     const related = await Product.find({ published: true, _id: { $ne: product._id } })
       .sort({ sortOrder: 1 })
       .limit(3);
-    if (!req.apiV1) return res.json({ product, related });
+    if (!req.apiV1) {
+      const [main] = await withSizes([product], { includeHidden: isAdminSession(req) });
+      return res.json({ product: main, related: await withSizes(related), ...(selected && { selected }) });
+    }
     const currency = currencyFrom(req.query);
     const rating = (await ratings([product.slug])).get(product.slug);
     res.json({ ...appProduct(product, { currency, rating }), related: await appProducts(related, currency) });
@@ -202,6 +225,10 @@ export const createProduct = asyncHandler(async (req, res) => {
   delete body.warnings;
   const check = priceCheck(body.price);
   if (check.error) return priceFail(res, check.error);
+  if (body.sizeOf) {
+    const main = await Product.findOne({ slug: String(body.sizeOf).toLowerCase() }).select('sizeOf').lean();
+    if (!main || main.sizeOf) return res.status(400).json({ message: 'A size must belong to an existing fragrance.', errors: [{ field: 'sizeOf', message: 'Unknown fragrance' }] });
+  }
   const product = await Product.create(body);
   res.status(201).json({ ...product.toJSON(), warnings: check.warnings });
 });
@@ -213,14 +240,19 @@ export const updateProduct = asyncHandler(async (req, res) => {
   delete body.warnings;
   const check = body.price ? priceCheck(body.price) : { warnings: [] };
   if (check.error) return priceFail(res, check.error);
+  const before = await Product.findById(req.params.id).select('slug').lean();
   const product = await Product.findByIdAndUpdate(req.params.id, body, { new: true, runValidators: true });
   if (!product) return res.status(404).json({ message: 'Product not found.' });
+  // Sizes follow their fragrance to a new web address.
+  if (before && before.slug !== product.slug) await Product.updateMany({ sizeOf: before.slug }, { sizeOf: product.slug });
   res.json({ ...product.toJSON(), warnings: check.warnings });
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {
   const p = await Product.findByIdAndDelete(req.params.id);
   if (!p && req.apiV1) return res.status(404).json({ message: 'Product not found.' });
+  // Deleting a fragrance deletes its other sizes; past orders keep their copy.
+  if (p) await Product.deleteMany({ sizeOf: p.slug });
   res.json({ ok: true });
 });
 

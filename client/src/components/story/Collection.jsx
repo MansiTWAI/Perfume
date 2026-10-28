@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { flyToCart } from '../../lib/flyToCart';
 import { renderFor } from '../../lib/renders';
+import { sizesOf, fromPrice } from '../../lib/sizes';
 import { ChapterOpening } from './Chapter';
 
 const PER_ROW = 4;
@@ -60,7 +61,8 @@ export default function Collection({ products }) {
             );
           }
           const render = renderFor(p);
-          const soldOut = p.stock <= 0;
+          const sizes = sizesOf(p);
+          const soldOut = sizes ? sizes.every((s) => s.stock <= 0) : p.stock <= 0;
           const wide = render && render.w / render.h > 1;
           return (
             <motion.li key={p._id || p.slug} {...reveal(i)} className="group flex min-w-0 flex-col">
@@ -81,7 +83,16 @@ export default function Collection({ products }) {
                 <h3 className="font-display text-[10px] leading-tight tracking-[0.04em] sm:text-base md:text-xl md:tracking-[0.08em] lg:text-2xl"><Link to={`/fragrances/${p.slug}`}>{p.name}</Link></h3>
                 <p className="mt-1 hidden text-xs text-mute sm:block md:text-sm">{p.family || p.subtitle}</p>
                 <div className="mt-auto flex flex-col items-center justify-center gap-1.5 pt-1.5 sm:gap-2 sm:pt-4 lg:flex-row lg:gap-4">
-                  <span className="font-display text-[11px] sm:text-base md:text-lg lg:text-xl">{fmt(priceOf(p))}</span>
+                  <span className="font-display text-[11px] sm:text-base md:text-lg lg:text-xl">{sizes && <small className="font-body text-[0.7em] text-mute">{t('From')} </small>}{fmt(sizes ? fromPrice(p, priceOf) : priceOf(p))}</span>
+                  {sizes && !soldOut ? (
+                    <Link
+                      to={`/fragrances/${p.slug}`}
+                      className="rounded-full bg-gold-soft px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-onyx transition hover:bg-champagne sm:px-4 sm:py-2 sm:text-[10px] sm:tracking-[0.2em] lg:px-5 lg:py-2.5 lg:text-[11px]"
+                      aria-label={t('Choose a size of {name}', { name: p.name })}
+                    >
+                      {t('Sizes')}
+                    </Link>
+                  ) : (
                   <button
                     className="rounded-full bg-gold-soft px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-onyx transition hover:bg-champagne disabled:opacity-50 sm:px-4 sm:py-2 sm:text-[10px] sm:tracking-[0.2em] lg:px-5 lg:py-2.5 lg:text-[11px]"
                     disabled={soldOut}
@@ -94,6 +105,7 @@ export default function Collection({ products }) {
                   >
                     + {t(soldOut ? 'Sold out' : 'Bag')}
                   </button>
+                  )}
                 </div>
               </div>
             </motion.li>

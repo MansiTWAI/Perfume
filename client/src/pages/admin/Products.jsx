@@ -7,6 +7,7 @@ import { clearApiCache } from '../../hooks/useApi';
 import { CsvInput, ImageField, PhotoGallery, RowList } from './Fields';
 import Icon from '../../components/Icon';
 import { confirm, EmptyState, LoadError } from './ui';
+import { sizesOf } from '../../lib/sizes';
 
 // Rupees per dirham. The shop prices the UAE a little above the exchange rate
 // on purpose (₹1,250 / AED 100), so only clear outliers are flagged; the
@@ -19,6 +20,11 @@ export function aedHint(inr, aed) {
   if (rate < 5 || rate > 80) return `This will not save: AED ${aed} cannot be right for ₹${inr} (about AED ${Math.round(inr / AED_RATE)}). Check each price is in its own box.`;
   return `AED ${aed} is unusually ${rate < 9 ? 'high' : 'low'} for ₹${inr}. Check both prices.`;
 }
+
+// Editable rows for a fragrance's other sizes (its own size is the product itself).
+const sizeRows = (p) => (sizesOf(p) || []).filter((s) => s.slug !== p.slug).map((s) => ({
+  _id: s._id, sizeMl: s.sizeMl ?? '', sizeLabel: s.sizeLabel || '', inr: s.price?.INR ?? '', aed: s.price?.AED ?? '', stock: s.stock ?? '',
+}));
 
 const stockState = (p) => (p.stock <= 0 ? ['Out of stock', 'bad'] : p.stock <= 5 ? [`Low · ${p.stock} left`, 'warn'] : [`${p.stock} in stock`, '']);
 
@@ -94,13 +100,15 @@ export function ProductList() {
             <thead><tr><th /><th>Name</th><th>Price</th><th>Stock</th><th>Notes</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {shown.map((p) => {
-                const [stockLabel, tone] = stockState(p);
+                const sizes = sizesOf(p);
+                const [stockLabel, tone] = stockState(sizes ? { stock: sizes.reduce((n, s) => n + (s.stock || 0), 0) } : p);
                 const hint = aedHint(p.price?.INR, p.price?.AED);
+                const lowest = sizes && Math.min(...sizes.map((s) => s.price?.INR || Infinity));
                 return (
                   <tr key={p._id}>
                     <td>{p.images?.[0]?.src ? <img src={p.images[0].src} alt="" className="a-thumb" /> : <span className="a-thumb a-thumb-empty" aria-hidden="true" />}</td>
                     <td><Link to={`/admin/products/${p._id}`} className="a-row-link">{p.name}</Link><small>/fragrances/{p.slug}</small></td>
-                    <td>{money(p.price?.INR, 'INR')}<br /><small>{p.price?.AED ? money(p.price.AED, 'AED') : 'No AED price'}</small>{hint && <><br /><small className="a-warn" title={hint}>Check AED price</small></>}</td>
+                    <td>{sizes ? <>From {money(lowest, 'INR')}<br /><small>{sizes.length} sizes: {sizes.map((s) => `${s.sizeMl} ml`).join(', ')}</small></> : <>{money(p.price?.INR, 'INR')}<br /><small>{p.price?.AED ? money(p.price.AED, 'AED') : 'No AED price'}</small></>}{hint && <><br /><small className="a-warn" title={hint}>Check AED price</small></>}</td>
                     <td><span className={`a-pill ${tone}`}>{stockLabel}</span></td>
                     <td>{p.notes?.top?.length ? (p.notes.approved ? <span className="a-pill ok">Approved</span> : <span className="a-pill warn">Awaiting approval</span>) : '—'}</td>
                     <td>{!p.published ? <span className="a-pill off">Hidden</span> : p.stock <= 0 ? <span className="a-pill warn" title="Shown in the store as Sold out; it cannot be ordered until restocked">Live · Sold out</span> : <span className="a-pill ok">Live</span>}</td>
@@ -136,14 +144,25 @@ export function ProductEdit() {
   const [p, setP] = useState(isNew ? EMPTY : null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Other sizes of this fragrance: { _id?, sizeMl, sizeLabel, inr, aed, stock }.
+  const [extra, setExtra] = useState([]);
+  const [removed, setRemoved] = useState([]);
 
   // Reset whenever the address changes, so "New product" never inherits the
   // product that was open before.
   useEffect(() => {
     setConfirmDelete(false);
-    if (isNew) return setP(EMPTY);
+    setRemoved([]);
+    if (isNew) {
+      setExtra([]);
+      return setP(EMPTY);
+    }
     setP(null);
-    api('/products?all=1').then((all) => setP({ ...EMPTY, ...all.find((x) => x._id === id) }));
+    api('/products?all=1').then((all) => {
+      const found = all.find((x) => x._id === id);
+      setExtra(sizeRows(found));
+      setP({ ...EMPTY, ...found });
+    });
   }, [id, isNew]);
 
   if (!p) return <p>Loading…</p>;
@@ -168,15 +187,52 @@ export function ProductEdit() {
     const body = { ...p, images: (p.images || []).map((img, i) => ({ ...img, alt: img.alt || `${p.name}${i ? `, photo ${i + 1}` : ''}` })) };
     try {
       const saved = await api(isNew ? '/products' : `/products/${id}`, { method: isNew ? 'POST' : 'PUT', body });
+      const sizeProblem = await saveSizes(saved, body);
       clearApiCache();
-      toast(saved.warnings?.length ? `Saved. ${saved.warnings[0]}` : 'Product saved', saved.warnings?.length ? 'warn' : undefined);
+      const warning = sizeProblem || saved.warnings?.[0];
+      toast(warning ? `Saved. ${warning}` : 'Product saved', warning ? 'warn' : undefined);
       if (isNew) navigate(`/admin/products/${saved._id}`, { replace: true });
-      else setP({ ...EMPTY, ...saved, warnings: undefined });
+      else {
+        const fresh = (await api('/products?all=1')).find((x) => x._id === saved._id);
+        setExtra(sizeRows(fresh));
+        setRemoved([]);
+        setP({ ...EMPTY, ...(fresh || saved), warnings: undefined });
+      }
     } catch (err) {
       toast(/duplicate|E11000|slug/i.test(err.message) ? 'A product with this name already exists. Change the name, or the web address under More details.' : err.message, 'warn');
     } finally {
       setBusy(false);
     }
+  }
+
+  // Each other size is a product of its own that shares this fragrance's
+  // name, photos and story; only its size, price and stock differ.
+  async function saveSizes(saved, body) {
+    const shared = {
+      name: saved.name, subtitle: saved.subtitle, tagline: saved.tagline, family: saved.family, description: saved.description,
+      story: saved.story, images: body.images, notes: saved.notes, theme: saved.theme, category: saved.category,
+      gender: saved.gender, published: saved.published, ar: saved.ar, sizeOf: saved.slug,
+    };
+    const problems = [];
+    for (const r of extra) {
+      const ml = Number(r.sizeMl);
+      if (!(ml > 0) || !(Number(r.inr) > 0)) {
+        problems.push(`a size without ${ml > 0 ? 'a ₹ price' : 'its ml'} was not saved`);
+        continue;
+      }
+      const one = {
+        ...shared, sizeMl: ml, sizeLabel: r.sizeLabel?.trim() || `${ml} ML`,
+        price: { INR: Number(r.inr), AED: Number(r.aed) || 0 }, stock: Math.max(0, Number(r.stock) || 0),
+      };
+      try {
+        if (r._id) await api(`/products/${r._id}`, { method: 'PUT', body: one });
+        else await api('/products', { method: 'POST', body: { ...one, slug: `${saved.slug}-${ml}ml` } });
+      } catch (err) {
+        problems.push(`${ml} ml: ${/duplicate|E11000/i.test(err.message) ? 'that size already exists' : err.message}`);
+      }
+    }
+    for (const rid of removed) await api(`/products/${rid}`, { method: 'DELETE' }).catch(() => problems.push('a removed size could not be deleted'));
+    return problems.length ? `Sizes: ${problems.join('; ')}.` : '';
   }
 
   async function remove() {
@@ -216,9 +272,40 @@ export function ProductEdit() {
             </div>
             <div className="a-grid2">
               <label>Fragrance family<input value={p.family} onChange={(e) => set('family', e.target.value)} placeholder="e.g. Oriental Woody Oud" /></label>
-              <label>Size<input value={p.sizeLabel} onChange={(e) => set('sizeLabel', e.target.value)} /></label>
+              <div className="a-grid2">
+                <label>Size (ml)<input type="number" min="1" value={p.sizeMl || ''} onChange={(e) => set('sizeMl', +e.target.value)} /></label>
+                <label>Size label<input value={p.sizeLabel} onChange={(e) => set('sizeLabel', e.target.value)} /></label>
+              </div>
             </div>
             <label>Short description<textarea rows="3" value={p.description} onChange={(e) => set('description', e.target.value)} placeholder="Two or three sentences shown on the product page." /></label>
+          </section>
+
+          <section className="a-panel a-form">
+            <h2>Other sizes</h2>
+            <p className="a-muted a-hint">The price and stock above are for the {p.sizeMl || '…'} ml bottle. Add each other size customers can choose on the product page; each has its own price and stock.</p>
+            {extra.length > 0 && (
+              <div className="a-table-wrap"><table className="a-table a-sizes">
+                <thead><tr><th>Size (ml)</th><th>Label</th><th>Price ₹</th><th>Price AED</th><th>Stock</th><th><span className="sr-only">Remove</span></th></tr></thead>
+                <tbody>
+                  {extra.map((r, i) => {
+                    const edit = (k) => (e) => setExtra((rows) => rows.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
+                    const hint = aedHint(Number(r.inr), Number(r.aed));
+                    return (
+                      <tr key={r._id || `new-${i}`}>
+                        <td><input type="number" min="1" value={r.sizeMl} onChange={edit('sizeMl')} aria-label="Size in ml" /></td>
+                        <td><input value={r.sizeLabel} onChange={edit('sizeLabel')} placeholder={r.sizeMl ? `${r.sizeMl} ML` : 'e.g. 10 ML'} aria-label="Size label" /></td>
+                        <td><input type="number" min="0" value={r.inr} onChange={edit('inr')} aria-label="Price in rupees" /></td>
+                        <td><input type="number" min="0" value={r.aed} onChange={edit('aed')} aria-label="Price in dirhams" aria-invalid={!!hint} title={hint || undefined} />{hint && <small className="a-field-error">{hint}</small>}</td>
+                        <td><input type="number" min="0" value={r.stock} onChange={edit('stock')} aria-label="Stock" /></td>
+                        <td><button type="button" className="a-btn a-quiet a-danger-text" onClick={() => { if (r._id) setRemoved((x) => [...x, r._id]); setExtra((rows) => rows.filter((_, j) => j !== i)); }} aria-label={`Remove ${r.sizeMl || 'this'} ml`}><Icon name="trash" size={16} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table></div>
+            )}
+            <div><button type="button" className="a-btn" onClick={() => setExtra((rows) => [...rows, { sizeMl: '', sizeLabel: '', inr: '', aed: '', stock: '' }])}><Icon name="plus" size={16} /> Add a size</button></div>
+            {removed.length > 0 && <p className="a-muted a-hint">Removed sizes are deleted when you save.</p>}
           </section>
 
           <section className="a-panel a-form">

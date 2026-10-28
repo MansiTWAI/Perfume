@@ -16,6 +16,10 @@ const productSchema = new mongoose.Schema(
     story: String,
     sizeMl: { type: Number, default: 100 },
     sizeLabel: { type: String, default: '100 ML / 3.4 FL.OZ.' },
+    // Another size of a fragrance: the slug of its main product. A size is a
+    // product of its own (price, stock, cart, orders), shown on the main
+    // product's page as a size choice and never listed on its own.
+    sizeOf: { type: String, lowercase: true, trim: true, default: '' },
     price: { INR: { type: Number, required: true }, AED: { type: Number, required: true } },
     compareAt: { INR: Number, AED: Number },
     stock: { type: Number, default: 0, min: 0 },
@@ -60,5 +64,16 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+productSchema.index({ sizeOf: 1 });
+
+// Listings show main products only. A query that names sizeOf, a slug or an
+// id (the bag, the checkout, orders) still finds sizes.
+const NAMED = ['sizeOf', 'slug', '_id'];
+function mainsOnly() {
+  const q = this.getQuery();
+  if (!NAMED.some((k) => k in q) && !q.$or?.some((c) => NAMED.some((k) => k in c))) this.where({ sizeOf: { $in: ['', null] } });
+}
+productSchema.pre('find', mainsOnly);
+productSchema.pre('countDocuments', mainsOnly);
 
 export default mongoose.model('Product', productSchema);

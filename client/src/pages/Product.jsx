@@ -12,6 +12,7 @@ import FloatingProduct from '../components/FloatingProduct';
 import { renderFor } from '../lib/renders';
 import { useProduct } from '../hooks/useProducts';
 import { useApi } from '../hooks/useApi';
+import { sizesOf, asSize, chosenSize } from '../lib/sizes';
 import Reviews, { RatingSummary } from '../components/Reviews';
 import { useSolidHeader } from '../hooks/useSolidHeader';
 import { useStore } from '../context/StoreContext';
@@ -104,6 +105,7 @@ export default function Product() {
   const { data: reviews } = useApi(`/reviews/product/${slug}`);
   const { region, addToCart, toast, priceOf, fmt, t } = useStore();
   const [qty, setQty] = useState(1);
+  const [sizeSlug, setSizeSlug] = useState(null);
   // Two fragrances viewed counts as interest for the WhatsApp reminder.
   const buyRef = useRef(null);
   const mainImg = useRef(null);
@@ -111,6 +113,8 @@ export default function Product() {
   useSolidHeader(data?.product?.theme === 'ivory');
 
   useEffect(() => setQty(1), [slug]);
+  // A size's own address (e.g. from the bag) opens with that size chosen.
+  useEffect(() => setSizeSlug(data?.selected || null), [slug, data?.selected]);
 
   useEffect(() => {
     const el = buyRef.current;
@@ -134,7 +138,9 @@ export default function Product() {
   if (loading && !data) return <div className="page-pad"><Loading /></div>;
   if (error?.status === 404) return <NotFound />;
   if (!data) return null;
-  const { product: p, related } = data;
+  const { product: main, related } = data;
+  const sizes = sizesOf(main);
+  const p = asSize(main, chosenSize(main, sizeSlug));
   const price = priceOf(p);
   const soldOut = p.stock <= 0;
   const rule = region.ships ? region.shipping : null;
@@ -143,7 +149,7 @@ export default function Product() {
   const add = (source) => {
     flyToCart(source || mainImg.current || document.querySelector('.pgallery .fp-img'));
     addToCart(p, qty);
-    toast(t('{name} added to your bag', { name: p.name }));
+    toast(t('{name} added to your bag', { name: sizes ? `${p.name} ${p.sizeMl} ML` : p.name }));
   };
   const buyNow = () => {
     addToCart(p, qty);
@@ -188,15 +194,15 @@ export default function Product() {
         description={p.seo?.description || p.description}
         image={p.images?.[0]?.src}
         type="product"
-        jsonLd={[ld, breadcrumbLd([['Home', '/'], ['Fragrances', '/fragrances'], [p.name, `/fragrances/${p.slug}`]])]}
+        jsonLd={[ld, breadcrumbLd([['Home', '/'], ['Fragrances', '/fragrances'], [main.name, `/fragrances/${main.slug}`]])]}
       />
       <section className="product-top">
         <div className="container">
           <nav className="crumbs" aria-label="Breadcrumb">
-            <Link to="/">{t('Home')}</Link><span aria-hidden="true">/</span><Link to="/fragrances">{t('Fragrances')}</Link><span aria-hidden="true">/</span><span aria-current="page">{p.name}</span>
+            <Link to="/">{t('Home')}</Link><span aria-hidden="true">/</span><Link to="/fragrances">{t('Fragrances')}</Link><span aria-hidden="true">/</span><span aria-current="page">{main.name}</span>
           </nav>
           <div className="product-main">
-            <Gallery product={p} mainRef={mainImg} />
+            <Gallery product={main} mainRef={mainImg} />
             <div className="pinfo">
               <p className="eyebrow">{p.family}</p>
               <SplitHeading as="h1" text={p.name} className="pinfo-name" />
@@ -211,6 +217,28 @@ export default function Product() {
                   <div><dt>{t('Heart')}</dt><dd>{noteLine('heart')}</dd></div>
                   <div><dt>{t('Base')}</dt><dd>{noteLine('base')}</dd></div>
                 </dl>
+              )}
+
+              {sizes && (
+                <div className="pinfo-sizes">
+                  <p className="eyebrow" id="size-label">{t('Size')}</p>
+                  <div className="chips" role="radiogroup" aria-labelledby="size-label">
+                    {sizes.map((s) => (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        role="radio"
+                        aria-checked={s.slug === p.slug}
+                        aria-pressed={s.slug === p.slug}
+                        className={`chip size-chip ${s.stock <= 0 ? 'is-out' : ''}`}
+                        onClick={() => setSizeSlug(s.slug)}
+                      >
+                        <b dir="ltr">{s.sizeMl} ML</b>
+                        <small>{s.stock <= 0 ? t('Sold out') : fmt(priceOf(s))}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <div className="pinfo-price">
@@ -280,7 +308,7 @@ export default function Product() {
           </Reveal>
           <div className="product-story-text">
             <Reveal><p className="eyebrow">{t('The story')}</p></Reveal>
-            <SplitHeading text={p.tagline.split(' · ').join(t(', '))} className="display-l product-story-title" />
+            <SplitHeading text={(p.tagline || p.name).split(' · ').join(t(', '))} className="display-l product-story-title" />
             <Reveal delay={0.1}><p className="story-p">{p.story}</p></Reveal>
             {p.occasions?.length > 0 && (
               <Reveal delay={0.2} className="story-occasions">

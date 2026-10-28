@@ -6,6 +6,7 @@ import { useStore } from '../context/StoreContext';
 import { useProducts } from '../hooks/useProducts';
 import { api } from '../lib/api';
 import { stopScroll } from './SmoothScroll';
+import { sizesOf, fromPrice } from '../lib/sizes';
 
 const SUGGESTIONS = ['Oud', 'Saffron', 'Jasmine', 'Gift', 'Evening'];
 
@@ -104,7 +105,7 @@ export default function SearchOverlay() {
                           <Link to={`/fragrances/${p.slug}`} onClick={close} className="search-product">
                             <Thumb src={p.images?.[0]?.src} width={64} height={84} />
                             <span><b>{p.name}</b><small>{why}</small></span>
-                            <span className="search-price">{fmt(priceOf(p))}</span>
+                            <span className="search-price">{sizesOf(p) && <small>{t('From')} </small>}{fmt(sizesOf(p) ? fromPrice(p, priceOf) : priceOf(p))}</span>
                           </Link>
                         </li>
                       ))}

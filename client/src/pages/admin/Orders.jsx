@@ -8,6 +8,7 @@ import { ImportModal } from './OrderExcel';
 import { OrderRow, STAGES, CANCEL_REASONS } from './OrderDetail';
 import { confirm, EmptyState, LoadError } from './ui';
 import Icon from '../../components/Icon';
+import { sizesOf, asSize } from '../../lib/sizes';
 import { INDIAN_STATES, foreignPlace } from '../../../../shared/india.js';
 
 const PAYMENT_LABEL = { cod: 'Cash on delivery', 'pay-on-confirmation': 'Pay on confirmation' };
@@ -20,7 +21,8 @@ function AddOrderModal({ products, onClose, onCreated }) {
   const [region, setRegion] = useState(markets[0]?.code || 'IN');
   const market = markets.find((r) => r.code === region) || markets[0];
   const [c, setC] = useState({ name: '', email: '', phone: '', line1: '', line2: '', city: '', state: '', postalCode: '' });
-  const live = products.filter((p) => p.published);
+  // Each size of a fragrance is its own line to choose, named with its size.
+  const live = products.filter((p) => p.published).flatMap((p) => (sizesOf(p) ? sizesOf(p).filter((s) => s.published !== false).map((s) => ({ ...asSize(p, s), name: `${p.name} · ${s.sizeMl} ML` })) : [p]));
   const [items, setItems] = useState([{ slug: live[0]?.slug || '', qty: 1 }]);
   const [paymentMethod, setPaymentMethod] = useState(market?.payments?.[0]);
   const [paymentStatus, setPaymentStatus] = useState('pending');

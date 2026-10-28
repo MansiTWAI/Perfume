@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, getToken, setToken } from '../lib/api';
 import { LANGS, translate } from '../lib/i18n';
 import { money } from '../lib/format';
+import { bySlug } from '../lib/sizes';
 
 const StoreContext = createContext(null);
 
@@ -154,7 +155,7 @@ export function StoreProvider({ children }) {
   // Re-reads today's prices for the bag (after the checkout reports a price
   // change). Fragrances no longer on sale leave the bag.
   const refreshCart = useCallback(async () => {
-    const products = new Map((await api('/products')).map((p) => [p.slug, p]));
+    const products = bySlug(await api('/products')); // sizes included
     setCart((c) =>
       c.filter((i) => products.has(i.slug)).map((i) => {
         const p = products.get(i.slug);
@@ -190,7 +191,7 @@ export function StoreProvider({ children }) {
         const merged = new Map(saved.items.map((i) => [i.slug, i.qty]));
         for (const i of local) merged.set(i.slug, Math.min(10, Math.max(merged.get(i.slug) || 0, i.qty)));
         const next = await api('/cart', { method: 'PUT', body: { items: [...merged].map(([slug, qty]) => ({ slug, qty })) } });
-        const products = new Map((await api('/products')).map((p) => [p.slug, p]));
+        const products = bySlug(await api('/products')); // sizes included
         if (stale) return;
         setCart(
           next.items
