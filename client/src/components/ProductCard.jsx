@@ -53,7 +53,7 @@ export default function ProductCard({ product, index = 0, className = '', sizes 
       <div className="pcard-body">
         <div className="pcard-title">
           <h3><Link to={`/fragrances/${product.slug}`}>{product.name}</Link></h3>
-          <p>{product.family} · <span dir="ltr">{product.sizeLabel.replace(' / 3.4 FL.OZ.', '')}</span></p>
+          <p>{product.family} · <span dir="ltr">{product.sizeLabel.replace(/ \/ [\d.]+ FL\.OZ\.?/i, '')}</span></p>
         </div>
         <div className="pcard-buy">
           <span className="pcard-price">{fmt(priceOf(product))}</span>

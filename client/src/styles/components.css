@@ -127,6 +127,28 @@
 
 /* ============ Product card ============ */
 .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: clamp(40px, 4vw, 64px) clamp(24px, 3vw, 48px); }
+/* Shop page: four to a row, a short row centred; new perfumes get their own row. */
+.collection-rows { display: grid; gap: clamp(40px, 4vw, 64px); }
+.collection-grid { --cols: 4; --gx: clamp(16px, 2.2vw, 32px); display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(40px, 4vw, 64px) var(--gx); }
+.collection-grid > .pcard { flex: 0 0 calc((100% - (var(--cols) - 1) * var(--gx)) / var(--cols)); min-width: 0; }
+.collection-grid .pcard-media { aspect-ratio: 4 / 5; }
+.collection-grid .pcard-body { flex-direction: column; flex-wrap: nowrap; gap: 14px; }
+.collection-grid .pcard-title h3 { font-size: clamp(18px, 1.5vw, 24px); }
+.collection-grid .pcard-buy { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
+.collection-grid .pcard-price { font-size: clamp(18px, 1.6vw, 24px); }
+/* Cards centre their text below 1024px (pages.css); the price follows. */
+@media (max-width: 1023px) { .collection-grid .pcard-buy { flex-direction: column; justify-content: center; gap: 2px; } }
+@media (max-width: 900px) { .collection-grid { --cols: 2; } }
+@media (max-width: 560px) {
+  .collection-grid { --gx: 14px; row-gap: 36px; }
+  .collection-grid .pcard { gap: 14px; }
+  .collection-grid .pcard-body { gap: 8px; }
+  .collection-grid .pcard-title h3 { font-size: 16px; letter-spacing: 0.03em; }
+  .collection-grid .pcard-title p { margin-top: 4px; font-size: 12px; }
+  .collection-grid .pcard-price { font-size: 18px; }
+  .collection-grid .pcard-badge { top: 10px; inset-inline-start: 10px; font-size: 9px; }
+}
+@media (max-width: 340px) { .collection-grid { --cols: 1; } }
 .pcard { display: grid; gap: 22px; align-content: start; }
 .pcard-media { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; background: var(--umber); }
 .pcard-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 62%; transition: transform 1.8s var(--ease), opacity 1s var(--ease); }
