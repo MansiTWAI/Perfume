@@ -55,7 +55,7 @@ export default function Collection() {
             <div className="collection-rows">
               {rows.map((row, r) => (
                 <div className="collection-grid" key={r}>
-                  {row.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} sizes="(max-width: 340px) 92vw, (max-width: 900px) 46vw, 24vw" />)}
+                  {row.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} sizes="24vw" />)}
                 </div>
               ))}
             </div>
