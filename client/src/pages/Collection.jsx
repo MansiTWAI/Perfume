@@ -21,10 +21,6 @@ export default function Collection() {
   // Family names change with the language; an unknown one means All.
   const family = families.includes(picked) ? picked : 'All';
   const list = (products || []).filter((p) => family === 'All' || p.family === family);
-  // Perfumes marked "New" in Admin > Products start their own row under the
-  // rest; each row holds up to four, centred when it has fewer.
-  const isNew = (p) => /^new$/i.test(p.badge || '');
-  const rows = [list.filter((p) => !isNew(p)), list.filter(isNew)].filter((r) => r.length);
 
   return (
     <>
@@ -52,12 +48,8 @@ export default function Collection() {
             <button className="text-link" onClick={() => setFinderOpen(true)}>{t('Not sure? Take the four-question guide')}</button>
           </div>
           {loading ? <Loading /> : (
-            <div className="collection-rows">
-              {rows.map((row, r) => (
-                <div className="collection-grid" key={r}>
-                  {row.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} sizes="24vw" />)}
-                </div>
-              ))}
+            <div className="product-grid">
+              {list.map((p, i) => <ProductCard key={p._id || p.slug} product={p} index={i} />)}
             </div>
           )}
           {/* The next fragrance, announced by name only: no notes, price or
