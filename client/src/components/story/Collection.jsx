@@ -15,12 +15,16 @@ const STAGE = {
   elarisse: 'bg-[radial-gradient(70%_60%_at_50%_45%,#fffaf0,#e8dcc4)]',
   zafreon: 'bg-[radial-gradient(70%_60%_at_50%_45%,#3a2520,#120c0a)]',
   'signature-duo': 'bg-[radial-gradient(70%_60%_at_50%_45%,#6a1a22,#2b080c)]',
+  'after-dark': 'bg-[radial-gradient(70%_60%_at_50%_45%,#4a2a6e,#140b22)]',
+  'sovereign-musk': 'bg-[radial-gradient(70%_60%_at_50%_45%,#7a4a1c,#1e1007)]',
+  'mukhallat-al-zayer': 'bg-[radial-gradient(70%_60%_at_50%_45%,#17493a,#07160f)]',
+  'blue-dive': 'bg-[radial-gradient(70%_60%_at_50%_45%,#1d4f9a,#08142b)]',
 };
 const DEFAULT_STAGE = 'bg-[radial-gradient(70%_60%_at_50%_45%,#2a1e19,#0d0a09)]';
 
-// Right after the hero: every fragrance, four to a row on every screen.
-// Perfumes marked "New" start their own row; the four-question guide card
-// fills the gap at the end of the row before them.
+// Right after the hero: every fragrance, four to a row on every screen and
+// a shorter row centred. Perfumes marked "New" start their own row; the
+// four-question guide closes the section after every fragrance.
 export default function Collection({ products }) {
   const { priceOf, fmt, addToCart, toast, t, setFinderOpen } = useStore();
   const all = [...products]
@@ -29,8 +33,10 @@ export default function Collection({ products }) {
   const first = all.filter((p) => !isNew(p));
   const fresh = all.filter(isNew);
   if (!all.length) return null;
-  const showGuide = first.length % PER_ROW !== 0 || !first.length;
-  const items = [...first.map((p) => ({ p })), ...(showGuide ? [{ guide: true }] : []), ...fresh.map((p) => ({ p }))];
+  const breakRow = first.length % PER_ROW !== 0 && fresh.length > 0;
+  const items = [...first.map((p) => ({ p })), ...(breakRow ? [{ rowBreak: true }] : []), ...fresh.map((p) => ({ p })), { guide: true }];
+  // A card's width: a quarter of the row, less its share of the gaps.
+  const quarter = 'shrink-0 grow-0 basis-[calc((100%-1.5rem)/4)] sm:basis-[calc((100%-3rem)/4)] md:basis-[calc((100%-3.75rem)/4)]';
 
   const reveal = (i) => ({
     initial: { opacity: 0, y: 40 },
@@ -45,17 +51,20 @@ export default function Collection({ products }) {
         <p className="mt-4 max-w-md text-mute">{t('Every fragrance the house makes, side by side. Choose one, or let us help.')}</p>
       </ChapterOpening>
 
-      {/* Four columns on every screen; text and buttons shrink with the card. */}
-      <ul className="mx-auto mt-10 grid max-w-[calc(var(--max)_-_2*var(--gutter))] list-none grid-cols-4 gap-x-2 gap-y-8 sm:mt-14 sm:gap-x-4 sm:gap-y-12 md:gap-x-5">
-        {items.map(({ p, guide }, i) => {
+      {/* Four to a row on every screen; text and buttons shrink with the card. */}
+      <ul className="mx-auto mt-10 flex max-w-[calc(var(--max)_-_2*var(--gutter))] list-none flex-wrap justify-center gap-x-2 gap-y-8 sm:mt-14 sm:gap-x-4 sm:gap-y-12 md:gap-x-5">
+        {items.map(({ p, guide, rowBreak }, i) => {
+          if (rowBreak) return <li key="row-break" className="h-0 basis-full" aria-hidden="true" />;
           if (guide) {
             return (
-              <motion.li key="guide" {...reveal(i)}>
-                <button className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-1 rounded-arch bg-[radial-gradient(80%_70%_at_50%_30%,#5a1520,#2b080c)] p-2 text-center sm:gap-3 sm:p-6 lg:gap-4 lg:p-8" onClick={() => setFinderOpen(true)}>
-                  <span className="text-sm text-gold-soft sm:text-xl lg:text-2xl" aria-hidden="true">✦</span>
-                  <span className="font-display text-[11px] leading-tight sm:text-xl lg:text-3xl">{t('Not sure which one?')}</span>
-                  <span className="hidden text-sm text-ivory/80 md:block">{t('Answer four questions and we will match your scent.')}</span>
-                  <span className="text-[8px] uppercase tracking-[0.18em] text-gold-soft sm:text-[10px] lg:text-[11px] lg:tracking-[0.22em]">{t('Take the guide')}</span>
+              <motion.li key="guide" {...reveal(i)} className="basis-full">
+                <button className="flex w-full flex-col items-center justify-center gap-2 rounded-[999px_999px_28px_28px] bg-[radial-gradient(80%_120%_at_50%_0%,#5a1520,#2b080c)] px-6 py-8 text-center sm:flex-row sm:gap-6 sm:rounded-full sm:px-10 sm:py-7 sm:text-start" onClick={() => setFinderOpen(true)}>
+                  <span className="text-xl text-gold-soft sm:text-2xl" aria-hidden="true">✦</span>
+                  <span className="grid gap-1">
+                    <span className="font-display text-xl leading-tight sm:text-2xl lg:text-3xl">{t('Not sure which one?')}</span>
+                    <span className="text-xs text-ivory/80 sm:text-sm">{t('Answer four questions and we will match your scent.')}</span>
+                  </span>
+                  <span className="rounded-full border border-gold-soft/60 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-gold-soft sm:ms-auto sm:text-[11px]">{t('Take the guide')}</span>
                 </button>
               </motion.li>
             );
@@ -65,7 +74,7 @@ export default function Collection({ products }) {
           const soldOut = sizes ? sizes.every((s) => s.stock <= 0) : p.stock <= 0;
           const wide = render && render.w / render.h > 1;
           return (
-            <motion.li key={p._id || p.slug} {...reveal(i)} className="group flex min-w-0 flex-col">
+            <motion.li key={p._id || p.slug} {...reveal(i)} className={`group flex min-w-0 flex-col ${quarter}`}>
               <Link to={`/fragrances/${p.slug}`} className={`relative grid aspect-[3/4] items-end justify-items-center overflow-hidden rounded-arch ${STAGE[p.slug] || DEFAULT_STAGE}`} aria-label={p.name}>
                 {(p.badge || soldOut) && (
                   <span className="absolute left-1/2 top-[6%] z-[1] -translate-x-1/2 whitespace-nowrap rounded-full bg-onyx/70 px-1.5 py-0.5 text-[7px] uppercase tracking-[0.12em] text-gold-soft sm:px-3 sm:py-1 sm:text-[10px] sm:tracking-[0.2em]">{t(soldOut ? 'Sold out' : p.badge)}</span>
@@ -74,7 +83,7 @@ export default function Collection({ products }) {
                   src={render ? render.sm || render.src : p.images[0].src}
                   alt=""
                   loading="lazy"
-                  className={`${render ? (wide ? 'mb-[12%] w-[86%]' : 'mb-[6%] h-[74%] w-auto') : 'h-full w-full object-cover object-[64%_50%]'} transition duration-700 ease-out group-hover:-translate-y-2`}
+                  className={`${render ? `absolute left-1/2 -translate-x-1/2 ${wide ? 'bottom-[12%] w-[86%]' : 'bottom-[6%] h-[74%] w-auto max-w-[86%] object-contain'}` : 'h-full w-full object-cover object-[64%_50%]'} transition duration-700 ease-out group-hover:-translate-y-2`}
                 />
               </Link>
               {/* Price and Bag sit at the bottom, so they line up across a row
