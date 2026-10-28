@@ -131,7 +131,7 @@ export default function Admin() {
     <div className="admin">
       <Helmet><title>Admin studio | AL BARAKAH LIFESTYLE</title><meta name="robots" content="noindex" /></Helmet>
       <aside className="a-side">
-        <Link to="/admin" className="a-brand"><img src="/media/calligraphy.webp" alt="" width="56" /> <span>Studio</span></Link>
+        <Link to="/admin" className="a-brand" aria-label="Studio home"><img src="/media/calligraphy.webp" alt="" width="56" /> <span>Studio</span></Link>
         <nav ref={nav} aria-label="Studio">
           {NAV.map(([group, links]) => (
             <div key={group} className="a-nav-group" role="group" aria-label={group}>

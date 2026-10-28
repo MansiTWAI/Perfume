@@ -259,7 +259,7 @@ export default function Leads() {
       <div className={`a-leads-grid ${open ? 'has-detail' : ''}`}>
         <section className="a-panel">
           <div className="a-filters">
-            <input type="search" placeholder="Search name, email, phone, product…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
+            <input type="search" aria-label="Search leads" placeholder="Search name, email, phone, product…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
             <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Status">
               <option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>

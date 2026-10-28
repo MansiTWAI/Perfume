@@ -73,7 +73,7 @@ function Ingredients({ products }) {
                     list: productsWith(products, ing.key).map((p, k, arr) => (
                       <span key={p.slug}>
                         <Link to={`/fragrances/${p.slug}`}>{p.name}</Link>
-                        {k < arr.length - 1 ? t(' and ') : ''}
+                        {k < arr.length - 2 ? t(', ') : k === arr.length - 2 ? t(' and ') : ''}
                       </span>
                     )),
                   })}

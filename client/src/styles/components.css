@@ -5,7 +5,7 @@
 .tt-track { position: relative; }
 /* The hero's copy and controls line up with the page container on wide screens. */
 .tt, .dn { --edge: max(var(--gutter), calc((100% - var(--max)) / 2 + var(--gutter))); }
-.tt { position: sticky; top: 0; height: 100vh; height: 100svh; min-height: 640px; overflow: hidden; color: var(--ivory); transition: color 1s var(--ease); touch-action: pan-y; }
+.tt { position: sticky; top: 0; height: 100vh; height: 100svh; min-height: 600px; overflow: hidden; color: var(--ivory); transition: color 1s var(--ease); touch-action: pan-y; }
 .tt-night { background: radial-gradient(70% 80% at 50% 60%, #6a1520 0%, var(--oxblood) 55%, var(--black) 100%); }
 .tt-day { background: radial-gradient(70% 80% at 50% 60%, #f7efe0 0%, #e6d6bb 55%, #c9b28b 100%); color: var(--ink); }
 .tt-amber { background: radial-gradient(70% 80% at 50% 60%, #3d2a1c 0%, #1a110c 60%, var(--black) 100%); }
@@ -533,3 +533,7 @@
 .cc-optin .btn { min-height: 42px; padding-inline: 20px; }
 .cc-optin-done { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #24543a; font-size: var(--fs-sm); }
 .coupon-applied + .offers-head { margin-top: 8px; }
+
+/* Hero: the link to the whole collection under the bag button. */
+.tt-all { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 0; font: 500 var(--fs-xs)/1 var(--body); letter-spacing: var(--caps); text-transform: uppercase; color: inherit; opacity: 0.85; border-bottom: 1px solid currentColor; transition: opacity 0.3s; }
+.tt-all:hover { opacity: 1; }

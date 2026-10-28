@@ -11,7 +11,10 @@ import { useSectionProgress } from '../hooks/useSectionProgress';
 import { scrollToY } from './SmoothScroll';
 
 // Extra scroll, in viewport heights, that each further bottle takes.
-const STEP_VH = 80;
+// Three featured bottles take a short turn each as the page scrolls; the
+// rest of the collection follows right below.
+const HERO_MAX = 3;
+const STEP_VH = 55;
 
 // Each fragrance brings its own light. ELARISSE is the one daylight theme, so
 // the header turns solid while it is in front.
@@ -32,7 +35,10 @@ const noteChips = (p) =>
 // bottles and a swipe scroll the page to the matching bottle.
 export default function Turntable({ products }) {
   const { priceOf, fmt, addToCart, toast, t, lang } = useStore();
-  const items = products.filter((p) => renderFor(p));
+  const items = products
+    .filter((p) => renderFor(p))
+    .sort((a, b) => (b.featured === true) - (a.featured === true) || (a.sortOrder || 0) - (b.sortOrder || 0))
+    .slice(0, HERO_MAX);
   const zafreonAt = items.findIndex((p) => p.slug === 'zafreon');
   // ZAFREON opens the show.
   if (zafreonAt > 0) items.unshift(...items.splice(zafreonAt, 1));
@@ -128,6 +134,7 @@ export default function Turntable({ products }) {
             </button>
             )}
           </div>
+          <Link className="tt-all" to="/fragrances">{t('Shop all fragrances')} <span className="flip-rtl" aria-hidden="true">→</span></Link>
         </div>
 
         {n > 1 && (

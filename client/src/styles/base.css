@@ -339,7 +339,7 @@ html.lenis, html.lenis body { height: auto; }
 /* ---------- Header v3: utilities, icons, profile ---------- */
 .header-right { gap: 2px; }
 .icon-btn { color: var(--ivory); transition: background 0.25s, color 0.25s; }
-.site-header .icon-btn { width: 42px; height: 42px; }
+.site-header .icon-btn { flex: none; width: 42px; height: 42px; } /* never squeezed below a comfortable tap size */
 .site-header .icon-btn:hover, .site-header .icon-btn.is-open { background: rgba(210, 182, 132, 0.12); color: var(--gold-soft); }
 .hdr-utils { display: flex; align-items: center; gap: 2px; }
 /* Subscribe, the market and the language share one quiet text style. */

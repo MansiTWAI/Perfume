@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
+import { MotionConfig } from 'framer-motion';
 import { StoreProvider } from './context/StoreContext';
 import App from './App';
 import './styles/base.css';
@@ -17,7 +18,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <StoreProvider>
-          <App />
+          {/* Visitors who ask their device for less motion get fades without movement. */}
+          <MotionConfig reducedMotion="user">
+            <App />
+          </MotionConfig>
         </StoreProvider>
       </BrowserRouter>
     </HelmetProvider>

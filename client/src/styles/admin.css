@@ -145,7 +145,8 @@
   .a-brand { padding: 0; flex: none; }
   .a-brand img { width: 38px; }
   .a-brand span { display: none; }
-  .a-side nav { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
+  /* position: relative keeps the links' screen-reader text inside the scrolling menu. */
+  .a-side nav { position: relative; display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
   .a-side nav::-webkit-scrollbar { display: none; }
   .a-side nav a { flex: none; white-space: nowrap; padding: 8px 10px; font-size: 14px; }
   .a-side-foot { margin: 0; display: flex; flex: none; gap: 12px; padding: 0; font-size: 13px; white-space: nowrap; }
@@ -598,7 +599,7 @@ button.a-link { background: none; border: 0; padding: 0; cursor: pointer; font: 
 .a-banner .a-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .a-banner .a-grid2, .a-banner .a-grid3 { align-items: start; }
 @media (max-width: 1000px) {
-  .a-banner { grid-template-columns: 1fr; }
+  .a-banner { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 600px) {
   .a-banner .a-grid3 { grid-template-columns: 1fr; }
@@ -853,3 +854,11 @@ a.a-tile:hover { background: #faf4ea; }
 .a-sizes input { width: 100%; min-width: 64px; padding: 7px 8px; border: 1px solid var(--a-line); border-radius: 6px; font: inherit; background: #fff; color: var(--a-ink); }
 .a-sizes td { vertical-align: top; }
 .a-sizes .a-field-error { display: block; margin-top: 4px; font-size: 11px; }
+
+/* Phones: comfortable tap targets for the studio's small text links. */
+@media (max-width: 760px) {
+  .a-side-foot a, .a-side-foot button { display: inline-flex; align-items: center; min-height: 40px; }
+  .a-table .a-link, .a-table .a-row-link, .a-table .a-code, .a-textbtn { display: inline-flex; align-items: center; min-height: 36px; }
+  /* The on/off switch keeps its look; its tappable area grows around it. */
+  .a-switch::before { content: ''; position: absolute; inset: -12px -6px; }
+}
