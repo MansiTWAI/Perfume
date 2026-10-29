@@ -640,8 +640,8 @@ section.acct.page-pad { padding-top: calc(var(--header-h) + clamp(28px, 4vw, 52p
 .acct-nav a.active { color: var(--s-fg); border-color: var(--gold); background: rgba(122, 90, 32, 0.08); }
 .acct-nav button { margin-top: 12px; border-top: 1px solid var(--s-line); padding-top: 16px; }
 .acct-main { min-width: 0; }
-.acct-stack { display: grid; gap: 20px; }
-.acct-card { border: 1px solid var(--s-line); background: var(--s-card); padding: clamp(18px, 2.6vw, 28px); display: grid; gap: 14px; }
+.acct-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.acct-card { border: 1px solid var(--s-line); background: var(--s-card); padding: clamp(18px, 2.6vw, 28px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .acct-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .acct-card-head h2, .acct-sub { font: 400 var(--fs-2xl)/1.2 var(--display); }
 .acct-sub { font-size: var(--fs-xl); margin-top: 10px; }
@@ -795,3 +795,9 @@ a.acct-stat:hover { border-color: var(--s-line-strong); }
 @media (prefers-reduced-motion: reduce) { .pay-spin { animation-duration: 2.4s; } }
 .pay-secure { margin-top: 10px; }
 .acct-phone-note { max-width: none; justify-items: start; margin: 0 0 18px; }
+
+/* Very narrow phones: the three account figures stack, so their labels fit. */
+@media (max-width: 380px) {
+  .acct-stats { grid-template-columns: minmax(0, 1fr); }
+  .acct-stat { grid-template-columns: auto 1fr; align-items: baseline; gap: 12px; }
+}
