@@ -125,3 +125,20 @@ describe('sign-up confirms the email once', () => {
     assert.equal((await login('reset@example.test', 'brand-new-pass')).status, 200);
   });
 });
+
+describe('sign out', () => {
+  test("signing out ends that device's session at once; other devices stay signed in", async () => {
+    const { user, token: phone } = await makeUser('customer');
+    await new Promise((r) => setTimeout(r, 1100)); // a second sign-in, a moment later
+    const { signToken } = await import('../src/middleware/auth.js');
+    const laptop = signToken(user);
+    assert.notEqual(phone, laptop);
+    assert.equal((await http('GET', '/api/me', { token: phone })).status, 200);
+    assert.equal((await http('POST', '/api/auth/logout', { token: phone, body: {} })).status, 200);
+    assert.equal((await http('GET', '/api/me', { token: phone })).status, 401);
+    assert.equal((await http('GET', '/api/me', { token: laptop })).status, 200);
+    // Signing out without a token (or twice) is harmless.
+    assert.equal((await http('POST', '/api/auth/logout', { body: {} })).status, 200);
+    assert.equal((await http('POST', '/api/auth/logout', { token: phone, body: {} })).status, 200);
+  });
+});

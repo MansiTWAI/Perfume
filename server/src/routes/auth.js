@@ -4,8 +4,10 @@ import User, { normalizePhone, validPhone, phoneKeys } from '../models/User.js';
 import Order from '../models/Order.js';
 import crypto from 'crypto';
 import RefreshToken from '../models/RefreshToken.js';
+import RevokedToken from '../models/RevokedToken.js';
+import jwt from 'jsonwebtoken';
 import Otp from '../models/Otp.js';
-import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff } from '../middleware/auth.js';
+import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff, tokenHash } from '../middleware/auth.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
 import {
   otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, codeLoginOn, staffTwoStepOn, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
@@ -315,6 +317,12 @@ r.post(
   asyncHandler(async (req, res) => {
     const presented = String(req.body?.refreshToken || '');
     if (presented) await RefreshToken.updateOne({ hash: sha256(presented), revokedAt: null }, { $set: { revokedAt: new Date() } });
+    // The access token used on this device stops working too (other devices
+    // stay signed in; "sign out everywhere" is /logout-all).
+    const header = req.headers.authorization || '';
+    const access = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const payload = access && (() => { try { return jwt.verify(access, process.env.JWT_SECRET); } catch { return null; } })();
+    if (payload?.exp) await RevokedToken.updateOne({ hash: tokenHash(access) }, { $setOnInsert: { expiresAt: new Date(payload.exp * 1000) } }, { upsert: true });
     res.json({ ok: true });
   })
 );

@@ -1,5 +1,9 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import User, { STAFF_ROLES } from '../models/User.js';
+import RevokedToken from '../models/RevokedToken.js';
+
+export const tokenHash = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 // `mfa` marks a sign-in that passed the emailed two-step code. Staff need it
 // for every staff endpoint; customers never do.
@@ -12,6 +16,8 @@ async function readUser(req) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    // A token signed out on its own device stops working at once.
+    if (await RevokedToken.exists({ hash: tokenHash(token) })) return null;
     const user = await User.findById(payload.sub);
     // Tokens issued before a password change or 'sign out everywhere' stop working,
     // and so do those of blocked accounts.

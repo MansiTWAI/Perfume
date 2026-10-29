@@ -168,6 +168,9 @@ export function StoreProvider({ children }) {
     setUser(u);
   }, []);
   const logout = useCallback(() => {
+    // Tell the server first (the token is still attached), so this sign-in
+    // stops working there too; the device signs out either way.
+    if (getToken()) api('/auth/logout', { method: 'POST' }).catch(() => {});
     setToken(null);
     setUser(null);
     setCart([]); // the bag is kept on the account, not left on this device
