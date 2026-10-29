@@ -43,7 +43,10 @@ const SITE_URL = (
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // behind Vercel / Nginx: real client IPs for rate limiting
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// Razorpay opens its card / bank authentication (3-D Secure) in a popup that
+// the checkout page drives; Helmet's default COOP of "same-origin" cuts that
+// link and leaves the popup blank (about:blank), so popups are allowed.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
 app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || true }));
 // The raw body is kept for verifying payment webhook signatures.

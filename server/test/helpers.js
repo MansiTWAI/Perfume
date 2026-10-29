@@ -244,7 +244,7 @@ export async function http(method, path, { body, token, headers = {}, raw, ip = 
   } catch {
     json = text;
   }
-  return { status: res.status, body: json };
+  return { status: res.status, body: json, headers: res.headers };
 }
 export function webhook(event, payload, { eventId = rid('evt'), secret } = {}) {
   const raw = JSON.stringify({ entity: 'event', event, payload, created_at: Math.floor(Date.now() / 1000) });

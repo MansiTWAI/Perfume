@@ -653,3 +653,11 @@ describe('a failed or closed payment places no order', () => {
     assert.equal((await User.findById(owner.user._id)).cart.length, 0, 'bag emptied once paid');
   });
 });
+
+describe('payment window', () => {
+  test("Razorpay's card / bank popup is not cut off from the checkout page (COOP allows popups)", async () => {
+    const r = await http('GET', '/api/health');
+    assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
+    assert.equal(r.headers.get('x-powered-by'), null);
+  });
+});
