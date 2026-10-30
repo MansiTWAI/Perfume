@@ -89,10 +89,13 @@ export const absUrl = (src) => {
 const liveBanner = (now) => ({ active: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] }] });
 const bannerView = (b) => ({
   id: String(b._id),
+  eyebrow: b.eyebrow || '',
   title: b.title || '',
   subtitle: b.subtitle || '',
   image: b.image,
   imageUrl: absUrl(b.image),
+  webImage: b.webImage || '',
+  webPhoneImage: b.webPhoneImage || '',
   width: b.width || 1080,
   height: b.height || 540,
   link: b.link || '',
@@ -115,13 +118,15 @@ export const DEFAULT_APP_BANNER = {
 };
 
 // Store banners for the mobile app (and any placement): live ones only, in
-// their order. ?placement=app (default), hero, strip or offer.
+// their order. ?placement=app (default), hero, strip or offer. ?on=web is the
+// website's list: banners the team chose to show there too, and no default.
 r.get(
   '/banners',
   asyncHandler(async (req, res) => {
     const placement = ['hero', 'strip', 'offer', 'app'].includes(req.query.placement) ? req.query.placement : 'app';
-    const list = await Banner.find({ placement, ...liveBanner(new Date()) }).sort({ sortOrder: 1, createdAt: -1 }).limit(20).lean();
-    const items = (list.length || placement !== 'app' ? list : [DEFAULT_APP_BANNER]).map(bannerView);
+    const web = req.query.on === 'web';
+    const list = await Banner.find({ placement, ...(web && { web: { $ne: false } }), ...liveBanner(new Date()) }).sort({ sortOrder: 1, createdAt: -1 }).limit(20).lean();
+    const items = (list.length || placement !== 'app' || web ? list : [DEFAULT_APP_BANNER]).map(bannerView);
     res.set('Cache-Control', 'public, max-age=60').json({ placement, size: { width: 1080, height: 540 }, items });
   })
 );

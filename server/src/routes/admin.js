@@ -920,13 +920,14 @@ function readBanner(body, partial) {
     out.image = String(body.image || '').trim().slice(0, 500);
     if (!out.image) errors.push({ field: 'image', message: 'image is required' });
   }
-  for (const [k, max] of [['title', 120], ['subtitle', 240], ['mobileImage', 500], ['link', 500], ['buttonLabel', 40]]) if (body[k] !== undefined) out[k] = String(body[k] || '').slice(0, max);
+  for (const [k, max] of [['eyebrow', 40], ['title', 120], ['subtitle', 240], ['mobileImage', 500], ['webImage', 500], ['webPhoneImage', 500], ['link', 500], ['buttonLabel', 40]]) if (body[k] !== undefined) out[k] = String(body[k] || '').slice(0, max);
   if (body.placement !== undefined) {
     if (!['hero', 'strip', 'offer', 'app'].includes(body.placement)) errors.push({ field: 'placement', message: 'hero, strip, offer or app' });
     else out.placement = body.placement;
   }
   if (body.sortOrder !== undefined) out.sortOrder = parseInt(body.sortOrder, 10) || 0;
   if (body.active !== undefined) out.active = !!body.active;
+  if (body.web !== undefined) out.web = body.web !== false && body.web !== 'false' && body.web !== '0';
   for (const k of ['startsAt', 'endsAt']) {
     if (body[k] === undefined) continue;
     if (body[k] === null || body[k] === '') out[k] = null;
@@ -949,19 +950,24 @@ r.post(
 // WebP, exactly 1080 × 540 pixels, under 4 MB) plus the banner's fields
 // (title, subtitle, link, buttonLabel, sortOrder, active, startsAt, endsAt;
 // placement defaults to app). POST /banners/upload creates a banner;
-// POST /banners/:id/image replaces the image of one.
+// POST /banners/:id/image replaces the image of one; ?kind=web (2400 × 480)
+// or ?kind=phone (1080 × 720) sets its website pictures instead.
 export const BANNER_SIZE = { width: 1080, height: 540 };
-async function readBannerImage(req) {
-  if (!req.file) return { error: 'Upload the banner image as `file`: a JPG, PNG or WebP of 1080 × 540 pixels.' };
+// The website's own pictures of a banner: wide for computers, tall for phones.
+export const BANNER_SIZES = { app: BANNER_SIZE, web: { width: 2400, height: 480 }, phone: { width: 1080, height: 720 } };
+const BANNER_FIELD = { app: 'image', web: 'webImage', phone: 'webPhoneImage' };
+async function readBannerImage(req, kind = 'app') {
+  const want = BANNER_SIZES[kind];
+  if (!req.file) return { error: `Upload the banner image as \`file\`: a JPG, PNG or WebP of ${want.width} × ${want.height} pixels.` };
   const real = sniffImage(req.file.buffer);
   if (!real || real.type === 'image/avif') return { error: 'The banner must be a JPG, PNG or WebP image.' };
   const size = imageSize(req.file.buffer);
   if (!size) return { error: 'We could not read the size of this image. Please export it again as JPG or PNG.' };
-  if (size.width !== BANNER_SIZE.width || size.height !== BANNER_SIZE.height) {
-    return { error: `The banner must be exactly ${BANNER_SIZE.width} × ${BANNER_SIZE.height} pixels; this image is ${size.width} × ${size.height}.`, code: 'BANNER_SIZE' };
+  if (size.width !== want.width || size.height !== want.height) {
+    return { error: `The banner must be exactly ${want.width} × ${want.height} pixels; this image is ${size.width} × ${size.height}.`, code: 'BANNER_SIZE' };
   }
   req.file.mimetype = real.type;
-  const stored = await storeImage(req.file, real.ext, `banner-${String(req.body?.title || 'app')}`);
+  const stored = await storeImage(req.file, real.ext, `banner-${kind === 'app' ? '' : `${kind}-`}${String(req.body?.title || 'app')}`);
   return { stored, size };
 }
 const bannerImageError = (res, e) => res.status(400).json({ code: e.code || 'BANNER_IMAGE_INVALID', message: e.error, errors: [{ field: 'file', message: e.error }] });
@@ -986,11 +992,12 @@ r.post(
   requireRole(...MANAGE),
   receive,
   asyncHandler(async (req, res) => {
+    const kind = BANNER_FIELD[req.query.kind] ? req.query.kind : 'app';
     const banner = validId(req.params.id) && (await Banner.findById(req.params.id));
     if (!banner) return res.status(404).json({ message: 'Banner not found.' });
-    const img = await readBannerImage(req);
+    const img = await readBannerImage(req, kind);
     if (img.error) return bannerImageError(res, img);
-    banner.set({ image: img.stored.src, mobileImage: undefined, width: img.size.width, height: img.size.height });
+    banner.set(kind === 'app' ? { image: img.stored.src, width: img.size.width, height: img.size.height } : { [BANNER_FIELD[kind]]: img.stored.src });
     await banner.save();
     res.json({ ...banner.toObject(), imageUrl: absUrl(banner.image), ...(img.stored.warning && { warning: img.stored.warning }) });
   })

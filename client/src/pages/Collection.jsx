@@ -7,6 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { useStore } from '../context/StoreContext';
 import Img from '../components/Img';
 import Newsletter from '../components/Newsletter';
+import SiteBanners from '../components/SiteBanners';
 
 export default function Collection() {
   const { products, loading } = useProducts();
@@ -37,6 +38,7 @@ export default function Collection() {
         ]}
       />
       <PageHero eyebrow={t('The collection')} title={t('Eau de Parfum')} image="/media/duo-triptych.webp" lede={t('Each fragrance has its own personality, and every presentation has a purpose.')} />
+      <SiteBanners />
       <section className="section collection-page">
         <div className="container">
           <div className="filter-row">

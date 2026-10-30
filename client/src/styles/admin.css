@@ -862,3 +862,14 @@ a.a-tile:hover { background: #faf4ea; }
   /* The on/off switch keeps its look; its tappable area grows around it. */
   .a-switch::before { content: ''; position: absolute; inset: -12px -6px; }
 }
+/* Website and phone pictures of a banner (Banners page). */
+.a-web-pics { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1.4fr); gap: 10px; margin-top: 10px; }
+.a-web-pic { margin: 0; display: grid; gap: 6px; align-content: start; }
+.a-banner-media .a-web-pic img, .a-web-empty { width: 100%; border-radius: 6px; object-fit: cover; background: #f1ebe2; }
+.a-banner-media .a-web-pic.is-web img, .a-web-pic.is-web .a-web-empty { aspect-ratio: 5 / 1; }
+.a-banner-media .a-web-pic.is-phone img, .a-web-pic.is-phone .a-web-empty { aspect-ratio: 3 / 2; max-height: 110px; width: auto; }
+.a-web-empty { display: grid; place-items: center; font-size: 12px; color: #8a7a70; border: 1px dashed #d8cbbb; padding: 6px; text-align: center; }
+.a-web-pic figcaption { display: grid; gap: 4px; font-size: 13px; }
+.a-web-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.a-web-acts .a-btn { padding: 6px 12px; font-size: 13px; }
+@media (max-width: 560px) { .a-web-pics { grid-template-columns: minmax(0, 1fr); } }

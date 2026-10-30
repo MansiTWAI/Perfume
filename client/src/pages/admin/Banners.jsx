@@ -4,9 +4,10 @@ import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 import { confirm, EmptyState, LoadError } from './ui';
 
-// Store banners for the mobile app (GET /api/banners). Images must be exactly
-// 1080 × 540; the server checks it again. Until one is uploaded, the app shows
-// the default house banner.
+// Store banners for the mobile app (GET /api/banners), also shown on the
+// website's home and shop pages unless "Also show on the website" is off.
+// Images must be exactly 1080 × 540; the server checks it again. Until one is
+// uploaded, the app shows the default house banner (the website shows none).
 const W = 1080;
 const H = 540;
 const DEFAULT_IMAGE = '/media/banners/app-banner-1.jpg';
@@ -23,7 +24,7 @@ function stateOf(b, now = new Date()) {
   if (!b.active) return ['Hidden', ''];
   if (b.startsAt && new Date(b.startsAt) > now) return ['Scheduled', 'warn'];
   if (b.endsAt && new Date(b.endsAt) < now) return ['Ended', ''];
-  return ['Live in the app', 'ok'];
+  return [b.web === false ? 'Live in the app' : 'Live in the app and website', 'ok'];
 }
 
 // Reads the picture's real size in the browser before uploading.
@@ -36,28 +37,31 @@ function readSize(file) {
     img.src = url;
   });
 }
-async function pick(file) {
+// The website's own pictures: wide for computers, tall for phones.
+const WEB = { web: { w: 2400, h: 480, field: 'webImage', label: 'Website picture', hint: 'computers' }, phone: { w: 1080, h: 720, field: 'webPhoneImage', label: 'Phone picture', hint: 'the website on phones' } };
+async function pick(file, w = W, h = H) {
   if (!file) return { error: '' };
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return { error: 'Choose a JPG, PNG or WebP image.' };
   if (file.size > 4 * 1024 * 1024) return { error: 'That image is larger than 4 MB. Please export a smaller one.' };
   const size = await readSize(file);
-  if (size.width !== W || size.height !== H) return { error: `The banner must be exactly ${W} × ${H} pixels; this image is ${size.width} × ${size.height}.`, preview: size.url };
+  if (size.width !== w || size.height !== h) return { error: `This picture must be exactly ${w} × ${h} pixels; this image is ${size.width} × ${size.height}.`, preview: size.url };
   return { file, preview: size.url };
 }
 
-const EMPTY = { title: '', subtitle: '', link: '/fragrances', buttonLabel: 'Shop now', sortOrder: '0', active: true, startsAt: '', endsAt: '' };
-const fieldsOf = (b) => ({ title: b.title || '', subtitle: b.subtitle || '', link: b.link || '', buttonLabel: b.buttonLabel || '', sortOrder: String(b.sortOrder ?? 0), active: b.active !== false, startsAt: toDay(b.startsAt), endsAt: toDay(b.endsAt) });
+const EMPTY = { eyebrow: '', title: '', subtitle: '', link: '/fragrances', buttonLabel: 'Shop now', sortOrder: '0', active: true, web: true, startsAt: '', endsAt: '' };
+const fieldsOf = (b) => ({ eyebrow: b.eyebrow || '', title: b.title || '', subtitle: b.subtitle || '', link: b.link || '', buttonLabel: b.buttonLabel || '', sortOrder: String(b.sortOrder ?? 0), active: b.active !== false, web: b.web !== false, startsAt: toDay(b.startsAt), endsAt: toDay(b.endsAt) });
 
 function Fields({ f, set }) {
   const on = (k) => (e) => set({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   return (
     <>
+      <label>Small line above the title<input value={f.eyebrow} onChange={on('eyebrow')} maxLength={40} placeholder="New in the house" /><span className="a-hint">Website only, e.g. New arrival, Gift idea. Optional.</span></label>
       <div className="a-grid2">
         <label>Title<input value={f.title} onChange={on('title')} maxLength={120} placeholder="Two signatures. One house." /></label>
         <label>Subtitle<input value={f.subtitle} onChange={on('subtitle')} maxLength={240} placeholder="Optional" /></label>
       </div>
       <div className="a-grid2">
-        <label>Opens in the app<input value={f.link} onChange={on('link')} maxLength={500} placeholder="/fragrances/zafreon" dir="ltr" /><span className="a-hint">A page of the store, e.g. /fragrances or /fragrances/zafreon.</span></label>
+        <label>Opens<input value={f.link} onChange={on('link')} maxLength={500} placeholder="/fragrances/zafreon" dir="ltr" /><span className="a-hint">A page of the store, e.g. /fragrances or /fragrances/zafreon.</span></label>
         <label>Button text<input value={f.buttonLabel} onChange={on('buttonLabel')} maxLength={40} placeholder="Shop now" /></label>
       </div>
       <div className="a-grid3">
@@ -66,6 +70,8 @@ function Fields({ f, set }) {
         <label>Ends<input type="date" value={f.endsAt} onChange={on('endsAt')} /><span className="a-hint">Empty = no end.</span></label>
       </div>
       <label className="a-check"><input type="checkbox" checked={f.active} onChange={on('active')} /> Show in the app</label>
+      <label className="a-check"><input type="checkbox" checked={f.web} disabled={!f.active} onChange={on('web')} /> Also show on the website</label>
+      <p className="a-hint a-muted">On the website it runs full width on the home page (below the opening bottles) and the shop page, with the words over the picture. Add a website and phone picture on the left for the best fit.</p>
     </>
   );
 }
@@ -92,17 +98,30 @@ function BannerCard({ b, onSaved, onDeleted }) {
       setBusy('');
     }
   }
-  async function replace(file) {
-    const p = await pick(file);
-    if (fileRef.current) fileRef.current.value = '';
+  async function replace(file, kind = 'app', input = fileRef.current) {
+    const size = WEB[kind] || { w: W, h: H };
+    const p = await pick(file, size.w, size.h);
+    if (input) input.value = '';
     if (p.error || !p.file) return setError(p.error || '');
-    setBusy('image');
+    setBusy(kind === 'app' ? 'image' : kind);
     setError('');
     try {
       const form = new FormData();
       form.append('file', p.file);
-      onSaved(await api(`/admin/banners/${b._id}/image`, { method: 'POST', form }));
-      toast('Image replaced');
+      onSaved(await api(`/admin/banners/${b._id}/image${kind === 'app' ? '' : `?kind=${kind}`}`, { method: 'POST', form }));
+      toast(kind === 'app' ? 'Image replaced' : `${WEB[kind].label} saved`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  }
+  async function clearWeb(kind) {
+    setBusy(kind);
+    setError('');
+    try {
+      onSaved(await api(`/admin/banners/${b._id}`, { method: 'PUT', body: { [WEB[kind].field]: '' } }));
+      toast(`${WEB[kind].label} removed`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -110,7 +129,7 @@ function BannerCard({ b, onSaved, onDeleted }) {
     }
   }
   async function remove() {
-    if (!(await confirm({ title: `Delete ${b.title ? `“${b.title}”` : 'this banner'}?`, message: 'It disappears from the app straight away. This cannot be undone.', confirmLabel: 'Delete banner', cancelLabel: 'Keep it', danger: true }))) return;
+    if (!(await confirm({ title: `Delete ${b.title ? `“${b.title}”` : 'this banner'}?`, message: 'It disappears from the app and the website straight away. This cannot be undone.', confirmLabel: 'Delete banner', cancelLabel: 'Keep it', danger: true }))) return;
     setBusy('delete');
     try {
       await api(`/admin/banners/${b._id}`, { method: 'DELETE' });
@@ -127,6 +146,23 @@ function BannerCard({ b, onSaved, onDeleted }) {
       <div className="a-banner-media">
         <img src={b.imageUrl || b.image} alt={b.title || 'Banner'} width={W} height={H} loading="lazy" />
         <span className={`a-pill ${tone}`}>{label}</span>
+        <div className="a-web-pics">
+          {Object.entries(WEB).map(([kind, s]) => (
+            <figure key={kind} className={`a-web-pic is-${kind}`}>
+              {b[s.field] ? <img src={b[s.field]} alt="" /> : <span className="a-web-empty">Uses the app picture</span>}
+              <figcaption>
+                <b>{s.label}</b> <span className="a-muted">{s.w} × {s.h}, for {s.hint}</span>
+                <span className="a-web-acts">
+                  <label className="a-btn a-file">
+                    {busy === kind ? 'Uploading…' : b[s.field] ? 'Replace' : 'Add'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!!busy} onChange={(e) => replace(e.target.files?.[0], kind, e.target)} />
+                  </label>
+                  {b[s.field] && <button type="button" className="a-btn" disabled={!!busy} onClick={() => clearWeb(kind)}>Remove</button>}
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
       </div>
       <div className="a-form">
         <Fields f={f} set={setF} />
@@ -288,13 +324,13 @@ export default function Banners() {
   return (
     <div>
       <header className="a-head">
-        <h1>App banners</h1>
-        <span className="a-muted">Shown at the top of the mobile app store, in order. Images must be exactly {W} × {H} pixels.</span>
+        <h1>App &amp; website banners</h1>
+        <span className="a-muted">Shown at the top of the mobile app store and on the website's home and shop pages, in order. Images must be exactly {W} × {H} pixels.</span>
       </header>
 
       <div className="a-banner-top">
         <section className="a-panel">
-          <div className="a-section-head"><h2>Order in the app</h2>{ordering && <small className="a-muted">Saving…</small>}</div>
+          <div className="a-section-head"><h2>Order in the app and website</h2>{ordering && <small className="a-muted">Saving…</small>}</div>
           {loadError && <LoadError message={loadError} onRetry={() => setTick((n) => n + 1)} />}
           {!list ? <p className="a-muted">Loading…</p> : list.length ? (
             <>

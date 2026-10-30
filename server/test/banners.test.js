@@ -101,6 +101,34 @@ describe('app banners', () => {
     assert.equal((await http('GET', '/api/banners?placement=hero')).body.items.length, 0);
   });
 
+  test('the website shows the banners turned on for it, and no default banner', async () => {
+    assert.equal((await http('GET', '/api/banners?placement=app&on=web')).body.items.length, 0, 'no default on the website');
+    const { token } = await makeUser('admin');
+    const both = (await upload('/api/admin/banners/upload', token, png(1080, 540), { title: 'Both', sortOrder: 1 })).body;
+    await upload('/api/admin/banners/upload', token, png(1080, 540), { title: 'App only', web: 'false', sortOrder: 2 });
+    assert.deepEqual((await http('GET', '/api/banners?placement=app&on=web')).body.items.map((b) => b.title), ['Both']);
+    assert.deepEqual((await http('GET', '/api/banners')).body.items.map((b) => b.title), ['Both', 'App only']);
+    assert.equal((await http('PUT', `/api/admin/banners/${both._id}`, { token, body: { web: false } })).body.web, false);
+    assert.equal((await http('GET', '/api/banners?placement=app&on=web')).body.items.length, 0);
+  });
+
+  test('a banner can have its own website and phone pictures, each checked for size', async () => {
+    const { token } = await makeUser('admin');
+    const b = (await upload('/api/admin/banners/upload', token, png(1080, 540), { title: 'Wide', eyebrow: 'New arrival' })).body;
+    assert.equal(b.eyebrow, 'New arrival');
+    assert.equal((await upload(`/api/admin/banners/${b._id}/image?kind=web`, token, png(1080, 540))).body.code, 'BANNER_SIZE');
+    const web = await upload(`/api/admin/banners/${b._id}/image?kind=web`, token, png(2400, 480));
+    assert.equal(web.status, 200);
+    assert.equal(web.body.image, b.image, 'the app picture is kept');
+    assert.ok(web.body.webImage);
+    assert.equal((await upload(`/api/admin/banners/${b._id}/image?kind=phone`, token, png(1080, 720))).status, 200);
+    const [item] = (await http('GET', '/api/banners?placement=app&on=web')).body.items;
+    assert.equal(item.eyebrow, 'New arrival');
+    assert.ok(item.webImage && item.webPhoneImage);
+    await http('PUT', `/api/admin/banners/${b._id}`, { token, body: { webImage: '' } });
+    assert.equal((await http('GET', '/api/banners?placement=app&on=web')).body.items[0].webImage, '');
+  });
+
   test('the size reader handles JPEG, PNG and WebP headers', () => {
     const jpg = fs.readFileSync(new URL('../../client/public/media/banners/app-banner-1.jpg', import.meta.url));
     assert.deepEqual(imageSize(jpg), { width: 1080, height: 540 });

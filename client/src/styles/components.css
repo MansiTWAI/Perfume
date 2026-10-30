@@ -537,3 +537,67 @@
 /* Hero: the link to the whole collection under the bag button. */
 .tt-all { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 0; font: 500 var(--fs-xs)/1 var(--body); letter-spacing: var(--caps); text-transform: uppercase; color: inherit; opacity: 0.85; border-bottom: 1px solid currentColor; transition: opacity 0.3s; }
 .tt-all:hover { opacity: 1; }
+
+/* Banners from Admin → Banners on the home and shop pages (SiteBanners):
+   full width, the words over the picture, a shade behind the words. */
+.site-banners { position: relative; background: var(--black); color: var(--ivory); overflow: hidden; }
+/* A thin gold line between the banner and the section above it. */
+.site-banners::before, .site-banners::after { content: ''; position: absolute; z-index: 3; left: 0; right: 0; height: 1px; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(210, 182, 132, 0.75) 25%, rgba(210, 182, 132, 0.75) 75%, transparent); }
+.site-banners::before { top: 0; }
+.site-banners::after { bottom: 0; opacity: 0.45; }
+.site-banners-track { display: flex; transition: transform 0.8s var(--ease); }
+.site-banner { position: relative; flex: 0 0 100%; min-width: 0; aspect-ratio: 5 / 1; min-height: 250px; max-height: 400px; overflow: hidden; }
+.site-banner-img, .site-banner-img picture { position: absolute; inset: 0; display: block; }
+.site-banner-img img { width: 100%; height: 100%; object-fit: cover; object-position: 70% 50%; transition: transform 6s ease-out; }
+/* Only the app picture (2 : 1): show all of it on the right, fading into the dark. */
+.site-banner:not(.has-wide) { background: radial-gradient(120% 140% at 85% 50%, var(--brown), var(--black) 70%); }
+.site-banner:not(.has-wide) .site-banner-img { left: auto; width: auto; aspect-ratio: 2 / 1; -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%); mask-image: linear-gradient(90deg, transparent, #000 22%); }
+.site-banner:not(.has-wide) .site-banner-img img { object-position: 50% 50%; }
+.site-banner[aria-hidden='false'] .site-banner-img img { transform: scale(1.04); }
+.site-banner.has-words::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(8, 5, 4, 0.82) 0%, rgba(8, 5, 4, 0.55) 34%, rgba(8, 5, 4, 0) 62%); }
+.site-banner-copy { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); pointer-events: none; }
+.site-banner-words { max-width: 620px; padding-bottom: 30px; pointer-events: auto; }
+.site-banner-eyebrow { display: flex; align-items: center; gap: 14px; margin: 0 0 8px; color: var(--gold-soft); font-size: var(--fs-xs); letter-spacing: 0.32em; text-transform: uppercase; }
+.site-banner-eyebrow::after { content: ''; width: 48px; height: 1px; background: currentColor; opacity: 0.7; }
+.site-banner-copy h2 { font-family: var(--display); font-size: clamp(26px, 2.8vw, 44px); line-height: 1.05; font-weight: 400; margin: 0 0 8px; text-wrap: balance; text-shadow: 0 2px 24px rgba(0, 0, 0, 0.4); }
+.site-banner-sub { color: #d9cdbf; font-size: var(--fs-base); line-height: 1.5; margin: 0 0 16px; max-width: 460px; }
+.site-banner-btn { display: inline-flex; align-items: center; gap: 12px; background: var(--gold-soft); color: var(--black); padding: 15px 30px; font-size: var(--fs-sm); letter-spacing: var(--caps); text-transform: uppercase; font-weight: 600; transition: background 0.2s, gap 0.2s; padding: 11px 22px; }
+.site-banner-btn:hover, .site-banner-btn:focus-visible { background: var(--champagne); gap: 16px; }
+.site-banners-nav { position: absolute; z-index: 2; left: 0; right: 0; bottom: clamp(10px, 1.2vw, 18px); max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); display: flex; align-items: center; justify-content: flex-start; gap: 10px; pointer-events: none; }
+.site-banners-nav > * { pointer-events: auto; }
+.site-banners-arrow { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(243, 237, 227, 0.35); background: rgba(8, 5, 4, 0.35); color: var(--ivory); cursor: pointer; backdrop-filter: blur(4px); transition: background 0.2s, border-color 0.2s; }
+.site-banners-arrow:hover, .site-banners-arrow:focus-visible { background: rgba(8, 5, 4, 0.7); border-color: var(--gold-soft); }
+.site-banners-dots { display: flex; gap: 2px; }
+.site-banners-dots button { width: 24px; height: 24px; display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer; }
+.site-banners-dots button::after { content: ''; width: 6px; height: 6px; border-radius: 3px; background: rgba(243, 237, 227, 0.45); transition: width 0.3s, background 0.3s; }
+.site-banners-dots button.is-on::after { width: 24px; background: var(--gold-soft); }
+@media (max-width: 760px) {
+  /* With a phone picture: tall banner, words over the bottom. Without one: the
+     picture full width, words underneath. */
+  .site-banner { aspect-ratio: auto; min-height: 0; max-height: none; display: flex; flex-direction: column; }
+  .site-banner-img, .site-banner-img picture, .site-banner:not(.has-wide) .site-banner-img { position: relative; inset: auto; width: 100%; -webkit-mask-image: none; mask-image: none; }
+  .site-banner-img img { aspect-ratio: 2 / 1; object-position: 50% 50%; }
+  .site-banner.has-words::after { display: none; }
+  .site-banner-copy { position: relative; padding: 18px var(--gutter) 46px; }
+  .site-banners-nav { justify-content: center; bottom: 4px; }
+  .site-banner-words { max-width: none; }
+  .site-banner.has-phone { aspect-ratio: 3 / 2; display: block; }
+  .site-banner.has-phone .site-banner-img, .site-banner.has-phone .site-banner-img picture { position: absolute; inset: 0; width: auto; aspect-ratio: auto; }
+  .site-banner.has-phone .site-banner-img img { aspect-ratio: auto; }
+  .site-banner.has-phone.has-words::after { display: block; background: linear-gradient(90deg, rgba(8, 5, 4, 0.8) 0%, rgba(8, 5, 4, 0.45) 45%, rgba(8, 5, 4, 0) 62%); }
+  .site-banner.has-phone .site-banner-copy { position: absolute; align-items: center; padding: 0 var(--gutter) 22px; }
+  .site-banner.has-phone .site-banner-words { max-width: 52%; }
+  .site-banner-eyebrow::after { display: none; }
+  .site-banner-btn { white-space: nowrap; }
+  .site-banner.has-phone .site-banner-sub { display: none; }
+  .site-banner-words { padding-bottom: 0; }
+  .site-banner-copy h2 { font-size: clamp(20px, 5.6vw, 28px); margin-bottom: 10px; }
+  .site-banner-sub { font-size: var(--fs-sm); line-height: 1.5; margin-bottom: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .site-banner-eyebrow { margin-bottom: 6px; font-size: 10px; letter-spacing: 0.22em; }
+  .site-banner-btn { padding: 9px 14px; font-size: 11px; gap: 8px; letter-spacing: 0.12em; }
+  .site-banners-arrow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-banners-track, .site-banner-img img { transition: none; }
+  .site-banner[aria-hidden='false'] .site-banner-img img { transform: none; }
+}

@@ -94,7 +94,7 @@ function AdminLogin({ notice = '' }) {
 // shown beside the link (GET /admin/counts).
 const NAV = [
   ['Sales', [['/admin', 'Dashboard', true], ['/admin/orders', 'Orders', false, 'orders'], ['/admin/shipping', 'Shipping', false, 'shipping'], ['/admin/coupons', 'Coupons']]],
-  ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'App banners'], ['/admin/reviews', 'Reviews', false, 'reviews'], ['/admin/journal', 'Journal']]],
+  ['Catalogue', [['/admin/products', 'Products'], ['/admin/banners', 'Banners'], ['/admin/reviews', 'Reviews', false, 'reviews'], ['/admin/journal', 'Journal']]],
   ['Customers', [['/admin/users', 'Users'], ['/admin/leads', 'AI leads'], ['/admin/whatsapp', 'WhatsApp'], ['/admin/enquiries', 'Enquiries', false, 'enquiries'], ['/admin/subscribers', 'Newsletter']]],
   ['Setup', [['/admin/integrations', 'Integrations', false, 'connections']]],
 ];

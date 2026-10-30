@@ -9,6 +9,7 @@ import SeasonBand from '../components/SeasonBand';
 import ServicePromise from '../components/ServicePromise';
 import DayNight from '../components/DayNight';
 import Turntable from '../components/Turntable';
+import SiteBanners from '../components/SiteBanners';
 import Collection from '../components/story/Collection';
 import House from '../components/story/House';
 import NotesChapter from '../components/story/NotesChapter';
@@ -194,6 +195,7 @@ export default function Home() {
       {/* The homepage reads as one story: the turntable, the collection, five
           chapters and an epilogue, on one continuous dark ground. */}
       <Turntable products={products} />
+      <SiteBanners />
       <Collection products={products} />
       <SeasonBand />
       <House />
