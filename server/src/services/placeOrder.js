@@ -5,7 +5,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ORDER_STAGES, regionByCode, shippingFor, paymentsFor } from '../config/commerce.js';
-import { code } from '../utils.js';
+import { code, isEmail } from '../utils.js';
 import { validPhone, formatPhone } from '../models/User.js';
 import { checkCoupon, claimCoupon, releaseCoupon, discountFor } from './coupons.js';
 import { foreignPlace, indianState, indianPin } from '../../../shared/india.js';
@@ -17,7 +17,6 @@ const MAX_LINES = 20;
 // The delivery details, checked on the server (the checkout form is only a
 // convenience): plain strings within sane lengths, a real email, a mobile
 // number and, in India, a 6-digit PIN code.
-const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function cleanCustomer(customer, region) {
   const c = customer && typeof customer === 'object' ? customer : {};
   const ad = c.address && typeof c.address === 'object' ? c.address : {};
@@ -32,7 +31,7 @@ function cleanCustomer(customer, region) {
   const long = [['name', 120], ['email', 160], ['phone', 40]].find(([k, m]) => out[k].length > m)
     || [['line1', 200], ['line2', 200], ['city', 80], ['state', 80], ['postalCode', 20]].find(([k, m]) => out.address[k].length > m);
   if (long) throw fail(400, 'Some delivery details are too long. Please shorten them.');
-  if (!EMAIL_RX.test(out.email)) throw fail(400, 'Please enter a valid email address.');
+  if (!isEmail(out.email)) throw fail(400, 'Please enter a valid email address.');
   const digits = out.phone.replace(/\D/g, '');
   const phoneOk = region.code === 'IN' ? validPhone(out.phone) : digits.length >= 8 && digits.length <= 15;
   if (!phoneOk) throw fail(400, 'Please enter a valid phone number.');

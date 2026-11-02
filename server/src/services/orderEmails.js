@@ -13,6 +13,7 @@
 // logged and the shop carries on.
 import Order from '../models/Order.js';
 import { mailConfigured, sendMail, shippingEmail, teamAlertEmail } from './mail.js';
+import { isEmail } from '../utils.js';
 
 const log = (event, data = {}) => console.log(`[email] ${event}`, JSON.stringify(data));
 const inFlight = new Set();
@@ -51,10 +52,10 @@ export function emailCustomer(order, key, { note = '', amount } = {}) {
 }
 
 export const alertRecipients = () => {
-  const list = String(process.env.ORDER_ALERT_EMAIL || '').split(',').map((s) => s.trim()).filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  const list = String(process.env.ORDER_ALERT_EMAIL || '').split(',').map((s) => s.trim()).filter(isEmail);
   if (list.length) return list;
   const from = String(process.env.MAIL_FROM || '').match(/<([^>]+)>/)?.[1] || String(process.env.MAIL_FROM || '').trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from) ? [from] : [];
+  return isEmail(from) ? [from] : [];
 };
 
 // kind: new_order, paid_order, customer_cancelled, customer_edited,

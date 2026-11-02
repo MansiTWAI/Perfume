@@ -21,6 +21,17 @@ export function noteActivity(integration, ok, message, { group = '' } = {}) {
   IntegrationEvent.create({ integration, kind: 'activity', ok, message: oneLine(message) }).catch(() => {});
 }
 
+// Something the team should know that is not a fault of the service (e.g. an
+// email skipped because the customer's address is invalid). Shown in the
+// activity list, never counted as working or broken.
+export function noteNotice(integration, message) {
+  const key = `${integration}|notice|${message}`;
+  const now = Date.now();
+  if (now - (seen.get(key) || 0) < QUIET_FAIL) return;
+  seen.set(key, now);
+  IntegrationEvent.create({ integration, kind: 'notice', ok: false, message: oneLine(message) }).catch(() => {});
+}
+
 // Checks, tests and setting changes by the team: always recorded.
 export const noteAction = (integration, kind, ok, message, by = '', ms) =>
   IntegrationEvent.create({ integration, kind, ok, message: oneLine(message), by, ...(ms != null && { ms }) }).catch(() => null);

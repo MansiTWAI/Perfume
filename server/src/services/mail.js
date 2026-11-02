@@ -6,7 +6,8 @@
 // must be an address on a domain of the hosting account). MAIL_TRANSPORT=memory
 // keeps messages in `outbox` instead of sending them (used by the tests).
 import nodemailer from 'nodemailer';
-import { noteActivity } from './integrationLog.js';
+import { noteActivity, noteNotice } from './integrationLog.js';
+import { isEmail } from '../utils.js';
 
 export const outbox = [];
 let transport = null;
@@ -34,15 +35,28 @@ function getTransport() {
 const last = { sentAt: null, failedAt: null, error: '' };
 export const mailStatus = () => ({ ...last });
 
+// "ok690729ok@gmail..com" → "ok…@gmail..com": enough to find the order, not the whole address.
+const masked = (list) => list.map((a) => a.replace(/^([^@]{0,2})[^@]*/, '$1…')).join(', ');
+
+// Addresses that cannot receive mail (old orders typed before checkout checked
+// them, e.g. "name@gmail..com") are left out: the mail server would refuse the
+// whole message and the email service would look broken. When none is left,
+// the send is skipped and noted (code EMAIL_INVALID), without counting as a
+// failure of the email service.
 export async function sendMail({ to, subject, text, html }) {
+  const all = (Array.isArray(to) ? to : String(to || '').split(',')).map((a) => String(a).trim()).filter(Boolean);
+  const good = all.filter(isEmail);
+  const bad = all.filter((a) => !isEmail(a));
+  if (bad.length) noteNotice('email', `Not sent to ${masked(bad)}: not a valid email address`);
+  if (!good.length) throw Object.assign(new Error('Not a valid email address.'), { code: 'EMAIL_INVALID' });
   try {
-    const r = await getTransport().sendMail({ from: process.env.MAIL_FROM || 'AL BARAKAH LIFESTYLE <no-reply@example.com>', to, subject, text, html });
+    const r = await getTransport().sendMail({ from: process.env.MAIL_FROM || 'AL BARAKAH LIFESTYLE <no-reply@example.com>', to: good.join(', '), subject, text, html });
     last.sentAt = new Date();
     noteActivity('email', true, 'Email sent', { group: 'sent' });
     return r;
   } catch (e) {
     Object.assign(last, { failedAt: new Date(), error: String(e?.message || e).slice(0, 160) });
-    noteActivity('email', false, `Sending failed: ${last.error}`);
+    noteActivity('email', false, `Sending to ${masked(good)} failed: ${last.error}`);
     throw e;
   }
 }

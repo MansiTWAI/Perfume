@@ -8,6 +8,7 @@ import RevokedToken from '../models/RevokedToken.js';
 import jwt from 'jsonwebtoken';
 import Otp from '../models/Otp.js';
 import { signToken, requireAuth, optionalAuth, asyncHandler, isStaff, tokenHash } from '../middleware/auth.js';
+import { isEmail } from '../utils.js';
 import { mailConfigured, sendMail, resetEmail } from '../services/mail.js';
 import {
   otpAvailable, issueOtp, consumeOtp, OTP_MINUTES, codeLoginOn, staffTwoStepOn, startStaffChallenge, resendStaffCode, staffChallengeUser, verifyStaffCode, STAFF_MINUTES, RESEND_SECONDS,
@@ -60,7 +61,7 @@ r.post(
         errors: [['name', name], ['email', email], ['password', password]].filter(([, v]) => !v).map(([field]) => ({ field, message: `${field} is required` })),
       });
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
+    if (!isEmail(email)) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
     if (name.length > 80) return res.status(400).json({ message: 'Please keep your name under 80 characters.', errors: [{ field: 'name', message: 'At most 80 characters' }] });
     if (email.length > 160) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
     if (password.length > 200) return res.status(400).json({ message: 'Please use a password under 200 characters.', errors: [{ field: 'password', message: 'At most 200 characters' }] });
@@ -135,7 +136,7 @@ r.post(
   otpLimiterEarly,
   asyncHandler(async (req, res) => {
     const email = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
-    const user = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (await User.findOne({ email }));
+    const user = isEmail(email) && (await User.findOne({ email }));
     const reply = { ok: true, message: 'If this email is waiting for a code, a new one is on its way.', expiresInSeconds: OTP_MINUTES * 60 };
     if (!user || user.emailVerified !== false || user.status === 'blocked') return res.json(reply);
     const sent = await sendVerification(user);
@@ -236,7 +237,7 @@ r.post(
     if (purpose === 'verify_phone') return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Phone verification is not available right now.' });
     if (!codeLoginOn()) return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Please sign in with your email and password.' });
     const byEmail = String(req.body?.email || '').toLowerCase().trim().slice(0, 160);
-    if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(byEmail)) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
+    if (byEmail && !isEmail(byEmail)) return res.status(400).json({ message: 'Please enter a valid email address.', errors: [{ field: 'email', message: 'Invalid email address' }] });
     const phone = byEmail ? `email:${byEmail}` : normalizePhone(req.body?.phone);
     if (!byEmail && (!phone || !validPhone(phone))) return res.status(400).json({ message: 'Please enter a valid phone number.', errors: [{ field: 'phone', message: 'Invalid phone number' }] });
     if (!otpAvailable()) return res.status(503).json({ code: 'OTP_NOT_CONFIGURED', message: 'Sign-in by code is not set up yet. Please sign in with your password.' });
@@ -357,7 +358,7 @@ r.post(
   asyncHandler(async (req, res) => {
     if (!mailConfigured()) return res.status(503).json({ message: 'Password reset by email is not set up yet. Please contact us on WhatsApp.' });
     const email = String(req.body?.email || '').toLowerCase().trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
+    if (!isEmail(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
     const user = await User.findOne({ email });
     if (user) {
       const token = crypto.randomBytes(32).toString('base64url');
@@ -401,7 +402,6 @@ r.post(
 
 // ----- profile -----
 const clean = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const accountLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: { message: 'Too many attempts. Please wait a few minutes and try again.' } });
 
 // Name, phone and the saved delivery address; also the email when the

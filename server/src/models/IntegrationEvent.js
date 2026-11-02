@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 // setting changes. Messages carry ids and outcomes only, never personal data,
 // tokens or passwords. Kept 90 days.
 export const INTEGRATIONS = ['delhivery', 'payments', 'email', 'whatsapp', 'ai'];
-export const EVENT_KINDS = ['activity', 'check', 'test', 'config'];
+export const EVENT_KINDS = ['activity', 'check', 'test', 'config', 'notice'];
 
 const schema = new mongoose.Schema({
   integration: { type: String, enum: INTEGRATIONS, required: true },

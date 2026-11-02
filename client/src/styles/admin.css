@@ -839,6 +839,7 @@ a.a-tile:hover { background: #faf4ea; }
 .a-int-result { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; white-space: nowrap; }
 .a-int-result.ok { color: #2f6b45; }
 .a-int-result.bad { color: #a4412b; }
+.a-int-result.warn { color: #8a6424; }
 .a-int-msg { min-width: 240px; }
 .a-int-msg small { display: block; color: var(--a-muted); margin-top: 2px; }
 .a-int-more { margin-top: 12px; }

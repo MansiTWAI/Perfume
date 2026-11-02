@@ -17,7 +17,7 @@ const STATE = {
   off: { label: 'Not set up', tone: 'off', icon: 'minus' },
 };
 const STAGES = [['configured', 'Configured'], ['connected', 'Connected'], ['operational', 'Operational'], ['production', 'Production-ready']];
-const KIND = { activity: 'Activity', check: 'Check', test: 'Test', config: 'Settings change' };
+const KIND = { activity: 'Activity', check: 'Check', test: 'Test', config: 'Settings change', notice: 'Notice' };
 
 const when = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 function ago(d) {
@@ -264,7 +264,7 @@ function Activity({ names, tick }) {
                     <td title={new Date(e.at).toLocaleString('en-GB')}>{when(e.at)}</td>
                     <td>{e.name}</td>
                     <td><span className="a-pill off">{KIND[e.kind] || e.kind}</span></td>
-                    <td><span className={`a-int-result ${e.ok ? 'ok' : 'bad'}`}><Icon name={e.ok ? 'check' : 'error'} size={14} />{e.ok ? 'OK' : 'Failed'}</span></td>
+                    <td>{e.kind === 'notice' ? <span className="a-int-result warn"><Icon name="error" size={14} />Skipped</span> : <span className={`a-int-result ${e.ok ? 'ok' : 'bad'}`}><Icon name={e.ok ? 'check' : 'error'} size={14} />{e.ok ? 'OK' : 'Failed'}</span>}</td>
                     <td className="a-int-msg">{e.message}{(e.by || e.ms != null) && <small>{[e.by, e.ms != null && `${e.ms} ms`].filter(Boolean).join(' · ')}</small>}</td>
                   </tr>
                 ))}
