@@ -16,9 +16,10 @@ import { scrollToY } from './SmoothScroll';
 const HERO_MAX = 4;
 const STEP_VH = 55;
 
-// Each fragrance brings its own light. ELARISSE is the one daylight theme, so
-// the header turns solid while it is in front.
-const THEMES = { zafreon: 'night', elarisse: 'day', 'signature-duo': 'amber' };
+// Each fragrance brings its own light, in the colour of its bottle (the same
+// colours as its card in the collection below). ELARISSE is the one daylight
+// theme, so the header turns solid while it is in front.
+const THEMES = { zafreon: 'night', elarisse: 'day', 'signature-duo': 'amber', 'after-dark': 'violet', 'sovereign-musk': 'gold', 'mukhallat-al-zayer': 'emerald', 'blue-dive': 'ocean' };
 const themeOf = (p) => THEMES[p.slug] || 'night';
 
 // The first note of each tier.

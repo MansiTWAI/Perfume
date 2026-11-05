@@ -9,6 +9,10 @@
 .tt-night { background: radial-gradient(70% 80% at 50% 60%, #6a1520 0%, var(--oxblood) 55%, var(--black) 100%); }
 .tt-day { background: radial-gradient(70% 80% at 50% 60%, #f7efe0 0%, #e6d6bb 55%, #c9b28b 100%); color: var(--ink); }
 .tt-amber { background: radial-gradient(70% 80% at 50% 60%, #3d2a1c 0%, #1a110c 60%, var(--black) 100%); }
+.tt-violet { background: radial-gradient(70% 80% at 50% 60%, #5b3189 0%, #26133f 55%, var(--black) 100%); }
+.tt-gold { background: radial-gradient(70% 80% at 50% 60%, #8a5520 0%, #3b220d 55%, var(--black) 100%); }
+.tt-emerald { background: radial-gradient(70% 80% at 50% 60%, #1f6049 0%, #0b2b20 55%, var(--black) 100%); }
+.tt-ocean { background: radial-gradient(70% 80% at 50% 60%, #2a63b8 0%, #0e2752 55%, var(--black) 100%); }
 .tt-ghost { position: absolute; left: 50%; top: 46%; translate: -50% -50%; font: 400 clamp(120px, 21vw, 340px)/1 var(--display); letter-spacing: 0.02em; white-space: nowrap; color: transparent; -webkit-text-stroke: 1px rgba(210, 182, 132, 0.45); pointer-events: none; animation: tt-ghost 1.2s var(--ease) both; }
 .tt::after { content: ''; position: absolute; inset: auto 0 0; height: 16vh; background: linear-gradient(transparent, var(--black)); pointer-events: none; z-index: 1; }
 .tt-day::after { background: linear-gradient(rgba(201, 178, 139, 0), var(--black)); }
