@@ -1,6 +1,9 @@
 // The fragrance catalogue. Used by the database seed (server/src/seed) and
 // by the storefront as a fallback, so the product story still renders if the
-// API cannot be reached.
+// API cannot be reached (and for the moment before it answers). Keep prices,
+// stock and "featured" in step with the live shop, or the first second of the
+// home page shows the wrong bottles. ELARISSE, ZAFREON and the Duo are sold
+// out (stock 0) as of 2026-11-05.
 //
 // Fragrance notes below are the proposed olfactive direction for each
 // fragrance, drawn from the campaign imagery. Confirm them against the
@@ -20,12 +23,12 @@ export default [
       'Presented in luminous ivory and gold, ELARISSE brings together refined architecture, warm light and precious-ingredient imagery. The clear crystal bottle, golden liquid, sculpted cap and ornate presentation box are its visual anchors. It is more than a fragrance. It is an atmosphere: warm, radiant and quietly distinctive, designed for moments when elegance should feel effortless.',
     sizeMl: 100,
     sizeLabel: '100 ML / 3.4 FL.OZ.',
-    price: { INR: 2499, AED: 115 },
-    stock: 24,
+    price: { INR: 1250, AED: 100 },
+    stock: 0,
     badge: 'Signature',
     theme: 'ivory',
-    featured: true,
-    sortOrder: 1,
+    featured: false,
+    sortOrder: 11,
     images: [
       { src: `${M}/panel-elarisse.webp`, alt: 'ELARISSE bottle framed by ivory arches, jasmine and saffron' },
       { src: `${M}/elarisse-campaign.webp`, alt: 'ELARISSE Eau de Parfum bottle and ivory box on black marble beneath palace arches at sunset' },
@@ -86,12 +89,12 @@ export default [
       'Its black-and-gold identity creates the most dramatic expression of the Al Barakah house. Oud wood, saffron, incense, polished metal and burgundy velvet form the vocabulary of its world. ZAFREON is a study in contrast: darkness and light, tradition and modernity, depth and refinement. It is a signature for evenings, occasions and moments when individuality deserves to be remembered.',
     sizeMl: 100,
     sizeLabel: '100 ML / 3.4 FL.OZ.',
-    price: { INR: 2799, AED: 129 },
-    stock: 18,
+    price: { INR: 1250, AED: 100 },
+    stock: 0,
     badge: 'Bold',
     theme: 'onyx',
-    featured: true,
-    sortOrder: 2,
+    featured: false,
+    sortOrder: 12,
     images: [
       { src: `${M}/panel-zafreon.webp`, alt: 'ZAFREON bottle with oud wood and incense smoke beneath a black arch' },
       { src: `${M}/zafreon-campaign.webp`, alt: 'ZAFREON black Eau de Parfum bottle with saffron, oud wood and burgundy velvet' },
@@ -153,13 +156,13 @@ export default [
       'ELARISSE explores luminous elegance: ivory, gold, crystal and warmth. ZAFREON takes a darker route: black, gold, oud-inspired textures and incense. Together they express the full philosophy of the house. Wear one by day, the other by night, or layer them into something entirely your own.',
     sizeMl: 200,
     sizeLabel: '2 × 100 ML',
-    price: { INR: 4999, AED: 229 },
-    stock: 12,
+    price: { INR: 2500, AED: 229 },
+    stock: 0,
     badge: 'Gift',
     theme: 'duo',
     category: 'Gift Sets',
     featured: false,
-    sortOrder: 3,
+    sortOrder: 13,
     images: [
       { src: `${M}/panel-house.webp`, alt: 'ELARISSE and ZAFREON side by side beneath a burgundy arch: two signatures, one philosophy' },
       { src: `${M}/duo-triptych.webp`, alt: 'ELARISSE and ZAFREON bottles side by side in a triptych of burgundy, ivory and black arches' },
@@ -182,5 +185,241 @@ export default [
       title: 'Signature Duo Gift Set | ELARISSE + ZAFREON | AL BARAKAH LIFESTYLE',
       description: 'A luxury perfume gift set with ELARISSE and ZAFREON Eau de Parfum. Ideal for weddings, Eid and Diwali. Delivered across India and to the UAE.',
     },
+  },
+  // The four ELARISSE perfumes added on 2026-10-27 (copied from the live shop on 2026-11-05).
+  {
+    "name": "AFTER DARK",
+    "slug": "after-dark",
+    "subtitle": "Eau de Parfum · For Women",
+    "tagline": "For Women",
+    "family": "Oud · Amber · Musk",
+    "description": "AFTER DARK is an evening fragrance for women: rich oud, warm amber and soft, skin-like musk, in a midnight-blue bottle.",
+    "story": "",
+    "sizeMl": 50,
+    "sizeLabel": "50 ML / 1.7 FL.OZ.",
+    "price": {
+      "INR": 499,
+      "AED": 22
+    },
+    "stock": 20,
+    "badge": "New",
+    "theme": "onyx",
+    "category": "Fragrances",
+    "gender": "unisex",
+    "featured": true,
+    "sortOrder": 1,
+    "images": [
+      {
+        "src": "/media/after-dark.webp",
+        "alt": "AFTER DARK for women, Eau de Parfum: midnight-blue bottle and purple box with a city skyline at dusk"
+      }
+    ],
+    "video": {
+      "src": "",
+      "poster": ""
+    },
+    "notes": {
+      "approved": false,
+      "top": [
+        {
+          "name": "Oud",
+          "description": "Rich and deep."
+        }
+      ],
+      "heart": [
+        {
+          "name": "Amber",
+          "description": "Warm and sensual."
+        }
+      ],
+      "base": [
+        {
+          "name": "Musk",
+          "description": "Pure and skin-like."
+        }
+      ]
+    },
+    "howToWear": "",
+    "howToStore": "",
+    "includes": [
+      "50 ml Eau de Parfum",
+      "Presentation box"
+    ],
+    "seo": {
+      "title": "AFTER DARK Eau de Parfum | For Women | AL BARAKAH LIFESTYLE",
+      "description": "AFTER DARK is an evening fragrance for women: rich oud, warm amber and soft, skin-like musk, in a midnight-blue bottle. 50 ml. Delivered across India and to the UAE."
+    },
+    "published": true
+  },
+  {
+    "name": "SOVEREIGN MUSK",
+    "slug": "sovereign-musk",
+    "subtitle": "Eau de Parfum · Oud Intense",
+    "tagline": "Oud Intense",
+    "family": "Oud · Amber · Musk",
+    "description": "SOVEREIGN MUSK is an intense oud: deep agarwood, warm amber and clean musk, in a gold-capped bottle with a black tassel.",
+    "sizeMl": 50,
+    "sizeLabel": "50 ML / 1.7 FL.OZ.",
+    "price": {
+      "INR": 699,
+      "AED": 30
+    },
+    "stock": 20,
+    "badge": "New",
+    "theme": "onyx",
+    "category": "Fragrances",
+    "gender": "unisex",
+    "featured": true,
+    "sortOrder": 2,
+    "images": [
+      {
+        "src": "/media/sovereign-musk.webp",
+        "alt": "SOVEREIGN MUSK Oud Intense, Eau de Parfum: amber glass bottle with gold cap and black tassel beside its box"
+      }
+    ],
+    "notes": {
+      "approved": false,
+      "top": [
+        {
+          "name": "Oud",
+          "description": "Rich and deep."
+        }
+      ],
+      "heart": [
+        {
+          "name": "Amber",
+          "description": "Warm and sensual."
+        }
+      ],
+      "base": [
+        {
+          "name": "Musk",
+          "description": "Pure and skin-like."
+        }
+      ]
+    },
+    "includes": [
+      "50 ml Eau de Parfum",
+      "Presentation box"
+    ],
+    "seo": {
+      "title": "SOVEREIGN MUSK Eau de Parfum | Oud Intense | AL BARAKAH LIFESTYLE",
+      "description": "SOVEREIGN MUSK is an intense oud: deep agarwood, warm amber and clean musk, in a gold-capped bottle with a black tassel. 50 ml. Delivered across India and to the UAE."
+    },
+    "published": true
+  },
+  {
+    "name": "MUKHALLAT AL ZAYER",
+    "slug": "mukhallat-al-zayer",
+    "subtitle": "Eau de Parfum",
+    "tagline": "مخلط الزاير",
+    "family": "Oud · Amber · Spices",
+    "description": "MUKHALLAT AL ZAYER is a traditional Arabian mukhallat: rich oud, warm amber and bold, refined spices.",
+    "sizeMl": 50,
+    "sizeLabel": "50 ML / 1.7 FL.OZ.",
+    "price": {
+      "INR": 399,
+      "AED": 17
+    },
+    "stock": 20,
+    "badge": "New",
+    "theme": "onyx",
+    "category": "Fragrances",
+    "gender": "unisex",
+    "featured": true,
+    "sortOrder": 3,
+    "images": [
+      {
+        "src": "/media/mukhallat-al-zayer.webp",
+        "alt": "MUKHALLAT AL ZAYER Eau de Parfum: deep red bottle with gold cap beside a green and gold Arabian box"
+      }
+    ],
+    "notes": {
+      "approved": false,
+      "top": [
+        {
+          "name": "Spices",
+          "description": "Bold and refined."
+        }
+      ],
+      "heart": [
+        {
+          "name": "Amber",
+          "description": "Warm and sensual."
+        }
+      ],
+      "base": [
+        {
+          "name": "Oud",
+          "description": "Rich and deep."
+        }
+      ]
+    },
+    "includes": [
+      "50 ml Eau de Parfum",
+      "Presentation box"
+    ],
+    "seo": {
+      "title": "MUKHALLAT AL ZAYER Eau de Parfum | مخلط الزاير | AL BARAKAH LIFESTYLE",
+      "description": "MUKHALLAT AL ZAYER is a traditional Arabian mukhallat: rich oud, warm amber and bold, refined spices. 50 ml. Delivered across India and to the UAE."
+    },
+    "published": true
+  },
+  {
+    "name": "BLUE DIVE",
+    "slug": "blue-dive",
+    "subtitle": "Eau de Parfum",
+    "tagline": "Fresh · Aquatic",
+    "family": "Aquatic Fresh",
+    "description": "BLUE DIVE is a fresh aquatic fragrance: bright bergamot, a clean sea-water accord and a spicy touch of black pepper.",
+    "sizeMl": 80,
+    "sizeLabel": "80 ML / 2.7 FL.OZ.",
+    "price": {
+      "INR": 599,
+      "AED": 26
+    },
+    "stock": 20,
+    "badge": "New",
+    "theme": "ivory",
+    "category": "Fragrances",
+    "gender": "unisex",
+    "featured": true,
+    "sortOrder": 4,
+    "images": [
+      {
+        "src": "/media/blue-dive.webp",
+        "alt": "BLUE DIVE Eau de Parfum: blue bottle with black cap beside a blue box with a water splash"
+      }
+    ],
+    "notes": {
+      "approved": false,
+      "top": [
+        {
+          "name": "Bergamot",
+          "description": "Fresh citrus."
+        }
+      ],
+      "heart": [
+        {
+          "name": "Aquatic accord",
+          "description": "Aquatic freshness."
+        }
+      ],
+      "base": [
+        {
+          "name": "Black Pepper",
+          "description": "A spicy touch."
+        }
+      ]
+    },
+    "includes": [
+      "50 ml Eau de Parfum",
+      "Presentation box"
+    ],
+    "seo": {
+      "title": "BLUE DIVE Eau de Parfum | Fresh · Aquatic | AL BARAKAH LIFESTYLE",
+      "description": "BLUE DIVE is a fresh aquatic fragrance: bright bergamot, a clean sea-water accord and a spicy touch of black pepper. 50 ml. Delivered across India and to the UAE."
+    },
+    "published": true
   },
 ];
