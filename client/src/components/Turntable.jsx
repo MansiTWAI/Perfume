@@ -11,9 +11,9 @@ import { useSectionProgress } from '../hooks/useSectionProgress';
 import { scrollToY } from './SmoothScroll';
 
 // Extra scroll, in viewport heights, that each further bottle takes.
-// Three featured bottles take a short turn each as the page scrolls; the
-// rest of the collection follows right below.
-const HERO_MAX = 3;
+// Up to four bottles that can be bought now take a short turn each as the
+// page scrolls; the rest of the collection (sold-out ones too) follows below.
+const HERO_MAX = 4;
 const STEP_VH = 55;
 
 // Each fragrance brings its own light. ELARISSE is the one daylight theme, so
@@ -35,8 +35,9 @@ const noteChips = (p) =>
 // bottles and a swipe scroll the page to the matching bottle.
 export default function Turntable({ products }) {
   const { priceOf, fmt, addToCart, toast, t, lang } = useStore();
-  const items = products
-    .filter((p) => renderFor(p))
+  const shown = products.filter((p) => renderFor(p));
+  const buyable = shown.filter((p) => p.stock > 0 || (p.sizes || []).some((x) => x.stock > 0));
+  const items = (buyable.length ? buyable : shown)
     .sort((a, b) => (b.featured === true) - (a.featured === true) || (a.sortOrder || 0) - (b.sortOrder || 0))
     .slice(0, HERO_MAX);
   const zafreonAt = items.findIndex((p) => p.slug === 'zafreon');
